@@ -1822,6 +1822,7 @@
         "from": "Fra",
         "to": "Til",
         "cc": "Cc",
+        "envelope_to": "Faktisk leveringsmodtager",
         "subject": "Emne",
         "header": "Brugerdefineret header",
         "size": "Størrelse",

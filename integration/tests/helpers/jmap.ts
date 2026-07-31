@@ -12,6 +12,7 @@ import { JMAP_URL } from './config';
 
 const CORE = 'urn:ietf:params:jmap:core';
 const MAIL = 'urn:ietf:params:jmap:mail';
+const SIEVE = 'urn:ietf:params:jmap:sieve';
 const PRINCIPALS = 'urn:ietf:params:jmap:principals';
 const SUBMISSION = 'urn:ietf:params:jmap:submission';
 
@@ -42,6 +43,7 @@ type MethodCall = [string, Record<string, unknown>, string];
 export class JmapClient {
   private authHeader: string;
   private apiUrl: string;
+  private uploadUrl = '';
   accountId = '';
   /** Every account visible in this user's session (own + shared/group),
    *  keyed by accountId -> account name (its email address). */
@@ -64,10 +66,109 @@ export class JmapClient {
     const primary = session.primaryAccounts?.[MAIL];
     if (!primary) throw new Error(`No mail account for ${email} in JMAP session`);
     c.accountId = primary;
+    const advertisedUploadUrl = new URL(
+      session.uploadUrl.replace('{accountId}', encodeURIComponent(primary)),
+    );
+    const reachableOrigin = new URL(JMAP_URL);
+    advertisedUploadUrl.protocol = reachableOrigin.protocol;
+    advertisedUploadUrl.host = reachableOrigin.host;
+    c.uploadUrl = advertisedUploadUrl.toString();
     c.accounts = Object.fromEntries(
       Object.entries(session.accounts ?? {}).map(([id, a]) => [id, (a as { name: string }).name]),
     );
     return c;
+  }
+
+  private async uploadSieveBlob(content: string): Promise<string> {
+    const res = await fetch(this.uploadUrl, {
+      method: 'POST',
+      headers: {
+        Authorization: this.authHeader,
+        'Content-Type': 'application/sieve',
+      },
+      body: content,
+    });
+    if (!res.ok) {
+      throw new Error(`Sieve upload failed: ${res.status} ${await res.text()}`);
+    }
+    const uploaded = await res.json() as { blobId?: string };
+    if (!uploaded.blobId) {
+      throw new Error(`Sieve upload returned no blobId: ${JSON.stringify(uploaded)}`);
+    }
+    return uploaded.blobId;
+  }
+
+  /** Validate raw Sieve with the real server without storing the script. */
+  async validateSieveScript(content: string): Promise<string | null> {
+    const blobId = await this.uploadSieveBlob(content);
+    const r = await this.request(
+      [['SieveScript/validate', { accountId: this.accountId, blobId }, '0']],
+      [CORE, SIEVE],
+    );
+    const [method, result] = r.methodResponses[0];
+    if (method !== 'SieveScript/validate') {
+      throw new Error(`SieveScript/validate failed: ${JSON.stringify(r.methodResponses[0])}`);
+    }
+    return result.error?.description ?? null;
+  }
+
+  /** Store a Sieve script and optionally make it active. Returns its id. */
+  async createSieveScript(name: string, content: string, activate = false): Promise<string> {
+    const blobId = await this.uploadSieveBlob(content);
+    const args = {
+      accountId: this.accountId,
+      create: { testScript: { name, blobId } },
+      ...(activate ? { onSuccessActivateScript: '#testScript' } : {}),
+    };
+    const r = await this.request(
+      [['SieveScript/set', args, '0']],
+      [CORE, SIEVE],
+    );
+    const result = r.methodResponses[0][1];
+    if (result.notCreated?.testScript) {
+      throw new Error(`SieveScript/set failed: ${JSON.stringify(result.notCreated.testScript)}`);
+    }
+    const id = result.created?.testScript?.id;
+    if (!id) {
+      throw new Error(`SieveScript/set returned no id: ${JSON.stringify(result)}`);
+    }
+    return id;
+  }
+
+  /** Remove all scripts from this disposable integration-test account. */
+  async resetSieveScripts(): Promise<void> {
+    const get = await this.request(
+      [['SieveScript/get', { accountId: this.accountId }, '0']],
+      [CORE, SIEVE],
+    );
+    const scripts = get.methodResponses[0][1].list as Array<{
+      id: string;
+      isActive: boolean;
+    }>;
+    const ids = scripts.map((script) => script.id);
+    if (ids.length === 0) {
+      return;
+    }
+    if (scripts.some((script) => script.isActive)) {
+      await this.request(
+        [['SieveScript/set', {
+          accountId: this.accountId,
+          onSuccessDeactivateScript: true,
+        }, '0']],
+        [CORE, SIEVE],
+      );
+    }
+    const set = await this.request(
+      [['SieveScript/set', {
+        accountId: this.accountId,
+        destroy: ids,
+      }, '0']],
+      [CORE, SIEVE],
+    );
+    const result = set.methodResponses[0][1];
+    if (result.notDestroyed && Object.keys(result.notDestroyed).length > 0) {
+      throw new Error(`Failed to reset Sieve scripts: ${JSON.stringify(result.notDestroyed)}`);
+    }
   }
 
   /** Names (email addresses) of the shared/group accounts this user can access,

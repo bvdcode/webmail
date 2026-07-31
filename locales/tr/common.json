@@ -1819,6 +1819,7 @@
         "from": "Kimden",
         "to": "Kime",
         "cc": "Bilgi",
+        "envelope_to": "Gerçek teslimat alıcısı",
         "subject": "Konu",
         "header": "Özel Başlık",
         "size": "Boyut",

@@ -1819,6 +1819,7 @@
         "from": "No",
         "to": "Kam",
         "cc": "Kopija",
+        "envelope_to": "Faktiskais piegādes adresāts",
         "subject": "Temats",
         "header": "Pielāgota galvene",
         "size": "Izmērs",

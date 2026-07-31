@@ -14,7 +14,7 @@ export interface SieveCapabilities {
 }
 
 export type FilterConditionField =
-  | 'from' | 'to' | 'cc' | 'subject' | 'header' | 'size' | 'body'
+  | 'from' | 'to' | 'cc' | 'envelope_to' | 'subject' | 'header' | 'size' | 'body'
   | 'attachment';
 
 export type FilterComparator =

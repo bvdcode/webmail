@@ -394,6 +394,20 @@ function parseAtom(raw: string): FilterCondition | null {
     return { comparator: 'matches', stripped: values };
   };
 
+  const classifyTextTest = (
+    tag: string,
+    values: string | string[],
+  ): { comparator: FilterComparator; value: string | string[] } => {
+    if (tag === 'contains') {
+      return { comparator: negated ? 'not_contains' : 'contains', value: values };
+    }
+    if (tag === 'is') {
+      return { comparator: negated ? 'not_is' : 'is', value: values };
+    }
+    const classified = classifyMatches(values);
+    return { comparator: classified.comparator, value: classified.stripped };
+  };
+
   // Match attachment-aware :mime :anychild tests before the generic header
   // pattern - emitted by our own generator for field === 'attachment'.
   // has_any: ":contains Content-Disposition attachment"
@@ -451,6 +465,16 @@ function parseAtom(raw: string): FilterCondition | null {
     return null;
   }
 
+  m = /^envelope\s+:(contains|is|matches)\s+"to"\s+([\s\S]+)$/.exec(s);
+  if (m) {
+    const value = parseValueTail(m[2]);
+    if (value === null) {
+      return null;
+    }
+    const classified = classifyTextTest(m[1], value);
+    return { field: 'envelope_to', comparator: classified.comparator, value: classified.value };
+  }
+
   m = /^header\s+:(contains|is|matches)\s+"((?:[^"\\]|\\.)*)"\s+([\s\S]+)$/.exec(s);
   if (m) {
     const [, tag, headerName, rawTail] = m;
@@ -458,30 +482,23 @@ function parseAtom(raw: string): FilterCondition | null {
     if (value === null) return null;
     const { field, headerName: customHeaderName } = normalizeHeaderName(unescapeSieveString(headerName));
 
-    let comparator: FilterComparator;
-    let finalValue: string | string[];
-    if (tag === 'contains') {
-      comparator = negated ? 'not_contains' : 'contains';
-      finalValue = value;
-    } else if (tag === 'is') {
-      comparator = negated ? 'not_is' : 'is';
-      finalValue = value;
-    } else {
-      const classified = classifyMatches(value);
-      comparator = classified.comparator;
-      finalValue = classified.stripped;
-    }
+    const classified = classifyTextTest(tag, value);
 
-    const cond: FilterCondition = { field, comparator, value: finalValue };
+    const cond: FilterCondition = {
+      field,
+      comparator: classified.comparator,
+      value: classified.value,
+    };
     if (customHeaderName !== undefined) cond.headerName = customHeaderName;
     return cond;
   }
 
-  m = /^body\s+:(contains|is)\s+([\s\S]+)$/.exec(s);
+  m = /^body\s+:(contains|is|matches)\s+([\s\S]+)$/.exec(s);
   if (m) {
     const value = parseValueTail(m[2]);
     if (value === null) return null;
-    return { field: 'body', comparator: m[1] === 'is' ? 'is' : 'contains', value };
+    const classified = classifyTextTest(m[1], value);
+    return { field: 'body', comparator: classified.comparator, value: classified.value };
   }
 
   m = /^size\s+:(over|under)\s+(\d+)$/.exec(s);

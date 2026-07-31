@@ -15,6 +15,14 @@ import type {
   FilterComparator,
   FilterActionType,
 } from "@/lib/jmap/sieve-types";
+import {
+  FILTER_ACTION_TYPES,
+  FILTER_CONDITION_FIELDS,
+  actionRequiresValue,
+  actionUsesMailbox,
+  comparatorsForField,
+  isValidFilterCondition,
+} from "@/lib/sieve/filter-schema";
 import type { Mailbox } from "@/lib/jmap/types";
 import { buildMailboxTree, flattenMailboxTree, type MailboxNode, generateUUID } from "@/lib/utils";
 import { useSettingsStore } from "@/stores/settings-store";
@@ -26,31 +34,6 @@ interface FilterRuleModalProps {
   onSave: (rule: FilterRule) => void;
   onClose: () => void;
 }
-
-const ALL_FIELDS: FilterConditionField[] = [
-  "from", "to", "cc", "subject", "header", "size", "body", "attachment",
-];
-
-const TEXT_COMPARATORS: FilterComparator[] = [
-  "contains", "not_contains", "is", "not_is", "starts_with", "ends_with", "matches",
-];
-
-const SIZE_COMPARATORS: FilterComparator[] = ["greater_than", "less_than"];
-
-const ATTACHMENT_COMPARATORS: FilterComparator[] = ["has_any", "has_type"];
-
-function comparatorsFor(field: FilterConditionField): FilterComparator[] {
-  if (field === "size") return SIZE_COMPARATORS;
-  if (field === "attachment") return ATTACHMENT_COMPARATORS;
-  return TEXT_COMPARATORS;
-}
-
-const ALL_ACTION_TYPES: FilterActionType[] = [
-  "move", "copy", "forward", "mark_read", "star", "add_label", "discard", "reject", "keep", "stop",
-];
-
-const ACTIONS_WITH_VALUE = new Set<FilterActionType>(["move", "copy", "forward", "reject", "add_label"]);
-const ACTIONS_WITH_MAILBOX = new Set<FilterActionType>(["move", "copy"]);
 
 function makeEmptyCondition(): FilterCondition {
   return { field: "from", comparator: "contains", value: "" };
@@ -133,25 +116,37 @@ export function FilterRuleModal({
     // user typing "a, b, c" actually persists as ["a","b","c"]. This is the
     // moment we know editing is finished - splitting earlier would eat any
     // comma the user just typed mid-edit.
-    const validConditions = conditions
-      .filter((c) => {
-        if (c.field === "attachment" && c.comparator === "has_any") return true;
-        return !isConditionValueEmpty(c.value);
-      })
+    const normalizedConditions = conditions
+      .filter((c) => !isConditionValueEmpty(c.value) || (
+        c.field === "attachment" && c.comparator === "has_any"
+      ))
       .map((c) => {
-        if (c.field === "attachment" && c.comparator === "has_any") return c;
-        if (c.field === "size") return c; // numeric, single-value only
-        if (typeof c.value !== "string") return c; // already structured
+        if (c.field === "attachment" && c.comparator === "has_any") {
+          return c;
+        }
+        if (c.field === "size") {
+          return c;
+        }
+        if (typeof c.value !== "string") {
+          return c;
+        }
         const parsed = inputStringToValue(c.value);
-        return { ...c, value: parsed };
+        return {
+          ...c,
+          value: parsed,
+          ...(c.field === "header" ? { headerName: c.headerName?.trim() } : {}),
+        };
       });
-    if (validConditions.length === 0) {
+    if (
+      normalizedConditions.length === 0 ||
+      !normalizedConditions.every(isValidFilterCondition)
+    ) {
       toast.error(t("validation_empty_conditions"));
       return;
     }
 
     const validActions = actions.filter(
-      (a) => !ACTIONS_WITH_VALUE.has(a.type) || a.value?.trim()
+      (a) => !actionRequiresValue(a.type) || a.value?.trim()
     );
     if (validActions.length === 0) {
       toast.error(t("validation_empty_actions"));
@@ -163,7 +158,7 @@ export function FilterRuleModal({
       name: trimmedName,
       enabled: rule?.enabled ?? true,
       matchType,
-      conditions: validConditions,
+      conditions: normalizedConditions,
       actions: validActions,
       stopProcessing,
     });
@@ -178,7 +173,7 @@ export function FilterRuleModal({
         // with e.g. (field=attachment, comparator=contains) — invalid for the
         // Sieve generator. Each field has its own valid comparator set.
         if (updates.field && updates.field !== c.field) {
-          const allowed = comparatorsFor(updates.field);
+          const allowed = comparatorsForField(updates.field);
           if (!allowed.includes(c.comparator)) {
             updated.comparator = allowed[0];
           }
@@ -210,10 +205,10 @@ export function FilterRuleModal({
       prev.map((a, i) => {
         if (i !== index) return a;
         const updated = { ...a, ...updates };
-        if (updates.type && !ACTIONS_WITH_VALUE.has(updates.type)) {
+        if (updates.type && !actionRequiresValue(updates.type)) {
           delete updated.value;
         }
-        if (updates.type && ACTIONS_WITH_MAILBOX.has(updates.type) && !updated.value) {
+        if (updates.type && actionUsesMailbox(updates.type) && !updated.value) {
           const firstMb = hierarchicalMailboxes[0];
           updated.value = firstMb ? (mailboxPathMap.get(firstMb.id) || firstMb.name) : "";
         }
@@ -312,7 +307,7 @@ export function FilterRuleModal({
                     className={selectClass}
                     aria-label={t("conditions")}
                   >
-                    {ALL_FIELDS.map((f) => (
+                    {FILTER_CONDITION_FIELDS.map((f) => (
                       <option key={f} value={f}>
                         {t(`condition_fields.${f}`)}
                       </option>
@@ -338,7 +333,7 @@ export function FilterRuleModal({
                     className={selectClass}
                     aria-label={t("comparators.contains")}
                   >
-                    {comparatorsFor(condition.field).map((c) => (
+                    {comparatorsForField(condition.field).map((c) => (
                       <option key={c} value={c}>
                         {t(`comparators.${c}`)}
                       </option>
@@ -388,6 +383,8 @@ export function FilterRuleModal({
                       }
                       className="flex-1 min-w-[120px]"
                       type={condition.field === "size" ? "number" : "text"}
+                      min={condition.field === "size" ? 0 : undefined}
+                      step={condition.field === "size" ? 1 : undefined}
                     />
                   )}
 
@@ -428,14 +425,14 @@ export function FilterRuleModal({
                     className={selectClass}
                     aria-label={t("actions")}
                   >
-                    {ALL_ACTION_TYPES.map((a) => (
+                    {FILTER_ACTION_TYPES.map((a) => (
                       <option key={a} value={a}>
                         {t(`action_types.${a}`)}
                       </option>
                     ))}
                   </select>
 
-                  {ACTIONS_WITH_MAILBOX.has(action.type) && (
+                  {actionUsesMailbox(action.type) && (
                     <select
                       value={action.value || ""}
                       onChange={(e) => updateAction(index, { value: e.target.value })}

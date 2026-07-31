@@ -1819,6 +1819,7 @@
         "from": "De",
         "to": "Para",
         "cc": "Cc",
+        "envelope_to": "Destinatário real da entrega",
         "subject": "Assunto",
         "header": "Cabeçalho personalizado",
         "size": "Tamanho",

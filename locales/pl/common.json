@@ -1819,6 +1819,7 @@
         "from": "Od",
         "to": "Do",
         "cc": "DW",
+        "envelope_to": "Rzeczywisty odbiorca dostawy",
         "subject": "Temat",
         "header": "Niestandardowy nagłówek",
         "size": "Rozmiar",

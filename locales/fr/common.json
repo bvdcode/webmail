@@ -1819,6 +1819,7 @@
         "from": "De",
         "to": "À",
         "cc": "Cc",
+        "envelope_to": "Destinataire réel de la livraison",
         "subject": "Objet",
         "header": "En-tête personnalisé",
         "size": "Taille",

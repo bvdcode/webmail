@@ -1819,6 +1819,7 @@
         "from": "Von",
         "to": "An",
         "cc": "Cc",
+        "envelope_to": "Tatsächlicher Zustellungsempfänger",
         "subject": "Betreff",
         "header": "Benutzerdefinierter Header",
         "size": "Größe",

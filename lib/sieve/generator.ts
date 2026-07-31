@@ -1,14 +1,11 @@
 import type { FilterRule, FilterCondition, FilterAction, FilterMetadata, VacationSieveConfig } from '@/lib/jmap/sieve-types';
 import { debug } from '@/lib/debug';
-
-const HEADER_MAP: Record<string, string> = {
-  from: 'From',
-  to: 'To',
-  cc: 'Cc',
-  subject: 'Subject',
-};
+import { isValidFilterAction, isValidFilterCondition } from './filter-schema';
 
 function escapeString(value: string): string {
+  if (value.includes('\0')) {
+    throw new Error('Sieve strings cannot contain NUL characters');
+  }
   return value.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
 }
 
@@ -16,7 +13,11 @@ function escapeString(value: string): string {
 // conditions stay one-element; arrays are filtered for empty strings.
 function toValueList(value: string | string[]): string[] {
   const arr = Array.isArray(value) ? value : [value];
-  return arr.map((v) => (v ?? '').toString()).filter((v) => v.length > 0);
+  const values = arr.map((v) => v.toString()).filter((v) => v.length > 0);
+  if (values.length === 0) {
+    throw new Error('Sieve condition requires at least one non-empty value');
+  }
+  return values;
 }
 
 // Render one or many strings as a Sieve string-literal-or-list. Sieve treats
@@ -30,86 +31,136 @@ function formatStringArg(values: string[], transform: (s: string) => string = (s
   return `[${values.map((v) => `"${escapeString(transform(v))}"`).join(', ')}]`;
 }
 
-function generateCondition(condition: FilterCondition): string {
-  const { field, comparator, value } = condition;
-
-  if (field === 'size') {
-    // Size is numeric, single value only.
-    const sizeValue = Array.isArray(value) ? value[0] : value;
-    const op = comparator === 'greater_than' ? ':over' : ':under';
-    return `size ${op} ${sizeValue}`;
-  }
-
-  const values = toValueList(value);
-
-  if (field === 'body') {
-    const matchType = comparator === 'is' ? ':is' : ':contains';
-    return `body ${matchType} ${formatStringArg(values)}`;
-  }
-
-  if (field === 'attachment') {
-    // RFC 5703: :mime :anychild matches against headers of any MIME part.
-    // has_any tests Content-Disposition for "attachment"; has_type matches
-    // the file extension against the filename across BOTH Content-Disposition
-    // (filename= parameter) and Content-Type (name= parameter) - many older
-    // senders (Microsoft SMTPSVC, PrintToMail, etc.) put the filename only
-    // in Content-Type and leave Content-Disposition without a filename.
-    // RFC 5228 §5.7 allows a string-list for header names; the test passes
-    // if any listed header matches. Wildcard "*.<ext>*" catches quoted,
-    // unquoted, and RFC-2231-encoded forms alike since ".<ext>" appears as
-    // a literal substring in all of them.
-    // Multiple extensions become a Sieve value-list ["*.pdf*", "*.xml*"]
-    // = OR within the condition (any item matches → test passes).
-    if (comparator === 'has_any') {
-      return `header :mime :anychild :contains "Content-Disposition" "attachment"`;
-    }
-    const normalised = values.map((v) => v.replace(/^[.*]+/, '').trim()).filter(Boolean);
-    return `header :mime :anychild :matches ["Content-Disposition", "Content-Type"] ${formatStringArg(normalised, (ext) => `*.${ext}*`)}`;
-  }
-
-  const headerName = field === 'header'
-    ? (condition.headerName || 'X-Unknown')
-    : HEADER_MAP[field];
-
+function generateTextTest(
+  comparator: FilterCondition['comparator'],
+  values: string[],
+  render: (matchType: ':contains' | ':is' | ':matches', values: string[]) => string,
+): string {
   switch (comparator) {
     case 'contains':
-      return `header :contains "${headerName}" ${formatStringArg(values)}`;
+      return render(':contains', values);
     case 'not_contains':
-      return `not header :contains "${headerName}" ${formatStringArg(values)}`;
+      return `not ${render(':contains', values)}`;
     case 'is':
-      return `header :is "${headerName}" ${formatStringArg(values)}`;
+      return render(':is', values);
     case 'not_is':
-      return `not header :is "${headerName}" ${formatStringArg(values)}`;
+      return `not ${render(':is', values)}`;
     case 'starts_with':
-      return `header :matches "${headerName}" ${formatStringArg(values, (v) => `${v}*`)}`;
+      return render(':matches', values.map((value) => `${value}*`));
     case 'ends_with':
-      return `header :matches "${headerName}" ${formatStringArg(values, (v) => `*${v}`)}`;
+      return render(':matches', values.map((value) => `*${value}`));
     case 'matches':
-      return `header :matches "${headerName}" ${formatStringArg(values)}`;
-    default:
-      return `header :contains "${headerName}" ${formatStringArg(values)}`;
+      return render(':matches', values);
+    case 'greater_than':
+    case 'less_than':
+    case 'has_any':
+    case 'has_type':
+      throw new Error(`Comparator ${comparator} is not valid for a text condition`);
   }
+}
+
+function generateCondition(condition: FilterCondition): string {
+  if (!isValidFilterCondition(condition)) {
+    throw new Error(`Invalid Sieve condition: ${condition.field}/${condition.comparator}`);
+  }
+
+  const { field, comparator, value } = condition;
+
+  switch (field) {
+    case 'size': {
+      const op = comparator === 'greater_than' ? ':over' : ':under';
+      return `size ${op} ${value}`;
+    }
+    case 'attachment': {
+      // RFC 5703: :mime :anychild matches against headers of any MIME part.
+      // has_type checks both standard locations for attachment filenames.
+      if (comparator === 'has_any') {
+        return `header :mime :anychild :contains "Content-Disposition" "attachment"`;
+      }
+      const values = toValueList(value);
+      const normalised = values.map((v) => v.replace(/^[.*]+/, '').trim()).filter(Boolean);
+      return `header :mime :anychild :matches ["Content-Disposition", "Content-Type"] ${formatStringArg(normalised, (ext) => `*.${ext}*`)}`;
+    }
+    case 'body': {
+      const values = toValueList(value);
+      return generateTextTest(
+        comparator,
+        values,
+        (matchType, testValues) => `body ${matchType} ${formatStringArg(testValues)}`,
+      );
+    }
+    case 'envelope_to': {
+      const values = toValueList(value);
+      return generateTextTest(
+        comparator,
+        values,
+        (matchType, testValues) => `envelope ${matchType} "to" ${formatStringArg(testValues)}`,
+      );
+    }
+    case 'from':
+    case 'to':
+    case 'cc':
+    case 'subject':
+    case 'header': {
+      let headerName: string;
+      switch (field) {
+        case 'from':
+          headerName = 'From';
+          break;
+        case 'to':
+          headerName = 'To';
+          break;
+        case 'cc':
+          headerName = 'Cc';
+          break;
+        case 'subject':
+          headerName = 'Subject';
+          break;
+        case 'header':
+          headerName = condition.headerName!;
+          break;
+      }
+      const values = toValueList(value);
+      return generateTextTest(
+        comparator,
+        values,
+        (matchType, testValues) => (
+          `header ${matchType} "${escapeString(headerName)}" ${formatStringArg(testValues)}`
+        ),
+      );
+    }
+  }
+}
+
+function requiredActionValue(action: FilterAction): string {
+  if (!action.value) {
+    throw new Error(`Sieve action ${action.type} requires a value`);
+  }
+  return action.value;
 }
 
 function generateActions(actions: FilterAction[]): string[] {
   return actions.map(action => {
+    if (!isValidFilterAction(action)) {
+      throw new Error(`Invalid Sieve action: ${action.type}`);
+    }
     switch (action.type) {
       case 'move':
-        return `fileinto "${escapeString(action.value || '')}";`;
+        return `fileinto "${escapeString(requiredActionValue(action))}";`;
       case 'copy':
-        return `fileinto :copy "${escapeString(action.value || '')}";`;
+        return `fileinto :copy "${escapeString(requiredActionValue(action))}";`;
       case 'forward':
-        return `redirect "${escapeString(action.value || '')}";`;
+        return `redirect "${escapeString(requiredActionValue(action))}";`;
       case 'mark_read':
         return 'addflag "\\\\Seen";';
       case 'star':
         return 'addflag "\\\\Flagged";';
       case 'add_label':
-        return `addflag "$label:${escapeString(action.value || '')}";`;
+        return `addflag "$label:${escapeString(requiredActionValue(action))}";`;
       case 'discard':
         return 'discard;';
       case 'reject':
-        return `reject "${escapeString(action.value || '')}";`;
+        return `reject "${escapeString(requiredActionValue(action))}";`;
       case 'keep':
         return 'keep;';
       case 'stop':
@@ -130,6 +181,9 @@ function computeRequires(rules: FilterRule[], vacation?: VacationSieveConfig): s
     for (const condition of rule.conditions) {
       if (condition.field === 'body') extensions.add('body');
       if (condition.field === 'attachment') extensions.add('mime');
+      if (condition.field === 'envelope_to') {
+        extensions.add('envelope');
+      }
     }
     for (const action of rule.actions) {
       switch (action.type) {
@@ -196,7 +250,10 @@ export function generateScript(
   if (vacation?.isEnabled) {
     metadata.vacation = vacation;
   }
-  const metadataJson = JSON.stringify(metadata);
+  // A literal */ inside JSON would terminate the metadata block comment and
+  // turn user input into Sieve source. Escaping the slash is valid JSON and
+  // round-trips back to the original string through JSON.parse.
+  const metadataJson = JSON.stringify(metadata).replace(/\*\//g, '*\\/');
   const lines: string[] = [];
 
   lines.push('/* @metadata:begin');
@@ -232,7 +289,7 @@ export function generateScript(
     }
 
     lines.push('');
-    lines.push(`# Rule: ${rule.name}`);
+    lines.push(`# Rule: ${rule.name.replace(/[\r\n]+/g, ' ')}`);
 
     const conditions = rule.conditions.map(generateCondition);
     let conditionStr: string;

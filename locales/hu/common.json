@@ -1822,6 +1822,7 @@
         "from": "Feladó",
         "to": "Címzett",
         "cc": "Másolat",
+        "envelope_to": "Tényleges kézbesítési címzett",
         "subject": "Tárgy",
         "header": "Egyéni fejléc",
         "size": "Méret",

@@ -413,11 +413,10 @@ describe('generateScript', () => {
       expect(script).not.toContain('if ');
     });
 
-    it('uses X-Unknown for header field without headerName', () => {
-      const script = generateScript([makeRule({
+    it('rejects a custom header condition without a header name', () => {
+      expect(() => generateScript([makeRule({
         conditions: [{ field: 'header', comparator: 'contains', value: 'test' }],
-      })]);
-      expect(script).toContain('header :contains "X-Unknown" "test"');
+      })])).toThrow('Invalid Sieve condition: header/contains');
     });
 
     it('handles all enabled rules with different extensions combined', () => {

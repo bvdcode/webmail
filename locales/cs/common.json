@@ -1819,6 +1819,7 @@
         "from": "Od",
         "to": "Komu",
         "cc": "Kopie",
+        "envelope_to": "Skutečný příjemce doručení",
         "subject": "Předmět",
         "header": "Vlastní hlavička",
         "size": "Velikost",
