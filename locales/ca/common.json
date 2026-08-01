@@ -624,6 +624,8 @@
     "remove_sub_address": "Elimina el subadreçament",
     "from_override": {
       "create_new": "Crea'n un de nou...",
+      "remember": "Recorda",
+      "remember_tooltip": "Desa aquesta adreça com a remitent que podreu triar la propera vegada. El servidor ha de confirmar que l'adreça és vostra.",
       "toggle_on": "Cancel·la la sobreescriptura",
       "toggle_tooltip": "Editeu lliurement el nom i l'adreça del remitent. El correu es continua enviant a través de la vostra identitat: només canvia la capçalera «De» visible.",
       "name_label": "Nom del remitent",

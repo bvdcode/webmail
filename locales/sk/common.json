@@ -624,6 +624,8 @@
     "remove_sub_address": "Odstrániť podadresu",
     "from_override": {
       "create_new": "Vytvoriť nový...",
+      "remember": "Zapamätať",
+      "remember_tooltip": "Uloží túto adresu ako odosielateľa, ktorého nabudúce vyberiete zo zoznamu. Server musí potvrdiť, že adresa patrí vám.",
       "toggle_on": "Zrušiť prepísanie",
       "toggle_tooltip": "Upravte meno a adresu odosielateľa. Pošta sa stále odosiela cez vašu identitu.",
       "name_label": "Meno odosielateľa",

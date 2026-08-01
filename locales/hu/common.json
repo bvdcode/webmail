@@ -624,6 +624,8 @@
     "remove_sub_address": "Alcím eltávolítása",
     "from_override": {
       "create_new": "Új létrehozása...",
+      "remember": "Megjegyzés",
+      "remember_tooltip": "Elmenti ezt a címet feladóként, amelyet legközelebb kiválaszthatsz. A kiszolgálónak meg kell erősítenie, hogy a cím a tiéd.",
       "toggle_on": "Felülbírálás megszüntetése",
       "toggle_tooltip": "A Feladó név és cím szabad szerkesztése. A levél továbbra is az identitásodon keresztül kerül elküldésre - csak a látható Feladó fejléc változik.",
       "name_label": "Feladó neve",

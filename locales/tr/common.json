@@ -624,6 +624,8 @@
     "remove_sub_address": "Alt adresi kaldır",
     "from_override": {
       "create_new": "Yeni oluştur...",
+      "remember": "Hatırla",
+      "remember_tooltip": "Bu adresi bir dahaki sefere seçebileceğiniz gönderen olarak kaydeder. Sunucunun adresin size ait olduğunu doğrulaması gerekir.",
       "toggle_on": "Geçersiz kılmayı iptal et",
       "toggle_tooltip": "Gönderen adını ve adresini serbestçe düzenleyin. Posta hâlâ kimliğiniz üzerinden gönderilir - yalnızca görünür Kimden başlığı değişir.",
       "name_label": "Gönderen adı",

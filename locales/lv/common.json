@@ -621,6 +621,8 @@
     "remove_sub_address": "Noņemt apakšadresi",
     "from_override": {
       "create_new": "Izveidot jaunu...",
+      "remember": "Atcerēties",
+      "remember_tooltip": "Saglabā šo adresi kā sūtītāju, ko varēsiet izvēlēties nākamreiz. Serverim jāapstiprina, ka adrese pieder jums.",
       "toggle_on": "Atcelt pārrakstīšanu",
       "toggle_tooltip": "Brīvi rediģējiet sūtītāja vārdu un adresi. Pasts joprojām tiek sūtīts caur jūsu identitāti - mainās tikai redzamais No galvenes ieraksts.",
       "name_label": "Sūtītāja vārds",

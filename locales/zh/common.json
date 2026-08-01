@@ -621,6 +621,8 @@
     "remove_sub_address": "删除子地址",
     "from_override": {
       "create_new": "新建…",
+      "remember": "记住",
+      "remember_tooltip": "将此地址保存为下次可选择的发件人。服务器需要确认该地址属于您。",
       "toggle_on": "取消覆盖",
       "toggle_tooltip": "自由编辑发件人姓名和地址。邮件仍通过您的身份发送 - 仅可见的发件人标题发生变化。",
       "name_label": "发件人姓名",

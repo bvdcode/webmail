@@ -621,6 +621,8 @@
     "remove_sub_address": "서브 어드레스 삭제",
     "from_override": {
       "create_new": "새로 만들기...",
+      "remember": "기억하기",
+      "remember_tooltip": "이 주소를 다음에 고를 수 있는 보낸 사람으로 저장해요. 주소가 본인 것인지 서버가 확인해야 해요.",
       "toggle_on": "재정의 취소",
       "toggle_tooltip": "보낸 사람 이름과 주소를 자유롭게 편집하세요. 메일은 여전히 사용자의 ID를 통해 전송되며 - 표시되는 보낸 사람 헤더만 변경됩니다.",
       "name_label": "보낸 사람 이름",

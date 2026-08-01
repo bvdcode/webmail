@@ -621,6 +621,8 @@
     "remove_sub_address": "Sub-adres verwijderen",
     "from_override": {
       "create_new": "Nieuwe maken...",
+      "remember": "Onthouden",
+      "remember_tooltip": "Bewaart dit adres als afzender die je de volgende keer kunt kiezen. De server moet bevestigen dat het adres van jou is.",
       "toggle_on": "Overschrijven annuleren",
       "toggle_tooltip": "Bewerk de naam en het adres van de afzender vrij. E-mail wordt nog steeds via je identiteit verzonden - alleen de zichtbare Van-koptekst verandert.",
       "name_label": "Afzendernaam",

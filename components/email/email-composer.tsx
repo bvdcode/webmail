@@ -278,6 +278,7 @@ export function EmailComposer({
 }: EmailComposerProps) {
   const t = useTranslations('email_composer');
   const tCommon = useTranslations('common');
+  const tNotifications = useTranslations('notifications');
   const tQuote = useTranslations('quote_header');
   const timeFormat = useSettingsStore((state) => state.timeFormat);
   const plainTextMode = useSettingsStore((state) => state.plainTextMode);
@@ -543,6 +544,10 @@ export function EmailComposer({
   // address field takes focus as soon as it replaces the picker.
   const [focusFromOverride, setFocusFromOverride] = useState(false);
   const fromOverrideEmailRef = useRef<HTMLInputElement>(null);
+  // Turns the typed address into a saved identity on send, so it joins the
+  // picker and later messages get a matching SMTP envelope rather than only a
+  // rewritten From header.
+  const [rememberFromOverride, setRememberFromOverride] = useState(false);
   const [showTemplatePicker, setShowTemplatePicker] = useState(false);
   const [showSaveAsTemplate, setShowSaveAsTemplate] = useState(false);
   const [showCloseDialog, setShowCloseDialog] = useState(false);
@@ -1800,6 +1805,29 @@ export function EmailComposer({
       }
     }
 
+    // Registering the typed address as an identity is the user asking the
+    // server "may I send as this?". A refusal answers that question, so the
+    // send stops rather than going out under an address just declined.
+    if (fromOverrideEnabled && rememberFromOverride && composerClient) {
+      const address = fromOverrideEmail.trim();
+      const alreadyKnown = identities.some(
+        (identity) => identity.email.toLowerCase() === address.toLowerCase()
+      );
+      if (!alreadyKnown) {
+        try {
+          await composerClient.createIdentity(fromOverrideName.trim() || address, address);
+          await useAuthStore.getState().refreshIdentities();
+          setRememberFromOverride(false);
+          toast.success(tNotifications('identity_created'));
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          toast.error(tNotifications('identity_create_failed', { error: message }));
+          setIsSending(false);
+          return;
+        }
+      }
+    }
+
     const identityFromEmail = currentIdentity?.email
       ? subAddressTag
         ? generateSubAddress(currentIdentity.email, subAddressTag, subAddressDelimiter)
@@ -2310,15 +2338,32 @@ export function EmailComposer({
                 </Button>
               )}
               {fromOverrideEnabled && (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setFromOverrideEnabled(false)}
-                  className="h-6 px-2 text-xs shrink-0"
-                >
-                  {t('from_override.toggle_on')}
-                </Button>
+                <>
+                  <label
+                    className="flex items-center gap-1.5 text-xs text-muted-foreground shrink-0 cursor-pointer"
+                    title={t('from_override.remember_tooltip')}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={rememberFromOverride}
+                      onChange={(e) => setRememberFromOverride(e.target.checked)}
+                      className="rounded border-input"
+                    />
+                    <span className="hidden sm:inline">{t('from_override.remember')}</span>
+                  </label>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setFromOverrideEnabled(false);
+                      setRememberFromOverride(false);
+                    }}
+                    className="h-6 px-2 text-xs shrink-0"
+                  >
+                    {t('from_override.toggle_on')}
+                  </Button>
+                </>
               )}
             </div>
           </div>

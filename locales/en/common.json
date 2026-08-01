@@ -624,6 +624,8 @@
     "remove_sub_address": "Remove sub-address",
     "from_override": {
       "create_new": "Create new...",
+      "remember": "Remember",
+      "remember_tooltip": "Save this address as a sender you can pick next time. The server has to confirm the address is yours.",
       "toggle_on": "Cancel override",
       "toggle_tooltip": "Edit the From name and address freely. Mail is still sent through your identity - only the visible From header changes.",
       "name_label": "From name",

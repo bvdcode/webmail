@@ -621,6 +621,8 @@
     "remove_sub_address": "Retirer le sous-adressage",
     "from_override": {
       "create_new": "Créer un nouveau...",
+      "remember": "Mémoriser",
+      "remember_tooltip": "Enregistre cette adresse comme expéditeur sélectionnable la prochaine fois. Le serveur doit confirmer que l'adresse vous appartient.",
       "toggle_on": "Annuler le remplacement",
       "toggle_tooltip": "Modifiez librement le nom et l'adresse d'expéditeur. Le courrier est toujours envoyé via votre identité - seul l'en-tête De visible change.",
       "name_label": "Nom de l'expéditeur",

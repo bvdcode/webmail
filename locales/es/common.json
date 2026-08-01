@@ -621,6 +621,8 @@
     "remove_sub_address": "Eliminar sub-dirección",
     "from_override": {
       "create_new": "Crear nuevo...",
+      "remember": "Recordar",
+      "remember_tooltip": "Guarda esta dirección como un remitente que podrás elegir la próxima vez. El servidor debe confirmar que la dirección es tuya.",
       "toggle_on": "Cancelar anulación",
       "toggle_tooltip": "Edita libremente el nombre y la dirección del remitente. El correo aún se envía a través de tu identidad - solo cambia el encabezado De visible.",
       "name_label": "Nombre del remitente",

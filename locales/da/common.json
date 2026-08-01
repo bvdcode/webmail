@@ -623,6 +623,8 @@
     "remove_sub_address": "Fjern underadresse",
     "from_override": {
       "create_new": "Opret ny...",
+      "remember": "Husk",
+      "remember_tooltip": "Gem denne adresse som en afsender, du kan vælge næste gang. Serveren skal bekræfte, at adressen er din.",
       "toggle_on": "Annuller tilsidesættelse",
       "toggle_tooltip": "Redigér Fra-navn og -adresse frit. Mail sendes stadig gennem din identitet - kun den synlige Fra-header ændres.",
       "name_label": "Fra-navn",

@@ -621,6 +621,8 @@
     "remove_sub_address": "Usuń podadres",
     "from_override": {
       "create_new": "Utwórz nowy...",
+      "remember": "Zapamiętaj",
+      "remember_tooltip": "Zapisuje ten adres jako nadawcę, którego wybierzesz następnym razem. Serwer musi potwierdzić, że adres należy do ciebie.",
       "toggle_on": "Anuluj zastąpienie",
       "toggle_tooltip": "Swobodnie edytuj nazwę i adres nadawcy. Poczta jest nadal wysyłana przez twoją tożsamość - zmienia się tylko widoczny nagłówek Od.",
       "name_label": "Nazwa nadawcy",

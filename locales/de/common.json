@@ -621,6 +621,8 @@
     "remove_sub_address": "Sub-Adresse entfernen",
     "from_override": {
       "create_new": "Neu erstellen...",
+      "remember": "Merken",
+      "remember_tooltip": "Speichert diese Adresse als Absender, den Sie künftig auswählen können. Der Server muss bestätigen, dass die Adresse Ihnen gehört.",
       "toggle_on": "Überschreibung aufheben",
       "toggle_tooltip": "Bearbeiten Sie Absendername und -adresse frei. Die E-Mail wird weiterhin über Ihre Identität gesendet - nur die sichtbare Absenderkopfzeile ändert sich.",
       "name_label": "Absendername",

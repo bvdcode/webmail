@@ -624,6 +624,8 @@
     "remove_sub_address": "Eliminați subadresa",
     "from_override": {
       "create_new": "Creați unul nou...",
+      "remember": "Reține",
+      "remember_tooltip": "Salvează această adresă ca expeditor pe care îl veți putea alege data viitoare. Serverul trebuie să confirme că adresa vă aparține.",
       "toggle_on": "Anulare suprascriere",
       "toggle_tooltip": "Puteți modifica liber numele și adresa din câmpul „De la”. E-mailul este trimis în continuare sub identitatea dvs. – se modifică doar antetul vizibil „De la”.",
       "name_label": "Numele expeditorului",
