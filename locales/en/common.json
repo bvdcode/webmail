@@ -2036,7 +2036,14 @@
     "advanced": "More options",
     "applies_to_new_mail": "Applies to mail that arrives from now on.",
     "load_failed": "Could not load your filters. Try again from the Filters settings.",
-    "opaque": "Your filter script was edited by hand. Manage it in the Filters settings."
+    "opaque": "Your filter script was edited by hand. Manage it in the Filters settings.",
+    "backfill_question": "Apply it to the messages already in this folder? Only new mail is filtered otherwise.",
+    "backfill_apply": "Apply",
+    "backfill_skip": "Not now",
+    "backfill_result": "Messages updated: {count}",
+    "backfill_none": "No message in this folder matches",
+    "backfill_limited": "Checked the {count} most recent messages; older ones were left alone.",
+    "backfill_failed": "Could not apply the filter to existing messages"
   },
   "context_menu": {
     "create_filter": "Create filter",

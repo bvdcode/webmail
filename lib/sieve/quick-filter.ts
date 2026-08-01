@@ -23,6 +23,8 @@ export interface QuickFilterDraft {
   actions: Record<QuickFilterActionType, boolean>;
   /** Sieve `fileinto` path, set when the `move` action is selected. */
   mailboxPath: string;
+  /** The same folder as a JMAP id, for applying the rule to existing mail. */
+  mailboxId: string;
   /** Keyword id, set when the `add_label` action is selected. */
   labelId: string;
 }
@@ -51,6 +53,7 @@ export function createQuickFilterDraft(email: Email): QuickFilterDraft {
     },
     actions: { mark_read: false, star: false, move: false, add_label: false },
     mailboxPath: '',
+    mailboxId: '',
     labelId: '',
   };
 }

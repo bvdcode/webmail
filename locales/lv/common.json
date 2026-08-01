@@ -2036,7 +2036,14 @@
     "advanced": "Vairāk opciju",
     "applies_to_new_mail": "Attiecas uz pastu, kas pienāks no šī brīža.",
     "load_failed": "Neizdevās ielādēt filtrus. Mēģiniet vēlreiz filtru iestatījumos.",
-    "opaque": "Filtru skripts ir rediģēts manuāli. Pārvaldiet to filtru iestatījumos."
+    "opaque": "Filtru skripts ir rediģēts manuāli. Pārvaldiet to filtru iestatījumos.",
+    "backfill_question": "Vai piemērot to vēstulēm, kas jau ir šajā mapē? Citādi tiek filtrēts tikai jaunais pasts.",
+    "backfill_apply": "Piemērot",
+    "backfill_skip": "Ne tagad",
+    "backfill_result": "Atjauninātās vēstules: {count}",
+    "backfill_none": "Neviena vēstule šajā mapē neatbilst",
+    "backfill_limited": "Pārbaudītas {count} jaunākās vēstules; vecākās netika aiztiktas.",
+    "backfill_failed": "Neizdevās piemērot filtru esošajām vēstulēm"
   },
   "context_menu": {
     "create_filter": "Izveidot filtru",

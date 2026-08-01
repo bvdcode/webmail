@@ -2036,7 +2036,14 @@
     "advanced": "추가 옵션",
     "applies_to_new_mail": "지금부터 도착하는 메일에 적용돼요.",
     "load_failed": "필터를 불러오지 못했어요. 필터 설정에서 다시 시도해 주세요.",
-    "opaque": "필터 스크립트가 직접 수정되었어요. 필터 설정에서 관리해 주세요."
+    "opaque": "필터 스크립트가 직접 수정되었어요. 필터 설정에서 관리해 주세요.",
+    "backfill_question": "이 폴더에 이미 있는 메일에도 적용할까요? 적용하지 않으면 새 메일만 걸러져요.",
+    "backfill_apply": "적용",
+    "backfill_skip": "나중에",
+    "backfill_result": "변경된 메일: {count}",
+    "backfill_none": "이 폴더에는 일치하는 메일이 없어요",
+    "backfill_limited": "최근 {count}통을 확인했어요. 더 오래된 메일은 그대로 두었어요.",
+    "backfill_failed": "기존 메일에 필터를 적용하지 못했어요"
   },
   "context_menu": {
     "create_filter": "필터 만들기",

@@ -2036,7 +2036,14 @@
     "advanced": "Més opcions",
     "applies_to_new_mail": "S'aplica al correu que arribi a partir d'ara.",
     "load_failed": "No s'han pogut carregar els filtres. Torneu-ho a provar des de la configuració de Filtres.",
-    "opaque": "L'script de filtres s'ha editat manualment. Gestioneu-lo des de la configuració de Filtres."
+    "opaque": "L'script de filtres s'ha editat manualment. Gestioneu-lo des de la configuració de Filtres.",
+    "backfill_question": "Voleu aplicar-lo als missatges que ja hi ha en aquesta carpeta? Altrament només es filtra el correu nou.",
+    "backfill_apply": "Aplica",
+    "backfill_skip": "Ara no",
+    "backfill_result": "Missatges actualitzats: {count}",
+    "backfill_none": "Cap missatge d'aquesta carpeta no hi coincideix",
+    "backfill_limited": "S'han comprovat els {count} missatges més recents; els més antics no s'han tocat.",
+    "backfill_failed": "No s'ha pogut aplicar el filtre als missatges existents"
   },
   "context_menu": {
     "create_filter": "Crea un filtre",

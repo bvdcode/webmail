@@ -2036,7 +2036,14 @@
     "advanced": "Mai multe opțiuni",
     "applies_to_new_mail": "Se aplică mesajelor primite de acum înainte.",
     "load_failed": "Filtrele nu au putut fi încărcate. Încercați din nou din setările Filtre.",
-    "opaque": "Scriptul de filtre a fost editat manual. Gestionați-l din setările Filtre."
+    "opaque": "Scriptul de filtre a fost editat manual. Gestionați-l din setările Filtre.",
+    "backfill_question": "Îl aplicați și mesajelor aflate deja în acest folder? Altfel se filtrează doar mesajele noi.",
+    "backfill_apply": "Aplicați",
+    "backfill_skip": "Nu acum",
+    "backfill_result": "Mesaje actualizate: {count}",
+    "backfill_none": "Niciun mesaj din acest folder nu corespunde",
+    "backfill_limited": "Au fost verificate cele mai recente {count} mesaje; cele mai vechi au rămas neatinse.",
+    "backfill_failed": "Filtrul nu a putut fi aplicat mesajelor existente"
   },
   "context_menu": {
     "create_filter": "Creați un filtru",

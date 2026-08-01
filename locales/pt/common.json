@@ -2036,7 +2036,14 @@
     "advanced": "Mais opções",
     "applies_to_new_mail": "Aplica-se ao e-mail que chegar a partir de agora.",
     "load_failed": "Não foi possível carregar seus filtros. Tente novamente nas configurações de Filtros.",
-    "opaque": "Seu script de filtros foi editado manualmente. Gerencie-o nas configurações de Filtros."
+    "opaque": "Seu script de filtros foi editado manualmente. Gerencie-o nas configurações de Filtros.",
+    "backfill_question": "Aplicar às mensagens que já estão nesta pasta? Caso contrário, apenas o e-mail novo é filtrado.",
+    "backfill_apply": "Aplicar",
+    "backfill_skip": "Agora não",
+    "backfill_result": "Mensagens atualizadas: {count}",
+    "backfill_none": "Nenhuma mensagem desta pasta corresponde",
+    "backfill_limited": "Foram verificadas as {count} mensagens mais recentes; as mais antigas não foram alteradas.",
+    "backfill_failed": "Não foi possível aplicar o filtro às mensagens existentes"
   },
   "context_menu": {
     "create_filter": "Criar filtro",

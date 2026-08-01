@@ -2036,7 +2036,14 @@
     "advanced": "Další možnosti",
     "applies_to_new_mail": "Platí pro poštu, která přijde od této chvíle.",
     "load_failed": "Filtry se nepodařilo načíst. Zkuste to znovu v nastavení Filtry.",
-    "opaque": "Skript filtrů byl upraven ručně. Spravujte jej v nastavení Filtry."
+    "opaque": "Skript filtrů byl upraven ručně. Spravujte jej v nastavení Filtry.",
+    "backfill_question": "Použít je i na zprávy, které už v této složce jsou? Jinak se filtruje jen nová pošta.",
+    "backfill_apply": "Použít",
+    "backfill_skip": "Teď ne",
+    "backfill_result": "Upravené zprávy: {count}",
+    "backfill_none": "V této složce žádná zpráva neodpovídá",
+    "backfill_limited": "Zkontrolováno {count} nejnovějších zpráv; starší zůstaly beze změny.",
+    "backfill_failed": "Filtr se nepodařilo použít na stávající zprávy"
   },
   "context_menu": {
     "create_filter": "Vytvořit filtr",

@@ -2036,7 +2036,14 @@
     "advanced": "Meer opties",
     "applies_to_new_mail": "Geldt voor e-mail die vanaf nu binnenkomt.",
     "load_failed": "Je filters konden niet worden geladen. Probeer het opnieuw via de Filters-instellingen.",
-    "opaque": "Je filterscript is handmatig bewerkt. Beheer het via de Filters-instellingen."
+    "opaque": "Je filterscript is handmatig bewerkt. Beheer het via de Filters-instellingen.",
+    "backfill_question": "Ook toepassen op de berichten die al in deze map staan? Anders wordt alleen nieuwe post gefilterd.",
+    "backfill_apply": "Toepassen",
+    "backfill_skip": "Niet nu",
+    "backfill_result": "Bijgewerkte berichten: {count}",
+    "backfill_none": "Geen bericht in deze map komt overeen",
+    "backfill_limited": "De {count} nieuwste berichten zijn gecontroleerd; oudere zijn ongemoeid gelaten.",
+    "backfill_failed": "Het filter kon niet op bestaande berichten worden toegepast"
   },
   "context_menu": {
     "create_filter": "Filter maken",

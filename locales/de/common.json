@@ -2036,7 +2036,14 @@
     "advanced": "Weitere Optionen",
     "applies_to_new_mail": "Gilt für E-Mails, die ab jetzt eingehen.",
     "load_failed": "Ihre Filter konnten nicht geladen werden. Versuchen Sie es erneut in den Filter-Einstellungen.",
-    "opaque": "Ihr Filterskript wurde manuell bearbeitet. Verwalten Sie es in den Filter-Einstellungen."
+    "opaque": "Ihr Filterskript wurde manuell bearbeitet. Verwalten Sie es in den Filter-Einstellungen.",
+    "backfill_question": "Auf die E-Mails anwenden, die bereits in diesem Ordner liegen? Sonst wird nur neue Post gefiltert.",
+    "backfill_apply": "Anwenden",
+    "backfill_skip": "Jetzt nicht",
+    "backfill_result": "Aktualisierte E-Mails: {count}",
+    "backfill_none": "Keine E-Mail in diesem Ordner passt",
+    "backfill_limited": "Die {count} neuesten E-Mails wurden geprüft; ältere blieben unberührt.",
+    "backfill_failed": "Der Filter konnte nicht auf vorhandene E-Mails angewendet werden"
   },
   "context_menu": {
     "create_filter": "Filter erstellen",

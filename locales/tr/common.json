@@ -2036,7 +2036,14 @@
     "advanced": "Diğer seçenekler",
     "applies_to_new_mail": "Bundan sonra gelen postalara uygulanır.",
     "load_failed": "Filtreleriniz yüklenemedi. Filtreler ayarlarından tekrar deneyin.",
-    "opaque": "Filtre betiğiniz elle düzenlenmiş. Filtreler ayarlarından yönetin."
+    "opaque": "Filtre betiğiniz elle düzenlenmiş. Filtreler ayarlarından yönetin.",
+    "backfill_question": "Bu klasörde zaten bulunan iletilere de uygulansın mı? Aksi hâlde yalnızca yeni postalar filtrelenir.",
+    "backfill_apply": "Uygula",
+    "backfill_skip": "Şimdi değil",
+    "backfill_result": "Güncellenen ileti: {count}",
+    "backfill_none": "Bu klasörde eşleşen ileti yok",
+    "backfill_limited": "En yeni {count} ileti denetlendi; daha eskilere dokunulmadı.",
+    "backfill_failed": "Filtre mevcut iletilere uygulanamadı"
   },
   "context_menu": {
     "create_filter": "Filtre oluştur",

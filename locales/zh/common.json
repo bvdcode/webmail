@@ -2036,7 +2036,14 @@
     "advanced": "更多选项",
     "applies_to_new_mail": "适用于从现在起收到的邮件。",
     "load_failed": "无法加载您的过滤器。请在过滤器设置中重试。",
-    "opaque": "您的过滤器脚本已手动编辑。请在过滤器设置中管理。"
+    "opaque": "您的过滤器脚本已手动编辑。请在过滤器设置中管理。",
+    "backfill_question": "要应用到此文件夹中已有的邮件吗？否则只会过滤新邮件。",
+    "backfill_apply": "应用",
+    "backfill_skip": "暂不",
+    "backfill_result": "已处理邮件：{count}",
+    "backfill_none": "此文件夹中没有匹配的邮件",
+    "backfill_limited": "已检查最近 {count} 封邮件，更早的未做改动。",
+    "backfill_failed": "无法将过滤器应用到已有邮件"
   },
   "context_menu": {
     "create_filter": "创建过滤器",

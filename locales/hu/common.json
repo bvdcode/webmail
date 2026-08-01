@@ -2036,7 +2036,14 @@
     "advanced": "További beállítások",
     "applies_to_new_mail": "A mostantól érkező levelekre vonatkozik.",
     "load_failed": "A szűrők betöltése nem sikerült. Próbáld újra a Szűrők beállításainál.",
-    "opaque": "A szűrőszkriptet kézzel szerkesztették. Kezeld a Szűrők beállításainál."
+    "opaque": "A szűrőszkriptet kézzel szerkesztették. Kezeld a Szűrők beállításainál.",
+    "backfill_question": "Alkalmazzuk a mappában már meglévő levelekre is? Egyébként csak az új levelek szűrődnek.",
+    "backfill_apply": "Alkalmaz",
+    "backfill_skip": "Most nem",
+    "backfill_result": "Frissített levelek: {count}",
+    "backfill_none": "Ebben a mappában egy levél sem egyezik",
+    "backfill_limited": "A(z) {count} legutóbbi levél lett ellenőrizve; a régebbiek érintetlenek maradtak.",
+    "backfill_failed": "A szűrőt nem sikerült a meglévő levelekre alkalmazni"
   },
   "context_menu": {
     "create_filter": "Szűrő létrehozása",

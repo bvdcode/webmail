@@ -163,6 +163,13 @@ export function EmailList({
     },
     [sieveRulesEditable, client]
   );
+  /**
+   * The folder a new rule can be applied backwards over. Aggregate and virtual
+   * views resolve to no mailbox, and another account's folder is not reachable
+   * from the personal script, so both skip that step.
+   */
+  const backfillMailboxId =
+    mailboxes.find((mailbox) => mailbox.id === selectedMailbox && !mailbox.isShared)?.id ?? "";
   const parentRef = useRef<HTMLDivElement>(null);
   // One tag treatment for the whole list, measured from the scroll container.
   const tagDisplay = useMeasuredTagDisplay(parentRef);
@@ -683,6 +690,7 @@ export function EmailList({
         <QuickFilterModal
           email={filterSourceEmail}
           mailboxes={mailboxes}
+          currentMailboxId={backfillMailboxId}
           onClose={() => setFilterSourceEmail(null)}
         />
       )}

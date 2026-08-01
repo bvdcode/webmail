@@ -2036,7 +2036,14 @@
     "advanced": "Więcej opcji",
     "applies_to_new_mail": "Dotyczy poczty, która nadejdzie od teraz.",
     "load_failed": "Nie udało się wczytać filtrów. Spróbuj ponownie w ustawieniach Filtry.",
-    "opaque": "Skrypt filtrów został zmodyfikowany ręcznie. Zarządzaj nim w ustawieniach Filtry."
+    "opaque": "Skrypt filtrów został zmodyfikowany ręcznie. Zarządzaj nim w ustawieniach Filtry.",
+    "backfill_question": "Zastosować go do wiadomości, które już są w tym folderze? W przeciwnym razie filtrowana jest tylko nowa poczta.",
+    "backfill_apply": "Zastosuj",
+    "backfill_skip": "Nie teraz",
+    "backfill_result": "Zmienione wiadomości: {count}",
+    "backfill_none": "Żadna wiadomość w tym folderze nie pasuje",
+    "backfill_limited": "Sprawdzono {count} najnowszych wiadomości; starsze pozostały bez zmian.",
+    "backfill_failed": "Nie udało się zastosować filtra do istniejących wiadomości"
   },
   "context_menu": {
     "create_filter": "Utwórz filtr",

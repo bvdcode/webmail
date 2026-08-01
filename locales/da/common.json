@@ -2036,7 +2036,14 @@
     "advanced": "Flere indstillinger",
     "applies_to_new_mail": "Gælder for mail, der ankommer fra nu af.",
     "load_failed": "Dine filtre kunne ikke indlæses. Prøv igen fra Filtre-indstillingerne.",
-    "opaque": "Dit filterscript er redigeret manuelt. Administrér det i Filtre-indstillingerne."
+    "opaque": "Dit filterscript er redigeret manuelt. Administrér det i Filtre-indstillingerne.",
+    "backfill_question": "Skal det anvendes på de mails, der allerede ligger i denne mappe? Ellers filtreres kun ny post.",
+    "backfill_apply": "Anvend",
+    "backfill_skip": "Ikke nu",
+    "backfill_result": "Opdaterede mails: {count}",
+    "backfill_none": "Ingen mail i denne mappe matcher",
+    "backfill_limited": "Tjekkede de {count} nyeste mails; ældre blev ikke rørt.",
+    "backfill_failed": "Filteret kunne ikke anvendes på eksisterende mails"
   },
   "context_menu": {
     "create_filter": "Opret filter",
