@@ -225,7 +225,6 @@ export function QuickFilterModal({ email, mailboxes, onClose }: QuickFilterModal
                     onChange={(e) => updateCondition(field, { value: e.target.value })}
                     onFocus={() => updateCondition(field, { enabled: true })}
                     className="flex-1 min-w-[140px]"
-                    dir="ltr"
                   />
                 </CheckRow>
               ))}

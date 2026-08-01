@@ -2248,6 +2248,10 @@ export function EmailComposer({
                   }}
                   className="flex-1 bg-transparent text-sm text-foreground outline-none cursor-pointer hover:text-muted-foreground transition-colors min-w-0 truncate"
                 >
+                  {/* Before identities load there is nothing for the select's
+                      value to match, and without this the browser would show
+                      "Create new..." as if it were the chosen sender. */}
+                  {identities.length === 0 && <option value="" />}
                   {identityGroups.length > 0
                     ? identityGroups.map((group) => (
                         <optgroup key={group.localAccountId} label={group.accountLabel}>
