@@ -2027,7 +2027,16 @@
     "retry": "Opnieuw proberen",
     "go_home": "Ga naar postvak IN"
   },
+  "quick_filter": {
+    "title": "Filter maken",
+    "create": "Filter maken",
+    "advanced": "Meer opties",
+    "applies_to_new_mail": "Geldt voor e-mail die vanaf nu binnenkomt.",
+    "load_failed": "Je filters konden niet worden geladen. Probeer het opnieuw via de Filters-instellingen.",
+    "opaque": "Je filterscript is handmatig bewerkt. Beheer het via de Filters-instellingen."
+  },
   "context_menu": {
+    "create_filter": "Filter maken",
     "reply": "Beantwoorden",
     "reply_all": "Allen beantwoorden",
     "forward": "Doorsturen",

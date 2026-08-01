@@ -2027,7 +2027,16 @@
     "retry": "Tentar novamente",
     "go_home": "Ir para caixa de entrada"
   },
+  "quick_filter": {
+    "title": "Criar filtro",
+    "create": "Criar filtro",
+    "advanced": "Mais opções",
+    "applies_to_new_mail": "Aplica-se ao e-mail que chegar a partir de agora.",
+    "load_failed": "Não foi possível carregar seus filtros. Tente novamente nas configurações de Filtros.",
+    "opaque": "Seu script de filtros foi editado manualmente. Gerencie-o nas configurações de Filtros."
+  },
   "context_menu": {
+    "create_filter": "Criar filtro",
     "reply": "Responder",
     "reply_all": "Responder a Todos",
     "forward": "Encaminhar",

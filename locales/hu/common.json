@@ -2027,7 +2027,16 @@
     "retry": "Újra",
     "go_home": "Ugrás a beérkezőhöz"
   },
+  "quick_filter": {
+    "title": "Szűrő létrehozása",
+    "create": "Szűrő létrehozása",
+    "advanced": "További beállítások",
+    "applies_to_new_mail": "A mostantól érkező levelekre vonatkozik.",
+    "load_failed": "A szűrők betöltése nem sikerült. Próbáld újra a Szűrők beállításainál.",
+    "opaque": "A szűrőszkriptet kézzel szerkesztették. Kezeld a Szűrők beállításainál."
+  },
   "context_menu": {
+    "create_filter": "Szűrő létrehozása",
     "reply": "Válasz",
     "reply_all": "Válasz mindenkinek",
     "forward": "Továbbítás",

@@ -2027,7 +2027,16 @@
     "retry": "Reîncearcă",
     "go_home": "Accesați căsuța de intrare"
   },
+  "quick_filter": {
+    "title": "Creați un filtru",
+    "create": "Creați filtrul",
+    "advanced": "Mai multe opțiuni",
+    "applies_to_new_mail": "Se aplică mesajelor primite de acum înainte.",
+    "load_failed": "Filtrele nu au putut fi încărcate. Încercați din nou din setările Filtre.",
+    "opaque": "Scriptul de filtre a fost editat manual. Gestionați-l din setările Filtre."
+  },
   "context_menu": {
+    "create_filter": "Creați un filtru",
     "reply": "Răspunde",
     "reply_all": "Răspunde tuturor",
     "forward": "Redirecționează",

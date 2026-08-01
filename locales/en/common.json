@@ -2027,7 +2027,16 @@
     "retry": "Retry",
     "go_home": "Go to inbox"
   },
+  "quick_filter": {
+    "title": "Create filter",
+    "create": "Create filter",
+    "advanced": "More options",
+    "applies_to_new_mail": "Applies to mail that arrives from now on.",
+    "load_failed": "Could not load your filters. Try again from the Filters settings.",
+    "opaque": "Your filter script was edited by hand. Manage it in the Filters settings."
+  },
   "context_menu": {
+    "create_filter": "Create filter",
     "reply": "Reply",
     "reply_all": "Reply All",
     "forward": "Forward",

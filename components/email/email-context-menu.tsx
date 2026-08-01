@@ -33,6 +33,7 @@ import {
   CalendarClock,
   XCircle,
   Paperclip,
+  Filter,
 } from "lucide-react";
 import { buildMailboxTree, MailboxNode } from "@/lib/utils";
 import { localizeMailboxName } from "@/lib/mailbox-label";
@@ -66,6 +67,7 @@ interface EmailContextMenuProps {
   onDelete?: () => void;
   onArchive?: () => void;
   onSetTag?: (tagId: string | null) => void;
+  onCreateFilter?: () => void;
   onMoveToMailbox?: (mailboxId: string) => void;
   onMarkAsSpam?: () => void;
   onUndoSpam?: () => void;
@@ -121,6 +123,7 @@ export function EmailContextMenu({
   onDelete,
   onArchive,
   onSetTag,
+  onCreateFilter,
   onMoveToMailbox,
   onMarkAsSpam,
   onUndoSpam,
@@ -364,6 +367,16 @@ export function EmailContextMenu({
             />
           </div>
         </ContextMenuSubMenu>
+      )}
+
+      {/* Create filter - prefilled from this message; single selection only */}
+      {!showBatchActions && onCreateFilter && (
+        <ContextMenuItem
+          icon={Filter}
+          label={t("create_filter")}
+          testId="ctx-create-filter"
+          onClick={() => handleAction(onCreateFilter)}
+        />
       )}
 
       {/* Spam - contextual based on folder; pointless on own outgoing mail */}

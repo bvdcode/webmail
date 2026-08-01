@@ -2027,7 +2027,16 @@
     "retry": "Mēģināt vēlreiz",
     "go_home": "Uz iesūtni"
   },
+  "quick_filter": {
+    "title": "Izveidot filtru",
+    "create": "Izveidot filtru",
+    "advanced": "Vairāk opciju",
+    "applies_to_new_mail": "Attiecas uz pastu, kas pienāks no šī brīža.",
+    "load_failed": "Neizdevās ielādēt filtrus. Mēģiniet vēlreiz filtru iestatījumos.",
+    "opaque": "Filtru skripts ir rediģēts manuāli. Pārvaldiet to filtru iestatījumos."
+  },
   "context_menu": {
+    "create_filter": "Izveidot filtru",
     "reply": "Atbildēt",
     "reply_all": "Atbildēt visiem",
     "forward": "Pārsūtīt",

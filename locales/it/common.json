@@ -2027,7 +2027,16 @@
     "retry": "Riprova",
     "go_home": "Vai alla posta in arrivo"
   },
+  "quick_filter": {
+    "title": "Crea filtro",
+    "create": "Crea filtro",
+    "advanced": "Altre opzioni",
+    "applies_to_new_mail": "Si applica alla posta che arriva d'ora in poi.",
+    "load_failed": "Impossibile caricare i filtri. Riprova dalle impostazioni Filtri.",
+    "opaque": "Lo script dei filtri è stato modificato a mano. Gestiscilo nelle impostazioni Filtri."
+  },
   "context_menu": {
+    "create_filter": "Crea filtro",
     "reply": "Rispondi",
     "reply_all": "Rispondi a tutti",
     "forward": "Inoltra",

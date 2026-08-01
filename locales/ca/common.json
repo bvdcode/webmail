@@ -2027,7 +2027,16 @@
     "retry": "Reintenta",
     "go_home": "Vés a la safata d'entrada"
   },
+  "quick_filter": {
+    "title": "Crea un filtre",
+    "create": "Crea un filtre",
+    "advanced": "Més opcions",
+    "applies_to_new_mail": "S'aplica al correu que arribi a partir d'ara.",
+    "load_failed": "No s'han pogut carregar els filtres. Torneu-ho a provar des de la configuració de Filtres.",
+    "opaque": "L'script de filtres s'ha editat manualment. Gestioneu-lo des de la configuració de Filtres."
+  },
   "context_menu": {
+    "create_filter": "Crea un filtre",
     "reply": "Respon",
     "reply_all": "Respon a tots",
     "forward": "Reenvia",

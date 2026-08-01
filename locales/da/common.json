@@ -2027,7 +2027,16 @@
     "retry": "Prøv igen",
     "go_home": "Gå til indbakke"
   },
+  "quick_filter": {
+    "title": "Opret filter",
+    "create": "Opret filter",
+    "advanced": "Flere indstillinger",
+    "applies_to_new_mail": "Gælder for mail, der ankommer fra nu af.",
+    "load_failed": "Dine filtre kunne ikke indlæses. Prøv igen fra Filtre-indstillingerne.",
+    "opaque": "Dit filterscript er redigeret manuelt. Administrér det i Filtre-indstillingerne."
+  },
   "context_menu": {
+    "create_filter": "Opret filter",
     "reply": "Svar",
     "reply_all": "Svar alle",
     "forward": "Videresend",

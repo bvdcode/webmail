@@ -2027,7 +2027,16 @@
     "retry": "Wiederholen",
     "go_home": "Zum Posteingang"
   },
+  "quick_filter": {
+    "title": "Filter erstellen",
+    "create": "Filter erstellen",
+    "advanced": "Weitere Optionen",
+    "applies_to_new_mail": "Gilt für E-Mails, die ab jetzt eingehen.",
+    "load_failed": "Ihre Filter konnten nicht geladen werden. Versuchen Sie es erneut in den Filter-Einstellungen.",
+    "opaque": "Ihr Filterskript wurde manuell bearbeitet. Verwalten Sie es in den Filter-Einstellungen."
+  },
   "context_menu": {
+    "create_filter": "Filter erstellen",
     "reply": "Antworten",
     "reply_all": "Allen antworten",
     "forward": "Weiterleiten",

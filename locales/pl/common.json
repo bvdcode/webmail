@@ -2027,7 +2027,16 @@
     "retry": "Ponów",
     "go_home": "Przejdź do skrzynki odbiorczej"
   },
+  "quick_filter": {
+    "title": "Utwórz filtr",
+    "create": "Utwórz filtr",
+    "advanced": "Więcej opcji",
+    "applies_to_new_mail": "Dotyczy poczty, która nadejdzie od teraz.",
+    "load_failed": "Nie udało się wczytać filtrów. Spróbuj ponownie w ustawieniach Filtry.",
+    "opaque": "Skrypt filtrów został zmodyfikowany ręcznie. Zarządzaj nim w ustawieniach Filtry."
+  },
   "context_menu": {
+    "create_filter": "Utwórz filtr",
     "reply": "Odpowiedz",
     "reply_all": "Odpowiedz wszystkim",
     "forward": "Prześlij dalej",

@@ -2027,7 +2027,16 @@
     "retry": "重试",
     "go_home": "前往收件箱"
   },
+  "quick_filter": {
+    "title": "创建过滤器",
+    "create": "创建过滤器",
+    "advanced": "更多选项",
+    "applies_to_new_mail": "适用于从现在起收到的邮件。",
+    "load_failed": "无法加载您的过滤器。请在过滤器设置中重试。",
+    "opaque": "您的过滤器脚本已手动编辑。请在过滤器设置中管理。"
+  },
   "context_menu": {
+    "create_filter": "创建过滤器",
     "reply": "回复",
     "reply_all": "全部回复",
     "forward": "转发",

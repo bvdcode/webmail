@@ -2027,7 +2027,16 @@
     "retry": "リトライ",
     "go_home": "受信トレイに移動"
   },
+  "quick_filter": {
+    "title": "フィルターを作成",
+    "create": "フィルターを作成",
+    "advanced": "詳細オプション",
+    "applies_to_new_mail": "今後受信するメールに適用されます。",
+    "load_failed": "フィルターを読み込めませんでした。フィルター設定からやり直してください。",
+    "opaque": "フィルタースクリプトは手動で編集されています。フィルター設定で管理してください。"
+  },
   "context_menu": {
+    "create_filter": "フィルターを作成",
     "reply": "返信",
     "reply_all": "全員に返信",
     "forward": "転送",

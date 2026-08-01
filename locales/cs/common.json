@@ -2027,7 +2027,16 @@
     "retry": "Opakovat",
     "go_home": "Přejít do doručené pošty"
   },
+  "quick_filter": {
+    "title": "Vytvořit filtr",
+    "create": "Vytvořit filtr",
+    "advanced": "Další možnosti",
+    "applies_to_new_mail": "Platí pro poštu, která přijde od této chvíle.",
+    "load_failed": "Filtry se nepodařilo načíst. Zkuste to znovu v nastavení Filtry.",
+    "opaque": "Skript filtrů byl upraven ručně. Spravujte jej v nastavení Filtry."
+  },
   "context_menu": {
+    "create_filter": "Vytvořit filtr",
     "reply": "Odpovědět",
     "reply_all": "Odpovědět všem",
     "forward": "Přeposlat",

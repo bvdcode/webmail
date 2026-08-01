@@ -2027,7 +2027,16 @@
     "retry": "재시도",
     "go_home": "받은편지함으로 이동"
   },
+  "quick_filter": {
+    "title": "필터 만들기",
+    "create": "필터 만들기",
+    "advanced": "추가 옵션",
+    "applies_to_new_mail": "지금부터 도착하는 메일에 적용돼요.",
+    "load_failed": "필터를 불러오지 못했어요. 필터 설정에서 다시 시도해 주세요.",
+    "opaque": "필터 스크립트가 직접 수정되었어요. 필터 설정에서 관리해 주세요."
+  },
   "context_menu": {
+    "create_filter": "필터 만들기",
     "reply": "답장",
     "reply_all": "전체 답장",
     "forward": "전달",

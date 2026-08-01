@@ -2027,7 +2027,16 @@
     "retry": "Yeniden dene",
     "go_home": "Gelen kutusuna git"
   },
+  "quick_filter": {
+    "title": "Filtre oluştur",
+    "create": "Filtre oluştur",
+    "advanced": "Diğer seçenekler",
+    "applies_to_new_mail": "Bundan sonra gelen postalara uygulanır.",
+    "load_failed": "Filtreleriniz yüklenemedi. Filtreler ayarlarından tekrar deneyin.",
+    "opaque": "Filtre betiğiniz elle düzenlenmiş. Filtreler ayarlarından yönetin."
+  },
   "context_menu": {
+    "create_filter": "Filtre oluştur",
     "reply": "Yanıtla",
     "reply_all": "Tümünü Yanıtla",
     "forward": "İlet",

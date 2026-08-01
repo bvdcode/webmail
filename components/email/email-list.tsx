@@ -8,8 +8,10 @@ import { Trash2, Mail, MailX, MailOpen, Loader2, SearchX, AlertTriangle, Calenda
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { QuickFilterModal } from "@/components/filters/quick-filter-modal";
 import { useEmailStore } from "@/stores/email-store";
 import { useAuthStore } from "@/stores/auth-store";
+import { useFilterStore } from "@/stores/filter-store";
 import { useSettingsStore } from "@/stores/settings-store";
 import { useUIStore } from "@/stores/ui-store";
 import { groupEmailsByThread, sortThreadGroups } from "@/lib/thread-utils";
@@ -144,6 +146,23 @@ export function EmailList({
   const { dialogProps: confirmDialogProps, confirm: confirmDialog } = useConfirmDialog();
 
   const [isProcessing, setIsProcessing] = useState(false);
+  // The message a quick filter is being built from; null while the dialog is closed.
+  const [filterSourceEmail, setFilterSourceEmail] = useState<Email | null>(null);
+  // A hand-edited Sieve script has no rule structure to append to, so the entry
+  // point stays hidden and Settings remains the only way in.
+  const sieveRulesEditable = useFilterStore((state) => state.isSupported && !state.isOpaque);
+  /**
+   * Rules are written into the personal account's script, so a message read out
+   * of someone else's shared folder has no matching script to file into - and
+   * its folder paths would not resolve there either.
+   */
+  const canCreateFilterFor = useCallback(
+    (email: Email | null): boolean => {
+      if (!email || !sieveRulesEditable || !client) return false;
+      return !email.sourceAccountId || email.sourceAccountId === client.getAccountId();
+    },
+    [sieveRulesEditable, client]
+  );
   const parentRef = useRef<HTMLDivElement>(null);
   // One tag treatment for the whole list, measured from the scroll container.
   const tagDisplay = useMeasuredTagDisplay(parentRef);
@@ -604,6 +623,11 @@ export function EmailList({
           onDelete={() => onDelete?.(contextMenuEmail!)}
           onArchive={() => onArchive?.(contextMenuEmail!)}
           onSetTag={(color) => onSetTag?.(contextMenuEmail!.id, color)}
+          onCreateFilter={
+            canCreateFilterFor(contextMenuEmail)
+              ? () => setFilterSourceEmail(contextMenuEmail)
+              : undefined
+          }
           onMoveToMailbox={(mailboxId) => onMoveToMailbox?.(contextMenuEmail!.id, mailboxId)}
           onMarkAsSpam={() => onMarkAsSpam?.(contextMenuEmail!)}
           onUndoSpam={() => onUndoSpam?.(contextMenuEmail!)}
@@ -652,6 +676,14 @@ export function EmailList({
               }
             }
           }}
+        />
+      )}
+
+      {filterSourceEmail && (
+        <QuickFilterModal
+          email={filterSourceEmail}
+          mailboxes={mailboxes}
+          onClose={() => setFilterSourceEmail(null)}
         />
       )}
 
