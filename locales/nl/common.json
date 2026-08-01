@@ -1819,7 +1819,7 @@
         "from": "Van",
         "to": "Aan",
         "cc": "Cc",
-        "envelope_to": "Werkelijke afleverontvanger",
+        "envelope_to": "Afgeleverd aan",
         "subject": "Onderwerp",
         "header": "Aangepaste header",
         "size": "Grootte",

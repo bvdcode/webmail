@@ -1819,7 +1819,7 @@
         "from": "发件人",
         "to": "收件人",
         "cc": "抄送",
-        "envelope_to": "实际投递收件人",
+        "envelope_to": "投递至",
         "subject": "主题",
         "header": "自定义标头",
         "size": "大小",

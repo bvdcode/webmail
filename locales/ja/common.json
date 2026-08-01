@@ -1819,7 +1819,7 @@
         "from": "差出人",
         "to": "宛先",
         "cc": "Cc",
-        "envelope_to": "実際の配信先",
+        "envelope_to": "配信先",
         "subject": "件名",
         "header": "カスタムヘッダー",
         "size": "サイズ",

@@ -1826,7 +1826,7 @@
         "from": "De",
         "to": "Per a",
         "cc": "CC",
-        "envelope_to": "Destinatari real del lliurament",
+        "envelope_to": "Lliurat a",
         "subject": "Assumpte",
         "header": "Capçalera personalitzada",
         "size": "Mida",

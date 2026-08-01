@@ -1826,7 +1826,7 @@
         "from": "From",
         "to": "To",
         "cc": "Cc",
-        "envelope_to": "Actual delivery recipient",
+        "envelope_to": "Delivered to",
         "subject": "Subject",
         "header": "Custom Header",
         "size": "Size",

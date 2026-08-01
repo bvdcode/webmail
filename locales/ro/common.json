@@ -1826,7 +1826,7 @@
         "from": "De la",
         "to": "Către",
         "cc": "Cc",
-        "envelope_to": "Destinatarul real al livrării",
+        "envelope_to": "Livrat către",
         "subject": "Subiect",
         "header": "Antet personalizat",
         "size": "Dimensiune",

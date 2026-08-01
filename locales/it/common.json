@@ -1819,7 +1819,7 @@
         "from": "Da",
         "to": "A",
         "cc": "Cc",
-        "envelope_to": "Destinatario effettivo della consegna",
+        "envelope_to": "Consegnato a",
         "subject": "Oggetto",
         "header": "Intestazione personalizzata",
         "size": "Dimensione",
