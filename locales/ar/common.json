@@ -623,7 +623,7 @@
     },
     "remove_sub_address": "إزالة العنوان الفرعي",
     "from_override": {
-      "toggle_off": "تجاوز",
+      "create_new": "إنشاء جديد...",
       "toggle_on": "إلغاء التجاوز",
       "toggle_tooltip": "عدّل اسم وعنوان \"من\" بحرية. سيُرسل البريد عبر هويتك، لكن ترويسة \"من\" الظاهرة فقط هي التي تتغير.",
       "name_label": "اسم المرسل",
@@ -635,6 +635,7 @@
     "save_as_template": "حفظ كقالب",
     "validation": {
       "recipient_required": "أضف مستلمًا للإرسال",
+      "from_invalid": "أدخل عنوان مُرسِل صالحًا",
       "subject_required": "أضف موضوعًا",
       "body_required": "اكتب رسالة أو أرفق ملفًا",
       "attachments_uploading": "المرفقات لا تزال قيد الرفع — سيتم الإرسال فور انتهائها",

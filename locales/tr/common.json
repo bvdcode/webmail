@@ -623,7 +623,7 @@
     },
     "remove_sub_address": "Alt adresi kaldır",
     "from_override": {
-      "toggle_off": "Geçersiz kıl",
+      "create_new": "Yeni oluştur...",
       "toggle_on": "Geçersiz kılmayı iptal et",
       "toggle_tooltip": "Gönderen adını ve adresini serbestçe düzenleyin. Posta hâlâ kimliğiniz üzerinden gönderilir - yalnızca görünür Kimden başlığı değişir.",
       "name_label": "Gönderen adı",
@@ -635,6 +635,7 @@
     "save_as_template": "Şablon Olarak Kaydet",
     "validation": {
       "recipient_required": "Göndermek için bir alıcı ekleyin",
+      "from_invalid": "Geçerli bir gönderen adresi girin",
       "subject_required": "Bir konu ekleyin",
       "body_required": "Bir ileti yazın veya dosya ekleyin",
       "attachments_uploading": "Ekler hâlâ yükleniyor — yükleme bitince gönderilecek",

@@ -620,7 +620,7 @@
     },
     "remove_sub_address": "Eliminar sub-dirección",
     "from_override": {
-      "toggle_off": "Anular",
+      "create_new": "Crear nuevo...",
       "toggle_on": "Cancelar anulación",
       "toggle_tooltip": "Edita libremente el nombre y la dirección del remitente. El correo aún se envía a través de tu identidad - solo cambia el encabezado De visible.",
       "name_label": "Nombre del remitente",
@@ -632,6 +632,7 @@
     "save_as_template": "Guardar como plantilla",
     "validation": {
       "recipient_required": "Agregue un destinatario para enviar",
+      "from_invalid": "Introduce una dirección de remitente válida",
       "subject_required": "Agregue un asunto",
       "body_required": "Escriba un mensaje o adjunte un archivo",
       "attachments_uploading": "Los archivos adjuntos aún se están subiendo; se enviará en cuanto terminen",

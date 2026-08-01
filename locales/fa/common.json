@@ -623,7 +623,7 @@
     },
     "remove_sub_address": "حذف زیرآدرس",
     "from_override": {
-      "toggle_off": "بازنویسی",
+      "create_new": "ایجاد جدید...",
       "toggle_on": "لغو بازنویسی",
       "toggle_tooltip": "نام و آدرس فرستنده را آزادانه ویرایش کنید.",
       "name_label": "نام فرستنده",
@@ -635,6 +635,7 @@
     "save_as_template": "ذخیره به عنوان قالب",
     "validation": {
       "recipient_required": "یک گیرنده اضافه کنید",
+      "from_invalid": "یک آدرس فرستنده معتبر وارد کنید",
       "subject_required": "یک موضوع اضافه کنید",
       "body_required": "پیامی بنویسید یا فایلی پیوست کنید",
       "attachments_uploading": "پیوست‌ها هنوز در حال بارگذاری هستند — پس از اتمام ارسال می‌شود",

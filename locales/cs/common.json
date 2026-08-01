@@ -620,7 +620,7 @@
     },
     "remove_sub_address": "Odebrat subadresu",
     "from_override": {
-      "toggle_off": "Přepsat",
+      "create_new": "Vytvořit nový...",
       "toggle_on": "Zrušit přepsání",
       "toggle_tooltip": "Volně upravujte jméno a adresu odesílatele. Pošta se stále odesílá přes vaši identitu - mění se pouze viditelné záhlaví Od.",
       "name_label": "Jméno odesílatele",
@@ -632,6 +632,7 @@
     "save_as_template": "Uložit jako šablonu",
     "validation": {
       "recipient_required": "Chcete-li zprávu odeslat, přidejte příjemce",
+      "from_invalid": "Zadejte platnou adresu odesílatele",
       "subject_required": "Přidejte předmět",
       "body_required": "Napište zprávu nebo připojte soubor",
       "attachments_uploading": "Přílohy se stále nahrávají – odeslání proběhne po dokončení",

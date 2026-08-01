@@ -184,20 +184,17 @@ export async function composerRecipients(page: Page): Promise<string[]> {
 }
 
 /**
- * The sender addresses the composer's From control offers.
+ * The sender addresses the composer's From picker offers.
  *
- * With more than one identity the control is a <select> and each choice is an
- * <option>; with a single identity it collapses to a static <span> that shows
- * only that address. Returning the raw text of whichever is rendered lets a
- * test assert on the *set of senders* without caring which shape it took.
+ * The picker's last <option> is the "type your own address" entry rather than a
+ * sender, so it is dropped here and tests can assert on the set of senders
+ * alone. Choosing that entry replaces the picker with free-text inputs, so this
+ * helper only applies while a saved sender is selected.
  */
 export async function composerFromOptions(page: Page): Promise<string[]> {
   const from = page.locator('[data-testid="composer-from"]').first();
   await from.waitFor({ state: 'visible', timeout: 10000 });
-  if ((await from.locator('option').count()) > 0) {
-    return from.locator('option').allTextContents();
-  }
-  return [await from.innerText()];
+  return from.locator('option:not([data-testid="composer-from-custom"])').allTextContents();
 }
 
 export interface FolderSelector {

@@ -623,7 +623,7 @@
     },
     "remove_sub_address": "Odstrániť podadresu",
     "from_override": {
-      "toggle_off": "Prepísať",
+      "create_new": "Vytvoriť nový...",
       "toggle_on": "Zrušiť prepísanie",
       "toggle_tooltip": "Upravte meno a adresu odosielateľa. Pošta sa stále odosiela cez vašu identitu.",
       "name_label": "Meno odosielateľa",
@@ -635,6 +635,7 @@
     "save_as_template": "Uložiť ako šablónu",
     "validation": {
       "recipient_required": "Pridajte príjemcu na odoslanie",
+      "from_invalid": "Zadajte platnú adresu odosielateľa",
       "subject_required": "Pridajte predmet",
       "body_required": "Napíšte správu alebo priložte súbor",
       "attachments_uploading": "Prílohy sa stále nahrávajú - odošle sa hneď po ich dokončení",

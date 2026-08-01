@@ -584,6 +584,7 @@
     "save_as_template": "שמור כתבנית",
     "validation": {
       "recipient_required": "הוסף נמען לשליחה",
+      "from_invalid": "הזן כתובת שולח תקינה",
       "subject_required": "הוסף נושא",
       "body_required": "כתוב הודעה או צרף קובץ",
       "attachments_uploading": "קבצים מצורפים עדיין בהעלאה - ההודעה תישלח מיד בסיום",
@@ -615,7 +616,7 @@
     "add_link": "הוסף קישור",
     "link_url_prompt": "הזן את כתובת ה־URL",
     "from_override": {
-      "toggle_off": "עקוף",
+      "create_new": "צור חדש...",
       "toggle_on": "בטל עקיפה",
       "toggle_tooltip": "ערוך את שם ההַשגחה וכתובת בחופשיות. הדוא״ל עדיין נשלח דרך הזהות שלך - רק כותרת ההַשגחה הנראית משתנה.",
       "name_label": "שם ממנו",

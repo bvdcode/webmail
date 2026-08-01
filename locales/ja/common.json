@@ -620,7 +620,7 @@
     },
     "remove_sub_address": "サブアドレスを削除",
     "from_override": {
-      "toggle_off": "上書き",
+      "create_new": "新規作成...",
       "toggle_on": "上書きを取り消す",
       "toggle_tooltip": "差出人名とアドレスを自由に編集できます。メールは引き続きあなたのアイデンティティ経由で送信されます - 表示される差出人ヘッダーのみが変更されます。",
       "name_label": "差出人名",
@@ -632,6 +632,7 @@
     "save_as_template": "テンプレートとして保存",
     "validation": {
       "recipient_required": "送信するには宛先を追加してください",
+      "from_invalid": "有効な差出人アドレスを入力してください",
       "subject_required": "件名を追加してください",
       "body_required": "メッセージを入力するかファイルを添付してください",
       "attachments_uploading": "添付ファイルをアップロード中です。完了次第送信します",

@@ -620,7 +620,7 @@
     },
     "remove_sub_address": "Sub-Adresse entfernen",
     "from_override": {
-      "toggle_off": "Überschreiben",
+      "create_new": "Neu erstellen...",
       "toggle_on": "Überschreibung aufheben",
       "toggle_tooltip": "Bearbeiten Sie Absendername und -adresse frei. Die E-Mail wird weiterhin über Ihre Identität gesendet - nur die sichtbare Absenderkopfzeile ändert sich.",
       "name_label": "Absendername",
@@ -632,6 +632,7 @@
     "save_as_template": "Als Vorlage speichern",
     "validation": {
       "recipient_required": "Empfänger hinzufügen zum Senden",
+      "from_invalid": "Gültige Absenderadresse eingeben",
       "subject_required": "Betreff hinzufügen",
       "body_required": "Nachricht schreiben oder Datei anhängen",
       "attachments_uploading": "Anhänge werden noch hochgeladen – wird gesendet, sobald sie fertig sind",

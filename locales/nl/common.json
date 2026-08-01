@@ -620,7 +620,7 @@
     },
     "remove_sub_address": "Sub-adres verwijderen",
     "from_override": {
-      "toggle_off": "Overschrijven",
+      "create_new": "Nieuwe maken...",
       "toggle_on": "Overschrijven annuleren",
       "toggle_tooltip": "Bewerk de naam en het adres van de afzender vrij. E-mail wordt nog steeds via je identiteit verzonden - alleen de zichtbare Van-koptekst verandert.",
       "name_label": "Afzendernaam",
@@ -632,6 +632,7 @@
     "save_as_template": "Opslaan als sjabloon",
     "validation": {
       "recipient_required": "Voeg een ontvanger toe om te verzenden",
+      "from_invalid": "Voer een geldig afzenderadres in",
       "subject_required": "Voeg een onderwerp toe",
       "body_required": "Schrijf een bericht of voeg een bestand toe",
       "attachments_uploading": "Bijlagen worden nog geüpload — wordt verzonden zodra dit klaar is",

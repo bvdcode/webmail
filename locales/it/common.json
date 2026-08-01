@@ -620,7 +620,7 @@
     },
     "remove_sub_address": "Rimuovi sotto-indirizzo",
     "from_override": {
-      "toggle_off": "Sovrascrivi",
+      "create_new": "Crea nuovo...",
       "toggle_on": "Annulla sovrascrittura",
       "toggle_tooltip": "Modifica liberamente nome e indirizzo del mittente. La posta viene comunque inviata tramite la tua identità - cambia solo l'intestazione Da visibile.",
       "name_label": "Nome mittente",
@@ -632,6 +632,7 @@
     "save_as_template": "Salva come modello",
     "validation": {
       "recipient_required": "Aggiungi un destinatario per inviare",
+      "from_invalid": "Inserisci un indirizzo mittente valido",
       "subject_required": "Aggiungi un oggetto",
       "body_required": "Scrivi un messaggio o allega un file",
       "attachments_uploading": "Gli allegati sono ancora in fase di caricamento: verrà inviato al termine",

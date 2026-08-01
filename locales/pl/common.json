@@ -620,7 +620,7 @@
     },
     "remove_sub_address": "Usuń podadres",
     "from_override": {
-      "toggle_off": "Zastąp",
+      "create_new": "Utwórz nowy...",
       "toggle_on": "Anuluj zastąpienie",
       "toggle_tooltip": "Swobodnie edytuj nazwę i adres nadawcy. Poczta jest nadal wysyłana przez twoją tożsamość - zmienia się tylko widoczny nagłówek Od.",
       "name_label": "Nazwa nadawcy",
@@ -632,6 +632,7 @@
     "save_as_template": "Zapisz jako szablon",
     "validation": {
       "recipient_required": "Dodaj odbiorcę, aby wysłać",
+      "from_invalid": "Podaj prawidłowy adres nadawcy",
       "subject_required": "Dodaj temat",
       "body_required": "Napisz wiadomość lub załącz plik",
       "attachments_uploading": "Załączniki wciąż się przesyłają — wiadomość zostanie wysłana po zakończeniu",

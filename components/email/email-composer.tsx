@@ -102,6 +102,13 @@ function createChipDragPreview(label: string): HTMLElement {
 // inserts as a single chip and expands into its members on send.
 type SuggestionItem = { name: string; email: string; group?: { id: string; memberCount: number } };
 
+/**
+ * Value of the From picker's "type your own address" entry. The change handler
+ * intercepts it, so it never reaches `selectedIdentityId` - an unknown id there
+ * would silently degrade to the primary identity on send.
+ */
+const CUSTOM_FROM_OPTION = '__compose_custom_from__';
+
 export interface ComposerDraftData {
   to: string;
   cc: string;
@@ -532,6 +539,10 @@ export function EmailComposer({
   const [fromOverrideEnabled, setFromOverrideEnabled] = useState<boolean>(initialData?.fromOverrideEnabled ?? false);
   const [fromOverrideEmail, setFromOverrideEmail] = useState<string>(initialData?.fromOverrideEmail ?? '');
   const [fromOverrideName, setFromOverrideName] = useState<string>(initialData?.fromOverrideName ?? '');
+  // Set when the picker's "type your own address" entry is chosen, so the
+  // address field takes focus as soon as it replaces the picker.
+  const [focusFromOverride, setFocusFromOverride] = useState(false);
+  const fromOverrideEmailRef = useRef<HTMLInputElement>(null);
   const [showTemplatePicker, setShowTemplatePicker] = useState(false);
   const [showSaveAsTemplate, setShowSaveAsTemplate] = useState(false);
   const [showCloseDialog, setShowCloseDialog] = useState(false);
@@ -877,6 +888,14 @@ export function EmailComposer({
   // Keep a ref to current state for the unmount save
   const stateRef = useRef({ to: toStr, cc: ccStr, bcc: bccStr, subject, body, showCc, showBcc, selectedIdentityId, subAddressTag, draftId, fromOverrideEnabled, fromOverrideEmail, fromOverrideName });
   stateRef.current = { to: toStr, cc: ccStr, bcc: bccStr, subject, body, showCc, showBcc, selectedIdentityId, subAddressTag, draftId, fromOverrideEnabled, fromOverrideEmail, fromOverrideName };
+
+  // The address field only exists once the override replaces the picker, so
+  // focusing it has to wait for that render.
+  useEffect(() => {
+    if (!focusFromOverride) return;
+    fromOverrideEmailRef.current?.focus();
+    setFocusFromOverride(false);
+  }, [focusFromOverride]);
 
   // Track initial values for dirty detection (captured once on first render)
   const initialValuesRef = useRef({ to: toStr, cc: ccStr, bcc: bccStr, subject, body, attachmentCount: attachments.length });
@@ -1574,11 +1593,16 @@ export function EmailComposer({
   const toAddresses = expandRecipients(withInput(to, toInput));
   const bodyPlainText = plainTextMode ? body.trim() : htmlToPlainText(body).trim();
   const hasContent = bodyPlainText || attachments.some(att => att.blobId && !att.uploading);
-  const canSend = toAddresses.length > 0 && !!subject && hasContent;
+  // A typed-in From must be a real address: it goes verbatim into the From
+  // header, so an empty or malformed one would either silently fall back to the
+  // identity or produce an unsendable message.
+  const hasValidFrom = !fromOverrideEnabled || isValidEmail(fromOverrideEmail.trim());
+  const canSend = toAddresses.length > 0 && !!subject && hasContent && hasValidFrom;
 
   const getSendTooltip = (): string | undefined => {
     if (isWaitingForUploads) return t('validation.attachments_uploading');
     if (canSend) return undefined;
+    if (!hasValidFrom) return t('validation.from_invalid');
     if (toAddresses.length === 0) return t('validation.recipient_required');
     if (!subject) return t('validation.subject_required');
     if (!hasContent) return t('validation.body_required');
@@ -1710,7 +1734,11 @@ export function EmailComposer({
       if (!hasContent) errors.body = true;
       setValidationErrors(errors);
 
-      if (errors.to) {
+      if (!hasValidFrom) {
+        setShakeField('from');
+        setTimeout(() => setShakeField(null), 400);
+        fromOverrideEmailRef.current?.focus();
+      } else if (errors.to) {
         setShakeField('to');
         setTimeout(() => setShakeField(null), 400);
         toInputRef.current?.focus();
@@ -2184,7 +2212,7 @@ export function EmailComposer({
         {/* Fields section */}
         <div className="space-y-0 border-b">
           {/* From field */}
-          <div className="flex items-center gap-2 px-4 py-2.5 border-b border-border/50">
+          <div className={cn("flex items-center gap-2 px-4 py-2.5 border-b border-border/50", shakeField === 'from' && "animate-shake")}>
             <span className="text-sm text-muted-foreground w-12 md:w-16 shrink-0">{t('from')}:</span>
             <div className="flex-1 flex items-center gap-1 min-w-0">
               {fromOverrideEnabled ? (
@@ -2197,6 +2225,7 @@ export function EmailComposer({
                     aria-label={t('from_override.name_label')}
                   />
                   <Input
+                    ref={fromOverrideEmailRef}
                     value={fromOverrideEmail}
                     onChange={(e) => setFromOverrideEmail(e.target.value)}
                     placeholder={t('from_override.email_placeholder')}
@@ -2205,11 +2234,18 @@ export function EmailComposer({
                     aria-label={t('from_override.email_label')}
                   />
                 </div>
-              ) : identities.length > 1 ? (
+              ) : (
                 <select
                   data-testid="composer-from"
                   value={selectedIdentityId || primaryIdentity?.id || ''}
-                  onChange={(e) => setSelectedIdentityId(e.target.value)}
+                  onChange={(e) => {
+                    if (e.target.value === CUSTOM_FROM_OPTION) {
+                      setFromOverrideEnabled(true);
+                      setFocusFromOverride(true);
+                      return;
+                    }
+                    setSelectedIdentityId(e.target.value);
+                  }}
                   className="flex-1 bg-transparent text-sm text-foreground outline-none cursor-pointer hover:text-muted-foreground transition-colors min-w-0 truncate"
                 >
                   {identityGroups.length > 0
@@ -2237,21 +2273,14 @@ export function EmailComposer({
                           </option>
                         );
                       })}
+                  <option
+                    value={CUSTOM_FROM_OPTION}
+                    data-testid="composer-from-custom"
+                    title={t('from_override.toggle_tooltip')}
+                  >
+                    {t('from_override.create_new')}
+                  </option>
                 </select>
-              ) : (
-                <span data-testid="composer-from" className="text-sm text-foreground flex-1 truncate">
-                  {subAddressTag ? (
-                    <span className="font-mono">
-                      {generateSubAddress(primaryIdentity?.email || '', subAddressTag, subAddressDelimiter)}
-                    </span>
-                  ) : (
-                    <bdi>
-                      {primaryIdentity?.name
-                        ? `${primaryIdentity.name} <${primaryIdentity.email}>`
-                        : primaryIdentity?.email || ''}
-                    </bdi>
-                  )}
-                </span>
               )}
               {!fromOverrideEnabled && (
                 <SubAddressHelper
@@ -2276,28 +2305,17 @@ export function EmailComposer({
                   <X className="w-3 h-3" />
                 </Button>
               )}
-              <Button
-                type="button"
-                variant={fromOverrideEnabled ? 'outline' : 'ghost'}
-                size="sm"
-                onClick={() => {
-                  if (fromOverrideEnabled) {
-                    setFromOverrideEnabled(false);
-                  } else {
-                    setFromOverrideEnabled(true);
-                    if (!fromOverrideEmail && currentIdentity?.email) {
-                      setFromOverrideEmail(currentIdentity.email);
-                    }
-                    if (!fromOverrideName && currentIdentity?.name) {
-                      setFromOverrideName(currentIdentity.name);
-                    }
-                  }
-                }}
-                className="h-6 px-2 text-xs shrink-0"
-                title={t('from_override.toggle_tooltip')}
-              >
-                {fromOverrideEnabled ? t('from_override.toggle_on') : t('from_override.toggle_off')}
-              </Button>
+              {fromOverrideEnabled && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setFromOverrideEnabled(false)}
+                  className="h-6 px-2 text-xs shrink-0"
+                >
+                  {t('from_override.toggle_on')}
+                </Button>
+              )}
             </div>
           </div>
 

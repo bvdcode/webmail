@@ -623,7 +623,7 @@
     },
     "remove_sub_address": "Alcím eltávolítása",
     "from_override": {
-      "toggle_off": "Felülbírálás",
+      "create_new": "Új létrehozása...",
       "toggle_on": "Felülbírálás megszüntetése",
       "toggle_tooltip": "A Feladó név és cím szabad szerkesztése. A levél továbbra is az identitásodon keresztül kerül elküldésre - csak a látható Feladó fejléc változik.",
       "name_label": "Feladó neve",
@@ -635,6 +635,7 @@
     "save_as_template": "Mentés sablonként",
     "validation": {
       "recipient_required": "Adj meg egy címzettet a küldéshez",
+      "from_invalid": "Adj meg egy érvényes feladócímet",
       "subject_required": "Adj meg egy tárgyat",
       "body_required": "Írj üzenetet vagy csatolj fájlt",
       "attachments_uploading": "A mellékletek még feltöltés alatt vannak – küldés a feltöltés befejezése után",

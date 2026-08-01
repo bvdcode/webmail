@@ -620,7 +620,7 @@
     },
     "remove_sub_address": "Retirer le sous-adressage",
     "from_override": {
-      "toggle_off": "Remplacer",
+      "create_new": "Créer un nouveau...",
       "toggle_on": "Annuler le remplacement",
       "toggle_tooltip": "Modifiez librement le nom et l'adresse d'expéditeur. Le courrier est toujours envoyé via votre identité - seul l'en-tête De visible change.",
       "name_label": "Nom de l'expéditeur",
@@ -632,6 +632,7 @@
     "save_as_template": "Enregistrer comme modèle",
     "validation": {
       "recipient_required": "Ajoutez un destinataire pour envoyer",
+      "from_invalid": "Saisissez une adresse d'expéditeur valide",
       "subject_required": "Ajoutez un objet",
       "body_required": "Rédigez un message ou joignez un fichier",
       "attachments_uploading": "Les pièces jointes sont en cours d'envoi — le message partira une fois terminé",

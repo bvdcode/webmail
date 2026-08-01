@@ -622,7 +622,7 @@
     },
     "remove_sub_address": "Fjern underadresse",
     "from_override": {
-      "toggle_off": "Tilsidesæt",
+      "create_new": "Opret ny...",
       "toggle_on": "Annuller tilsidesættelse",
       "toggle_tooltip": "Redigér Fra-navn og -adresse frit. Mail sendes stadig gennem din identitet - kun den synlige Fra-header ændres.",
       "name_label": "Fra-navn",
@@ -634,6 +634,7 @@
     "save_as_template": "Gem som skabelon",
     "validation": {
       "recipient_required": "Tilføj en modtager for at sende",
+      "from_invalid": "Angiv en gyldig afsenderadresse",
       "subject_required": "Tilføj et emne",
       "body_required": "Skriv en besked eller vedhæft en fil",
       "attachments_uploading": "Vedhæftninger uploades stadig — sendes, når de er færdige",

@@ -623,7 +623,7 @@
     },
     "remove_sub_address": "Remove sub-address",
     "from_override": {
-      "toggle_off": "Override",
+      "create_new": "Create new...",
       "toggle_on": "Cancel override",
       "toggle_tooltip": "Edit the From name and address freely. Mail is still sent through your identity - only the visible From header changes.",
       "name_label": "From name",
@@ -635,6 +635,7 @@
     "save_as_template": "Save as Template",
     "validation": {
       "recipient_required": "Add a recipient to send",
+      "from_invalid": "Enter a valid sender address",
       "subject_required": "Add a subject",
       "body_required": "Write a message or attach a file",
       "attachments_uploading": "Attachments are still uploading — sending as soon as they finish",

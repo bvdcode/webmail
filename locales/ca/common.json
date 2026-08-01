@@ -623,7 +623,7 @@
     },
     "remove_sub_address": "Elimina el subadreçament",
     "from_override": {
-      "toggle_off": "Sobreescriu",
+      "create_new": "Crea'n un de nou...",
       "toggle_on": "Cancel·la la sobreescriptura",
       "toggle_tooltip": "Editeu lliurement el nom i l'adreça del remitent. El correu es continua enviant a través de la vostra identitat: només canvia la capçalera «De» visible.",
       "name_label": "Nom del remitent",
@@ -635,6 +635,7 @@
     "save_as_template": "Desa com a plantilla",
     "validation": {
       "recipient_required": "Afegiu un destinatari per enviar",
+      "from_invalid": "Introduïu una adreça de remitent vàlida",
       "subject_required": "Afegiu un assumpte",
       "body_required": "Escriviu un missatge o adjunteu un fitxer",
       "attachments_uploading": "Els fitxers adjunts encara s'estan pujant — s'enviarà en acabar",

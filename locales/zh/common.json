@@ -620,7 +620,7 @@
     },
     "remove_sub_address": "删除子地址",
     "from_override": {
-      "toggle_off": "覆盖",
+      "create_new": "新建…",
       "toggle_on": "取消覆盖",
       "toggle_tooltip": "自由编辑发件人姓名和地址。邮件仍通过您的身份发送 - 仅可见的发件人标题发生变化。",
       "name_label": "发件人姓名",
@@ -632,6 +632,7 @@
     "save_as_template": "保存为模板",
     "validation": {
       "recipient_required": "请添加收件人",
+      "from_invalid": "请输入有效的发件人地址",
       "subject_required": "请添加主题",
       "body_required": "请输入邮件内容或添加附件",
       "attachments_uploading": "附件仍在上传中，上传完成后将自动发送",

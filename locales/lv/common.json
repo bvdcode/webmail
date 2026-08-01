@@ -620,7 +620,7 @@
     },
     "remove_sub_address": "Noņemt apakšadresi",
     "from_override": {
-      "toggle_off": "Pārrakstīt",
+      "create_new": "Izveidot jaunu...",
       "toggle_on": "Atcelt pārrakstīšanu",
       "toggle_tooltip": "Brīvi rediģējiet sūtītāja vārdu un adresi. Pasts joprojām tiek sūtīts caur jūsu identitāti - mainās tikai redzamais No galvenes ieraksts.",
       "name_label": "Sūtītāja vārds",
@@ -632,6 +632,7 @@
     "save_as_template": "Saglabāt kā veidni",
     "validation": {
       "recipient_required": "Norādiet vismaz vienu saņēmēju",
+      "from_invalid": "Norādiet derīgu sūtītāja adresi",
       "subject_required": "Norādiet tematu",
       "body_required": "Ierakstiet ziņojumu vai pievienojiet failu",
       "attachments_uploading": "Pielikumi joprojām tiek augšupielādēti — nosūtīs, tiklīdz tas pabeigts",
