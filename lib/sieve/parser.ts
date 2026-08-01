@@ -65,6 +65,19 @@ function isValidRule(rule: unknown): rule is FilterRule {
   return r.conditions.every(isValidCondition) && r.actions.every(isValidAction);
 }
 
+function migrateLegacyRecipientConditions(rule: FilterRule): FilterRule {
+  return {
+    ...rule,
+    conditions: rule.conditions.map((condition) => {
+      if ((condition.field as string) !== 'bcc') {
+        return condition;
+      }
+
+      return { ...condition, field: 'envelope_to' };
+    }),
+  };
+}
+
 /**
  * Detect Stalwart-generated vacation-only scripts (no metadata).
  */
@@ -818,7 +831,7 @@ export function parseScript(content: string): ParseResult {
     // Parsed bulwark rules intentionally omit an explicit `origin` field so
     // round-trip equality with metadata-only callers holds. Absence of origin
     // is treated as 'bulwark' everywhere downstream.
-    const bulwarkRules: FilterRule[] = metadata.rules;
+    const bulwarkRules = metadata.rules.map(migrateLegacyRecipientConditions);
 
     const externalRequires = [
       ...external.externalRequires,

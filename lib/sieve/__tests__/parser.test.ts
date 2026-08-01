@@ -176,6 +176,30 @@ describe('parseScript', () => {
       expect(parseScript(script).isOpaque).toBe(true);
     });
 
+    it('migrates legacy bcc conditions to the delivery recipient', () => {
+      const legacyRule = makeRule({
+        conditions: [{
+          field: 'bcc' as never,
+          comparator: 'is',
+          value: 'alias@example.org',
+        }],
+      });
+      const script = `/* @metadata:begin\n${JSON.stringify({ version: 1, rules: [legacyRule] })}\n@metadata:end */`;
+
+      const parsed = parseScript(script);
+      const regenerated = generateScript(parsed.rules);
+
+      expect(parsed.isOpaque).toBe(false);
+      expect(parsed.rules[0].conditions).toEqual([{
+        field: 'envelope_to',
+        comparator: 'is',
+        value: 'alias@example.org',
+      }]);
+      expect(regenerated).toContain('"envelope"');
+      expect(regenerated).toContain('envelope :is "to" "alias@example.org"');
+      expect(regenerated).not.toContain('"undefined"');
+    });
+
     it('accepts valid empty rules array', () => {
       const script = `/* @metadata:begin\n${JSON.stringify({ version: 1, rules: [] })}\n@metadata:end */`;
       const result = parseScript(script);

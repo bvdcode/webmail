@@ -168,10 +168,7 @@ export const useFilterStore = create<FilterStore>()((set, get) => ({
       void filterHooks.onSieveScriptChange.emit({ accountId: selectedAccountId || null, script: content });
     } catch (error) {
       debug.error('Failed to save filters:', error);
-      set({
-        isSaving: false,
-        error: error instanceof Error ? error.message : 'Failed to save filters',
-      });
+      set({ isSaving: false });
       throw error;
     }
   },

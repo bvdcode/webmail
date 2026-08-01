@@ -276,13 +276,13 @@ describe('filter-store', () => {
       expect(savedContent).toContain('require ["fileinto"]');
     });
 
-    it('should set error on failure', async () => {
+    it('should leave the load error clear when saving fails', async () => {
       const mockClient = {
         updateSieveScript: async () => { throw new Error('Server error'); },
       };
       useFilterStore.setState({ activeScriptId: 'existing-id', rules: [makeRule()] });
       await expect(useFilterStore.getState().saveFilters(mockClient as unknown as IJMAPClient)).rejects.toThrow('Server error');
-      expect(useFilterStore.getState().error).toBe('Server error');
+      expect(useFilterStore.getState().error).toBeNull();
       expect(useFilterStore.getState().isSaving).toBe(false);
     });
 
