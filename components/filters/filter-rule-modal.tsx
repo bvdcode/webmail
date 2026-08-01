@@ -24,13 +24,19 @@ import {
   isValidFilterCondition,
 } from "@/lib/sieve/filter-schema";
 import type { Mailbox } from "@/lib/jmap/types";
-import { buildMailboxTree, flattenMailboxTree, type MailboxNode, generateUUID } from "@/lib/utils";
+import { generateUUID } from "@/lib/utils";
+import { buildSieveMailboxOptions } from "@/lib/sieve/mailbox-paths";
 import { useSettingsStore } from "@/stores/settings-store";
 import { useKeywordFormat } from "@/hooks/use-keyword-format";
 
 interface FilterRuleModalProps {
   rule?: FilterRule;
   mailboxes: Mailbox[];
+  /**
+   * Titles the dialog. Defaults to "edit" whenever a rule is supplied; pass
+   * "create" when the rule is only a prefilled draft that does not exist yet.
+   */
+  mode?: "create" | "edit";
   onSave: (rule: FilterRule) => void;
   onClose: () => void;
 }
@@ -67,11 +73,12 @@ function makeEmptyAction(): FilterAction {
 export function FilterRuleModal({
   rule,
   mailboxes,
+  mode,
   onSave,
   onClose,
 }: FilterRuleModalProps) {
   const t = useTranslations("settings.filters");
-  const isEdit = !!rule;
+  const isEdit = (mode ?? (rule ? "edit" : "create")) === "edit";
   const emailKeywords = useSettingsStore((state) => state.emailKeywords);
   const { tagName } = useKeywordFormat();
 
@@ -87,22 +94,10 @@ export function FilterRuleModal({
 
   const modalRef = useFocusTrap({ isActive: true, onEscape: onClose });
 
-  const { hierarchicalMailboxes, mailboxPathMap } = useMemo(() => {
-    const tree = buildMailboxTree(mailboxes.filter((mb) => !mb.isShared));
-    const pathMap = new Map<string, string>();
-    const buildPaths = (nodes: MailboxNode[], parentPath = "") => {
-      for (const node of nodes) {
-        // Sieve fileinto expects the IMAP-canonical "INBOX" for the inbox,
-        // not the localized JMAP display name (e.g. "Entrada" in pt-BR).
-        const segment = node.role === "inbox" ? "INBOX" : node.name;
-        const fullPath = parentPath ? `${parentPath}/${segment}` : segment;
-        pathMap.set(node.id, fullPath);
-        if (node.children.length > 0) buildPaths(node.children, fullPath);
-      }
-    };
-    buildPaths(tree);
-    return { hierarchicalMailboxes: flattenMailboxTree(tree), mailboxPathMap: pathMap };
-  }, [mailboxes]);
+  const { mailboxes: hierarchicalMailboxes, pathMap: mailboxPathMap } = useMemo(
+    () => buildSieveMailboxOptions(mailboxes),
+    [mailboxes]
+  );
 
   const handleSave = useCallback(() => {
     const trimmedName = name.trim();
