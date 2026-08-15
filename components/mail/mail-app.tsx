@@ -139,7 +139,7 @@ export function MailApp({ linkSegments }: MailAppProps = {}) {
   // Whether the bootstrap fetch for the default mailbox has landed. Deep links
   // wait for it so their folder switch isn't overwritten (#733).
   const [initialMailLoadDone, setInitialMailLoadDone] = useState(false);
-  const { isAuthenticated, client, logout, checkAuth, switchAccount, activeAccountId, isLoading: authLoading, connectionLost, isRateLimited, rateLimitUntil } = useAuthStore();
+  const { isAuthenticated, client, checkAuth, switchAccount, activeAccountId, isLoading: authLoading, connectionLost, isRateLimited, rateLimitUntil } = useAuthStore();
   const { identities } = useIdentityStore();
   const multiAccountIdentities = useProMultiAccountIdentities();
   useIdentitySync();
@@ -279,14 +279,12 @@ export function MailApp({ linkSegments }: MailAppProps = {}) {
   // Mobile/tablet responsive hooks
   const { isMobile, isTablet } = useDeviceDetection();
   const isEmbedded = useIsEmbedded();
-  const { activeView, sidebarOpen, setSidebarOpen, setActiveView, tabletListVisible, setTabletListVisible, sidebarWidth, emailListWidth, emailListHeight, setSidebarWidth, setEmailListWidth, setEmailListHeight, persistColumnWidths, sidebarCollapsed, resetSidebarWidth, resetEmailListWidth, resetEmailListHeight } = useUIStore();
+  const { activeView, sidebarOpen, setSidebarOpen, setActiveView, tabletListVisible, setTabletListVisible, sidebarWidth, emailListWidth, emailListHeight, setSidebarWidth, setEmailListWidth, setEmailListHeight, persistColumnWidths, resetSidebarWidth, resetEmailListWidth, resetEmailListHeight } = useUIStore();
   const {
     emails,
     mailboxes,
     selectedEmail,
     selectedMailbox,
-    quota,
-    isPushConnected,
     newEmailNotification,
     selectEmail,
     selectMailbox,
@@ -2608,8 +2606,6 @@ export function MailApp({ linkSegments }: MailAppProps = {}) {
     }
   };
 
-  const handleLogout = logout;
-
   const handleSearch = async (query: string) => {
     if (!client) return;
     setSearchQuery(query);
@@ -3117,23 +3113,6 @@ export function MailApp({ linkSegments }: MailAppProps = {}) {
           </div>
         )}
         <div className="flex flex-1 overflow-hidden">
-        {/* Desktop Navigation Rail (hidden when embedded inside Pro shell) */}
-        {!isMobile && !isTablet && !isEmbedded && (
-          <div className="w-14 bg-secondary flex flex-col flex-shrink-0" style={{ borderRight: '1px solid rgba(128, 128, 128, 0.3)' }}>
-            <NavigationRail
-              collapsed
-              quota={quota}
-              isPushConnected={isPushConnected}
-              onLogout={handleLogout}
-              onShowShortcuts={() => setShowShortcutsModal(true)}
-              onManageApps={handleManageApps}
-              onInlineApp={handleInlineApp}
-              onCloseInlineApp={closeInlineApp}
-              activeAppId={inlineApp?.id ?? null}
-            />
-          </div>
-        )}
-
         {inlineApp && (
           <InlineAppView apps={loadedApps} activeAppId={inlineApp!.id} onClose={closeInlineApp} className="flex-1" />
         )}
@@ -3187,7 +3166,7 @@ export function MailApp({ linkSegments }: MailAppProps = {}) {
                 ),
             inlineApp && "hidden"
           )}
-          style={!isMobile && !isTablet ? { width: sidebarCollapsed ? 48 : sidebarWidth } : undefined}
+          style={!isMobile && !isTablet ? { width: sidebarWidth } : undefined}
         >
           <ErrorBoundary fallback={SidebarErrorFallback}>
             <Sidebar
@@ -3232,8 +3211,8 @@ export function MailApp({ linkSegments }: MailAppProps = {}) {
           </ErrorBoundary>
         </div>
 
-        {/* Sidebar resize handle (desktop only, hidden when collapsed) */}
-        {!isMobile && !isTablet && !sidebarCollapsed && !inlineApp && (
+        {/* Sidebar resize handle (desktop only) */}
+        {!isMobile && !isTablet && !inlineApp && (
           <ResizeHandle
             onResizeStart={() => { dragStartWidth.current = sidebarWidth; setIsResizing(true); }}
             onResize={(delta) => setSidebarWidth(dragStartWidth.current + delta)}

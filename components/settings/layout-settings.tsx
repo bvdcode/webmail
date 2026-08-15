@@ -119,7 +119,7 @@ export function LayoutSettings() {
   const t = useTranslations('settings.appearance');
   const tEmail = useTranslations('settings.email_behavior');
   const tSidebar = useTranslations('sidebar');
-  const { toolbarPosition, showToolbarLabels, hideAccountSwitcher, showRailAccountList, enableUnifiedMailbox, includeGroupInUnified, unifiedCrossAccount, allMailFolderIds, enableCrossUnreadView, enableCrossStarredView, enableCrossAllView, colorfulSidebarIcons, tintListRowsByTag, showFolderTotalCount, showTagsInSidebar, faviconUnreadBadge, mailLayout, proInterface, updateSetting } = useSettingsStore();
+  const { toolbarPosition, showToolbarLabels, showRailAccountList, enableUnifiedMailbox, includeGroupInUnified, unifiedCrossAccount, allMailFolderIds, enableCrossUnreadView, enableCrossStarredView, enableCrossAllView, colorfulSidebarIcons, tintListRowsByTag, showFolderTotalCount, showTagsInSidebar, faviconUnreadBadge, mailLayout, proInterface, updateSetting } = useSettingsStore();
   const { isSettingLocked, isSettingHidden, isFeatureEnabled } = usePolicyStore();
   const accounts = useAccountStore(s => s.accounts);
   const activeAccountId = useAccountStore(s => s.activeAccountId);
@@ -201,13 +201,6 @@ export function LayoutSettings() {
         <ToggleSwitch
           checked={showToolbarLabels}
           onChange={(checked) => updateSetting('showToolbarLabels', checked)}
-        />
-      </SettingItem>
-
-      <SettingItem label={t('hide_account_switcher.label')} description={t('hide_account_switcher.description')}>
-        <ToggleSwitch
-          checked={hideAccountSwitcher}
-          onChange={(checked) => updateSetting('hideAccountSwitcher', checked)}
         />
       </SettingItem>
 

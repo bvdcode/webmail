@@ -353,7 +353,6 @@ interface SettingsState {
   // Layout
   toolbarPosition: ToolbarPosition;
   showToolbarLabels: boolean;
-  hideAccountSwitcher: boolean;
   showRailAccountList: boolean;
   proInterface: boolean;
 
@@ -575,7 +574,6 @@ const DEFAULT_SETTINGS = {
   // Layout
   toolbarPosition: 'top' as ToolbarPosition,
   showToolbarLabels: true,
-  hideAccountSwitcher: false,
   showRailAccountList: false,
   proInterface: false,
 
@@ -768,7 +766,6 @@ export const useSettingsStore = create<SettingsState>()(
           showWeekNumbers: state.showWeekNumbers,
           calendarHoverPreview: state.calendarHoverPreview,
           toolbarPosition: state.toolbarPosition,
-          hideAccountSwitcher: state.hideAccountSwitcher,
           showRailAccountList: state.showRailAccountList,
           // proInterface is intentionally omitted - it's a per-device choice
           // (see DEVICE_LOCAL_SETTING_KEYS) and must not be synced.

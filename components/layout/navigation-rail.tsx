@@ -9,7 +9,6 @@ import { useConfig } from "@/hooks/use-config";
 import { useThemeStore } from "@/stores/theme-store";
 import { usePathname, Link, useRouter } from "@/i18n/navigation";
 import { useTranslations } from "next-intl";
-import { useCalendarStore } from "@/stores/calendar-store";
 import { useEmailStore } from "@/stores/email-store";
 import { useSettingsStore } from "@/stores/settings-store";
 import { usePolicyStore } from "@/stores/policy-store";
@@ -25,6 +24,7 @@ import { PluginSlot } from "@/components/plugins/plugin-slot";
 import { KeyboardShortcutsModal } from "@/components/keyboard-shortcuts-modal";
 import { apiFetch, getPathPrefix, withBasePath } from "@/lib/browser-navigation";
 import { Avatar } from "@/components/ui/avatar";
+import { useNavigationCapabilities } from '@/hooks/use-navigation-capabilities';
 
 interface NavItem {
   id: string;
@@ -191,17 +191,11 @@ export function NavigationRail({
   const router = useRouter();
   const { appLogoLightUrl, appLogoDarkUrl } = useConfig();
   const resolvedTheme = useThemeStore((s) => s.resolvedTheme);
-  const { supportsCalendar } = useCalendarStore();
   const { mailboxes } = useEmailStore();
-  const client = useAuthStore((s) => s.client);
-  const supportsFiles = client?.supportsFiles() ?? false;
-  const supportsContacts = client?.supportsContacts() ?? false;
+  const navigationCapabilities = useNavigationCapabilities();
   const sidebarApps = useSettingsStore((s) => s.sidebarApps);
   const showRailAccountList = useSettingsStore((s) => s.showRailAccountList);
   const sidebarAppsEnabled = usePolicyStore((s) => s.isFeatureEnabled('sidebarAppsEnabled'));
-  const filesEnabled = usePolicyStore((s) => s.isFeatureEnabled('filesEnabled'));
-  const contactsEnabled = usePolicyStore((s) => s.isFeatureEnabled('contactsEnabled'));
-  const calendarEnabled = usePolicyStore((s) => s.isFeatureEnabled('calendarEnabled'));
   const visibleSidebarApps = sidebarAppsEnabled ? sidebarApps : [];
   const inboxUnread = mailboxes.find(m => m.role === "inbox")?.unreadEmails || 0;
   const [isStalwartAdmin, setIsStalwartAdmin] = useState(false);
@@ -295,9 +289,9 @@ export function NavigationRail({
 
   const navItems: NavItem[] = [
     { id: "mail", icon: Mail, labelKey: "mail", href: "/", badge: inboxUnread },
-    { id: "calendar", icon: Calendar, labelKey: "calendar", href: "/calendar", hidden: !supportsCalendar || !calendarEnabled },
-    { id: "contacts", icon: BookUser, labelKey: "contacts", href: "/contacts", hidden: !supportsContacts || !contactsEnabled },
-    { id: "files", icon: HardDrive, labelKey: "files", href: "/files", hidden: !supportsFiles || !filesEnabled },
+    { id: "calendar", icon: Calendar, labelKey: "calendar", href: "/calendar", hidden: !navigationCapabilities.calendar },
+    { id: "contacts", icon: BookUser, labelKey: "contacts", href: "/contacts", hidden: !navigationCapabilities.contacts },
+    { id: "files", icon: HardDrive, labelKey: "files", href: "/files", hidden: !navigationCapabilities.files },
   ];
 
   // When the host (e.g. the Pro shell) takes over navigation via `onNavigate`,

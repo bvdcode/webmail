@@ -34,9 +34,6 @@ interface UIState {
   emailListWidth: number;
   emailListHeight: number;
 
-  // Sidebar collapsed state (desktop)
-  sidebarCollapsed: boolean;
-
   // Actions
   setActiveView: (view: ActiveView) => void;
   setSidebarOpen: (open: boolean) => void;
@@ -50,8 +47,6 @@ interface UIState {
   resetEmailListWidth: () => void;
   resetEmailListHeight: () => void;
   persistColumnWidths: () => void;
-  setSidebarCollapsed: (collapsed: boolean) => void;
-  toggleSidebarCollapsed: () => void;
 
   // Navigation helpers
   showEmailList: () => void;
@@ -72,7 +67,6 @@ export const useUIStore = create<UIState>((set, get) => ({
   sidebarWidth: SIDEBAR_DEFAULT,
   emailListWidth: EMAIL_LIST_DEFAULT,
   emailListHeight: EMAIL_LIST_HEIGHT_DEFAULT,
-  sidebarCollapsed: false,
 
   // Actions
   setActiveView: (view) => set({ activeView: view }),
@@ -125,9 +119,6 @@ export const useUIStore = create<UIState>((set, get) => ({
       localStorage.setItem("column-widths", JSON.stringify({ sidebarWidth, emailListWidth, emailListHeight }));
     } catch { /* localStorage may be unavailable */ }
   },
-
-  setSidebarCollapsed: (collapsed) => set({ sidebarCollapsed: collapsed }),
-  toggleSidebarCollapsed: () => set((state) => ({ sidebarCollapsed: !state.sidebarCollapsed })),
 
   // Navigation helpers for mobile
   showEmailList: () => {

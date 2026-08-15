@@ -12,6 +12,9 @@ import { cn } from "@/lib/utils";
 import { useRouter } from "@/i18n/navigation";
 import { Avatar } from "@/components/ui/avatar";
 import { useMenuNavigation } from "@/hooks/use-menu-navigation";
+import { KeyboardShortcutsModal } from '@/components/keyboard-shortcuts-modal';
+import { AccountNavigationItems, type AccountNavigationDestination } from './account-navigation-items';
+import { useNavigationCapabilities } from '@/hooks/use-navigation-capabilities';
 
 interface AccountSwitcherProps {
   /** "rail" = small avatar only (NavigationRail), "expanded" = avatar + name + email (Sidebar) */
@@ -36,6 +39,7 @@ export function AccountSwitcher({ variant = "rail", className }: AccountSwitcher
   const t = useTranslations("sidebar");
   const router = useRouter();
   const [open, setOpen] = useState(false);
+  const [showShortcutsModal, setShowShortcutsModal] = useState(false);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const menuId = useId();
   const [popoverStyle, setPopoverStyle] = useState<React.CSSProperties>({});
@@ -61,6 +65,7 @@ export function AccountSwitcher({ variant = "rail", className }: AccountSwitcher
   const logout = useAuthStore((s) => s.logout);
   const removeAccount = useAuthStore((s) => s.removeAccount);
   const logoutAll = useAuthStore((s) => s.logoutAll);
+  const navigationCapabilities = useNavigationCapabilities();
 
   const updatePosition = useCallback(() => {
     if (!buttonRef.current) return;
@@ -127,6 +132,16 @@ export function AccountSwitcher({ variant = "rail", className }: AccountSwitcher
   const handleAddAccount = () => {
     setOpen(false);
     router.push(`/login?mode=add-account` as never);
+  };
+
+  const handleNavigate = (destination: AccountNavigationDestination) => {
+    setOpen(false);
+    router.push(destination as never);
+  };
+
+  const handleShowShortcuts = () => {
+    setOpen(false);
+    setShowShortcutsModal(true);
   };
 
   const handleRemove = (e: React.MouseEvent, account: AccountEntry) => {
@@ -342,6 +357,16 @@ export function AccountSwitcher({ variant = "rail", className }: AccountSwitcher
             </div>
           )}
 
+          {variant === 'expanded' && (
+            <AccountNavigationItems
+              showCalendar={navigationCapabilities.calendar}
+              showContacts={navigationCapabilities.contacts}
+              showFiles={navigationCapabilities.files}
+              onNavigate={handleNavigate}
+              onShowShortcuts={handleShowShortcuts}
+            />
+          )}
+
           {/* Separator + Actions */}
           <div className="border-t border-border">
             {activeAccount && !activeAccount.isDefault && accounts.length > 1 && (
@@ -376,6 +401,11 @@ export function AccountSwitcher({ variant = "rail", className }: AccountSwitcher
         </div>,
         document.body
       )}
+
+      <KeyboardShortcutsModal
+        isOpen={showShortcutsModal}
+        onClose={() => setShowShortcutsModal(false)}
+      />
     </>
   );
 }

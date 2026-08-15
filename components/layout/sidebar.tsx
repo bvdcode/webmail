@@ -13,8 +13,6 @@ import {
   Trash2,
   Archive,
   Ban,
-  ChevronsLeft,
-  ChevronsRight,
   ChevronRight,
   ChevronDown,
   Folder,
@@ -58,7 +56,6 @@ import type { UnifiedMailboxRole } from '@/lib/jmap/types';
 import { useDragDropContext } from "@/contexts/drag-drop-context";
 import { useMailboxDrop } from "@/hooks/use-mailbox-drop";
 import { useTagDrop } from "@/hooks/use-tag-drop";
-import { useUIStore } from "@/stores/ui-store";
 import { useAuthStore } from "@/stores/auth-store";
 import { useVacationStore } from "@/stores/vacation-store";
 import { useSettingsStore, getKeywordVisibility } from "@/stores/settings-store";
@@ -792,7 +789,7 @@ export function Sidebar({
   onAccountMailboxSelect,
 }: SidebarProps) {
   const router = useRouter();
-  const { sidebarCollapsed: isCollapsed, toggleSidebarCollapsed } = useUIStore();
+  const isCollapsed: boolean = false;
   const { primaryIdentity: _primaryIdentity, activeAccountId } = useAuthStore();
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
   const [expandedTags, setExpandedTags] = useState<Set<string>>(new Set());
@@ -844,7 +841,6 @@ export function Sidebar({
   // The Pro shell owns the global chrome (rail + tab bar), so the sidebar's
   // own AccountSwitcher would be a redundant second account UI in the same
   // pane.
-  const hideAccountSwitcher = useSettingsStore(s => s.hideAccountSwitcher) || isEmbedded;
   const enableUnifiedMailbox = useSettingsStore(s => s.enableUnifiedMailbox);
   const includeGroupInUnified = useSettingsStore(s => s.includeGroupInUnified);
   const colorfulSidebarIcons = useSettingsStore(s => s.colorfulSidebarIcons);
@@ -1125,7 +1121,7 @@ export function Sidebar({
         "relative flex flex-col h-full border-e transition-all duration-300 overflow-hidden",
         "bg-secondary border-border",
         "max-lg:w-full",
-        isCollapsed ? "lg:w-12" : "lg:w-full",
+        "lg:w-full",
         className
       )}
     >
@@ -1135,7 +1131,7 @@ export function Sidebar({
         // Border lives on the wrapper (outside the h-14 box) so the bar's total
         // height matches the search/reply toolbars, which border-b their wrapper too.
         <div className="border-b border-border">
-          <div className={cn("flex items-center h-14", isCollapsed ? "justify-center px-2" : "gap-1 px-2")}>
+          <div className="flex items-center h-14 gap-1 px-2">
             <Button
               variant="ghost"
               size="icon"
@@ -1146,19 +1142,7 @@ export function Sidebar({
               <X className="w-5 h-5" />
             </Button>
 
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={toggleSidebarCollapsed}
-              className="hidden lg:flex h-8 w-8 flex-shrink-0"
-              title={isCollapsed ? t("expand_tooltip") : t("collapse_tooltip")}
-            >
-              {isCollapsed ? <ChevronsRight className="w-4 h-4" /> : <ChevronsLeft className="w-4 h-4" />}
-            </Button>
-
-            {!isCollapsed && !hideAccountSwitcher && (
-              <AccountSwitcher variant="expanded" className="flex-1" />
-            )}
+            <AccountSwitcher variant="expanded" className="flex-1" />
           </div>
         </div>
       )}

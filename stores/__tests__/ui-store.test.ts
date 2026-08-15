@@ -12,7 +12,6 @@ describe('ui-store', () => {
       isDesktop: true,
       sidebarWidth: 256,
       emailListWidth: 384,
-      sidebarCollapsed: false,
     });
     localStorage.clear();
   });
@@ -93,21 +92,6 @@ describe('ui-store', () => {
       const stored = JSON.parse(localStorage.getItem('column-widths')!);
       expect(stored.sidebarWidth).toBe(280);
       expect(stored.emailListWidth).toBe(420);
-    });
-  });
-
-  describe('sidebarCollapsed', () => {
-    it('should toggle collapsed state', () => {
-      expect(useUIStore.getState().sidebarCollapsed).toBe(false);
-      useUIStore.getState().toggleSidebarCollapsed();
-      expect(useUIStore.getState().sidebarCollapsed).toBe(true);
-      useUIStore.getState().toggleSidebarCollapsed();
-      expect(useUIStore.getState().sidebarCollapsed).toBe(false);
-    });
-
-    it('should set collapsed directly', () => {
-      useUIStore.getState().setSidebarCollapsed(true);
-      expect(useUIStore.getState().sidebarCollapsed).toBe(true);
     });
   });
 });
