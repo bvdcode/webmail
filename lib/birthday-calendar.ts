@@ -72,9 +72,9 @@ function parseBirthdayDate(date: string | PartialDate | Timestamp): { month: num
       const parsed = parseISO(date.utc);
       if (!isNaN(parsed.getTime())) {
         return {
-          month: parsed.getMonth() + 1,
-          day: parsed.getDate(),
-          year: parsed.getFullYear(),
+          month: parsed.getUTCMonth() + 1,
+          day: parsed.getUTCDate(),
+          year: parsed.getUTCFullYear(),
         };
       }
     } catch {
