@@ -68,7 +68,7 @@ export interface IJMAPClient {
   onRateLimit(callback: (rateLimited: boolean, retryAfterMs: number) => void): void;
   isRateLimited(): boolean;
   getRateLimitRemainingMs(): number;
-  onStateChange(callback: (change: StateChange) => void): void;
+  onStateChange(callback: (change: StateChange) => void | Promise<void>): void;
   getLastStates(): AccountStates;
   setLastStates(states: AccountStates): void;
 

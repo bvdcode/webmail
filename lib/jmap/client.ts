@@ -6,6 +6,7 @@ import { batched, itemsPerRequest } from "./request-limits";
 import { debug } from "@/lib/debug";
 import { normalizeCalendarEventLike } from "@/lib/calendar-event-normalization";
 import { sanitizeDisplayName, splitMailbox } from "@/lib/rfc5322-mailbox";
+import { StateChangeDispatcher, type StateChangeHandler } from "./state-change-dispatcher";
 
 /**
  * Parse a recipient string that may be "Name <email>" or bare "email" into
@@ -611,7 +612,9 @@ export class JMAPClient implements IJMAPClient {
   private pingSkipRemaining = 0;
   private accounts: Record<string, JMAPAccount> = {};
   private eventSource: EventSource | null = null;
-  private stateChangeCallback: ((change: StateChange) => void) | null = null;
+  private readonly stateChanges = new StateChangeDispatcher((error) => {
+    debug.error('push', 'State change handler failed:', error);
+  });
   private lastStates: AccountStates = {};
   private reconnecting = false;
   private connectionChangeCallback: ((connected: boolean) => void) | null = null;
@@ -6390,7 +6393,7 @@ export class JMAPClient implements IJMAPClient {
     if (eventType === 'state' && dataLines.length > 0) {
       try {
         const change = JSON.parse(dataLines.join('\n')) as StateChange;
-        this.stateChangeCallback?.(change);
+        void this.stateChanges.dispatch(change);
       } catch {
         // Malformed SSE data - ignore
       }
@@ -6544,8 +6547,8 @@ export class JMAPClient implements IJMAPClient {
           this.pollingStates[key] = result.state;
         }
 
-        if (Object.keys(changedByAccount).length > 0 && this.stateChangeCallback) {
-          this.stateChangeCallback({ '@type': 'StateChange', changed: changedByAccount });
+        if (Object.keys(changedByAccount).length > 0 && this.stateChanges.hasHandler()) {
+          void this.stateChanges.dispatch({ '@type': 'StateChange', changed: changedByAccount });
         }
       }
     } catch {
@@ -6576,7 +6579,7 @@ export class JMAPClient implements IJMAPClient {
     }
     this.stopSSEPingMonitor();
     this.cleanupBrowserEventListeners();
-    this.stateChangeCallback = null;
+    this.stateChanges.clear();
     this.pollingStates = {};
   }
 
@@ -6688,16 +6691,18 @@ export class JMAPClient implements IJMAPClient {
     this.rateLimitCallback?.(true, retryAfterMs);
 
     // Pause live updates until the server's rate-limit window expires.
-    const stateChangeCallback = this.stateChangeCallback;
+    const stateChangeCallback = this.stateChanges.getHandler();
     this.closePushNotifications();
-    this.stateChangeCallback = stateChangeCallback;
+    if (stateChangeCallback) {
+      this.stateChanges.setHandler(stateChangeCallback);
+    }
 
     // Schedule clearing the rate-limit flag and notifying listeners.
     this.rateLimitTimeout = setTimeout(() => {
       this.rateLimitTimeout = null;
       if (!this.isRateLimited()) {
         this.rateLimitCallback?.(false, 0);
-        if (this.session && this.stateChangeCallback) {
+        if (this.session && this.stateChanges.hasHandler()) {
           this.setupPushNotifications();
         }
       }
@@ -6736,8 +6741,8 @@ export class JMAPClient implements IJMAPClient {
     return 60_000;
   }
 
-  onStateChange(callback: (change: StateChange) => void): void {
-    this.stateChangeCallback = callback;
+  onStateChange(callback: StateChangeHandler): void {
+    this.stateChanges.setHandler(callback);
   }
 
   getLastStates(): AccountStates {

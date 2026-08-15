@@ -11,7 +11,9 @@ export const NOTIFICATION_SOUNDS: { id: NotificationSoundChoice; file?: string }
   { id: 'relax', file: '/notification/relax-message-tone.mp3' },
 ];
 
-function playBeep() {
+let soundPlaying = false;
+
+function playBeep(onFinished: () => void) {
   const audioContext = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
   const oscillator = audioContext.createOscillator();
   const gainNode = audioContext.createGain();
@@ -36,32 +38,64 @@ function playBeep() {
 
   oscillator.start(now);
   oscillator.stop(now + duration + 0.02);
-  oscillator.onended = () => audioContext.close();
+  oscillator.onended = () => {
+    void audioContext.close();
+    onFinished();
+  };
 }
 
-function playFile(file: string) {
+function playFile(file: string, onFinished: () => void) {
   // Prefix with the deployment base path (e.g. /webmail); a raw "/notification/
   // x.mp3" 404s under a subpath, which made playFile fall back to the beep for
   // every choice.
   const audio = new Audio(withBasePath(file));
   audio.volume = 0.3;
+  let fellBack = false;
+  audio.onended = onFinished;
+  audio.onerror = () => {
+    fellBack = true;
+    onFinished();
+  };
   audio.play().catch((e) => {
+    if (fellBack) {
+      return;
+    }
+    fellBack = true;
+    audio.onended = null;
+    audio.onerror = null;
     debug.log('push', 'Could not play audio file, falling back to beep:', e);
-    playBeep();
+    playBeep(onFinished);
   });
 }
 
-export function playNotificationSound(sound?: NotificationSoundChoice) {
+export function playNotificationSound(sound?: NotificationSoundChoice): boolean {
+  if (soundPlaying) {
+    return false;
+  }
+
+  soundPlaying = true;
+  let finished = false;
+  const onFinished = () => {
+    if (finished) {
+      return;
+    }
+    finished = true;
+    soundPlaying = false;
+  };
+
   try {
     const choice = sound ?? 'default';
     const entry = NOTIFICATION_SOUNDS.find((s) => s.id === choice);
 
     if (entry?.file) {
-      playFile(entry.file);
+      playFile(entry.file, onFinished);
     } else {
-      playBeep();
+      playBeep(onFinished);
     }
+    return true;
   } catch (e) {
+    onFinished();
     debug.log('push', 'Could not play notification sound:', e);
+    return false;
   }
 }

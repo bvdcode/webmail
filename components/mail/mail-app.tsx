@@ -1111,13 +1111,14 @@ export function MailApp({ linkSegments }: MailAppProps = {}) {
         if (accId === activeAccountId) {
           c.onStateChange((change) => handleStateChange(change, c));
         } else {
-          c.onStateChange(() => {
-            buildPopulatedUnifiedAccounts()
-              .then((built) => {
-                refreshCrossCounts(built);
-                refreshUnifiedCounts(built);
-              })
-              .catch(() => { /* per-account fetch failures surface elsewhere */ });
+          c.onStateChange(async () => {
+            try {
+              const built = await buildPopulatedUnifiedAccounts();
+              refreshCrossCounts(built);
+              refreshUnifiedCounts(built);
+            } catch {
+              // Per-account fetch failures surface elsewhere.
+            }
           });
         }
         c.setupPushNotifications();

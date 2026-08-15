@@ -13,7 +13,7 @@ export class DemoJMAPClient implements IJMAPClient {
   private blobStore = new Map<string, Blob>();
   private scheduledSubmissions = new Map<string, { id: string; emailId: string; identityId: string; sendAt: string; undoStatus: 'pending' | 'final' | 'canceled'; isSmime: boolean }>();
   private connectionCallback: ((connected: boolean) => void) | null = null;
-  private stateChangeCallback: ((change: StateChange) => void) | null = null;
+  private stateChangeCallback: ((change: StateChange) => void | Promise<void>) | null = null;
   private lastStates: AccountStates = {};
   private incomingTimer: ReturnType<typeof setInterval> | null = null;
 
@@ -95,7 +95,7 @@ export class DemoJMAPClient implements IJMAPClient {
   onRateLimit(): void { /* no-op in demo */ }
   isRateLimited(): boolean { return false; }
   getRateLimitRemainingMs(): number { return 0; }
-  onStateChange(callback: (change: StateChange) => void): void { this.stateChangeCallback = callback; }
+  onStateChange(callback: (change: StateChange) => void | Promise<void>): void { this.stateChangeCallback = callback; }
   getLastStates(): AccountStates { return { ...this.lastStates }; }
   setLastStates(states: AccountStates): void { this.lastStates = { ...states }; }
 
