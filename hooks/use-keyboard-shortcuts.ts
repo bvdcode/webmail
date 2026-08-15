@@ -100,6 +100,12 @@ export function useKeyboardShortcuts({
             event.preventDefault();
             h.onSelectAll?.();
             return;
+          case "f":
+            if (!event.altKey) {
+              event.preventDefault();
+              h.onFocusSearch?.();
+            }
+            return;
         }
       }
 
@@ -294,7 +300,7 @@ export const KEYBOARD_SHORTCUTS = {
   ],
   global: [
     { key: "c", description: "shortcuts.global.compose" },
-    { key: "/", description: "shortcuts.global.search" },
+    { key: "Ctrl/Cmd + F / /", description: "shortcuts.global.search" },
     { key: "?", description: "shortcuts.global.help" },
     { key: "Shift + G", description: "shortcuts.global.refresh" },
     { key: "Ctrl + A", description: "shortcuts.global.select_all" },

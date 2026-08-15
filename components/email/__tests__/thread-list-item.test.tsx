@@ -208,6 +208,16 @@ describe('ThreadListItem row content', () => {
     // rather than getting a paragraph of its own.
     expect(container.querySelector('p')).toBeNull();
   });
+
+  it('renders readable text instead of HTML source in the preview', () => {
+    useSettingsStore.setState({ showPreview: true, mailLayout: 'split' });
+    renderRow(makeEmail({
+      preview: '<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN"><html><body><p>Readable preview</p></body></html>',
+    }));
+
+    expect(screen.getByText('Readable preview')).toBeInTheDocument();
+    expect(screen.queryByText(/DOCTYPE HTML/)).not.toBeInTheDocument();
+  });
 });
 
 describe('ThreadListItem shift-range checkbox', () => {

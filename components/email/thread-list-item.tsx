@@ -1,9 +1,9 @@
 "use client";
 
 import React, { useCallback } from "react";
-import { formatDate, formatDateTime, stripInvisibleLeading } from "@/lib/utils";
+import { cn, formatDate, formatDateTime } from "@/lib/utils";
 import { Email, ThreadGroup } from "@/lib/jmap/types";
-import { cn } from "@/lib/utils";
+import { normalizeEmailPreview } from "@/lib/email-preview";
 import { SelectableAvatar } from "@/components/email/selectable-avatar";
 import { Paperclip, Star, Pin, Circle, ChevronRight, ChevronDown, Loader2, MessageSquare, CheckSquare, Square, Reply, Forward, CalendarClock, Folder } from "lucide-react";
 import { useSettingsStore } from "@/stores/settings-store";
@@ -130,8 +130,8 @@ const SingleEmailItem = React.forwardRef<HTMLDivElement, SingleEmailItemProps>(
     const isMobile = useUIStore((state) => state.isMobile);
     // The horizontal one-line "focus" layout doesn't fit on narrow screens; fall back to multi-line on mobile.
     const isFocusedMailLayout = mailLayout === 'focus' && !isMobile;
-    const trimmedPreview = stripInvisibleLeading(email.preview ?? '');
-    const inlinePreview = showPreview && trimmedPreview ? ` ${trimmedPreview}` : '';
+    const normalizedPreview = normalizeEmailPreview(email.preview ?? '');
+    const inlinePreview = showPreview && normalizedPreview ? ` ${normalizedPreview}` : '';
     const scheduledSendLabel = email.isScheduled && email.scheduledSendAt
       ? formatDateTime(email.scheduledSendAt, timeFormat)
       : null;
@@ -428,7 +428,7 @@ const SingleEmailItem = React.forwardRef<HTMLDivElement, SingleEmailItemProps>(
                       ? "text-muted-foreground"
                       : "text-muted-foreground/80"
                   )}>
-                    {trimmedPreview || t('no_preview_available')}
+                    {normalizedPreview || t('no_preview_available')}
                   </p>
                 )}
               </>
@@ -490,8 +490,8 @@ export const ThreadListItem = React.forwardRef<HTMLDivElement, ThreadListItemPro
     const { latestEmail, participantNames, hasUnread, hasStarred, hasPinned, hasAttachment, hasAnswered, hasForwarded, emailCount } = thread;
     // The horizontal one-line "focus" layout doesn't fit on narrow screens; fall back to multi-line on mobile.
     const isFocusedMailLayout = mailLayout === 'focus' && !isMobile;
-    const trimmedPreview = stripInvisibleLeading(latestEmail.preview ?? '');
-    const inlinePreview = showPreview && trimmedPreview ? ` ${trimmedPreview}` : '';
+    const normalizedPreview = normalizeEmailPreview(latestEmail.preview ?? '');
+    const inlinePreview = showPreview && normalizedPreview ? ` ${normalizedPreview}` : '';
     const scheduledSendLabel = latestEmail.isScheduled && latestEmail.scheduledSendAt
       ? formatDateTime(latestEmail.scheduledSendAt, timeFormat)
       : null;
@@ -905,7 +905,7 @@ export const ThreadListItem = React.forwardRef<HTMLDivElement, ThreadListItemPro
                         ? "text-muted-foreground"
                         : "text-muted-foreground/80"
                     )}>
-                      {trimmedPreview || tEmailViewer('no_preview_available')}
+                      {normalizedPreview || tEmailViewer('no_preview_available')}
                     </p>
                   )}
                 </>
