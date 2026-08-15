@@ -41,6 +41,7 @@ import { useCopyLink } from "@/hooks/use-copy-link";
 import { buildMailboxTree, MailboxNode } from "@/lib/utils";
 import { localizeMailboxName } from "@/lib/mailbox-label";
 import { getEmailTagIds } from "@/lib/thread-utils";
+import { useUIStore } from "@/stores/ui-store";
 import { TagPicker } from "./tag-picker";
 
 interface Position {
@@ -144,12 +145,16 @@ export function EmailContextMenu({
   const tEmailViewer = useTranslations("email_viewer");
   const tDeepLink = useTranslations("deep_link");
   const copyLink = useCopyLink();
+  const isMobile = useUIStore((state) => state.isMobile);
+  const isTablet = useUIStore((state) => state.isTablet);
   const isUnread = !email.keywords?.$seen;
   const isStarred = email.keywords?.$flagged;
   const isPinned = email.keywords?.['$pinned'] === true;
   const isDraft = email.keywords?.['$draft'] === true;
   const currentTagIds = getEmailTagIds(email.keywords);
   const showBatchActions = isMultiSelect && selectedCount > 1;
+  const showFullSingleMessageActions = !showBatchActions && (isMobile || isTablet);
+  const showBulkOrFullActions = showBatchActions || showFullSingleMessageActions;
   const isInJunkFolder = currentMailboxRole === 'junk';
   // Marking your own outgoing mail as spam makes no sense - hide the action
   // in Sent, Drafts and Scheduled.
@@ -257,19 +262,21 @@ export function EmailContextMenu({
             onClick={() => handleAction(onForward!)}
             disabled={!onForward}
           />
-          <ContextMenuItem
-            icon={Paperclip}
-            label={tEmailViewer("forward_as_attachment")}
-            onClick={() => handleAction(onForwardAsAttachment!)}
-            disabled={!onForwardAsAttachment || !email.blobId}
-          />
+          {showFullSingleMessageActions && (
+            <ContextMenuItem
+              icon={Paperclip}
+              label={tEmailViewer("forward_as_attachment")}
+              onClick={() => handleAction(onForwardAsAttachment!)}
+              disabled={!onForwardAsAttachment || !email.blobId}
+            />
+          )}
           <ContextMenuSeparator />
         </>
       )}
 
       {/* Permalinks (#733). The conversation entry only appears when the
           message actually belongs to a thread worth linking to. */}
-      {!showBatchActions && (
+      {showFullSingleMessageActions && (
         <>
           <ContextMenuItem
             icon={LinkIcon}
@@ -291,29 +298,31 @@ export function EmailContextMenu({
         </>
       )}
 
-      {/* Archive */}
-      <ContextMenuItem
-        icon={Archive}
-        label={t("archive")}
-        onClick={() =>
-          handleAction(showBatchActions ? onBatchArchive! : onArchive!)
-        }
-        disabled={showBatchActions ? !onBatchArchive : !onArchive}
-      />
+      {showBulkOrFullActions && (
+        <>
+          <ContextMenuItem
+            icon={Archive}
+            label={t("archive")}
+            onClick={() =>
+              handleAction(showBatchActions ? onBatchArchive! : onArchive!)
+            }
+            disabled={showBatchActions ? !onBatchArchive : !onArchive}
+          />
 
-      {/* Delete */}
-      <ContextMenuItem
-        icon={Trash2}
-        label={t("delete")}
-        testId="ctx-delete"
-        onClick={() =>
-          handleAction(showBatchActions ? onBatchDelete! : onDelete!)
-        }
-        disabled={showBatchActions ? !onBatchDelete : !onDelete}
-        destructive
-      />
+          <ContextMenuItem
+            icon={Trash2}
+            label={t("delete")}
+            testId="ctx-delete"
+            onClick={() =>
+              handleAction(showBatchActions ? onBatchDelete! : onDelete!)
+            }
+            disabled={showBatchActions ? !onBatchDelete : !onDelete}
+            destructive
+          />
 
-      <ContextMenuSeparator />
+          <ContextMenuSeparator />
+        </>
+      )}
 
       {/* Move to submenu */}
       {moveTree.length > 0 && (
@@ -360,7 +369,7 @@ export function EmailContextMenu({
       )}
 
       {/* Star/Unstar - only for single email */}
-      {!showBatchActions && (
+      {showFullSingleMessageActions && (
         <ContextMenuItem
           icon={Star}
           label={isStarred ? t("unstar") : t("star")}
@@ -371,7 +380,7 @@ export function EmailContextMenu({
       )}
 
       {/* Pin/Unpin - only for single email; pinned mails float to the top of the list */}
-      {!showBatchActions && onTogglePinned && (
+      {showFullSingleMessageActions && onTogglePinned && (
         <ContextMenuItem
           icon={isPinned ? PinOff : Pin}
           label={isPinned ? t("unpin") : t("pin")}
@@ -380,7 +389,7 @@ export function EmailContextMenu({
       )}
 
       {/* Set tag submenu - only for single email */}
-      {!showBatchActions && (
+      {showFullSingleMessageActions && (
         <ContextMenuSubMenu icon={Tag} label={t("tag")}>
           <div className="w-56 max-w-[18rem]">
             <TagPicker
@@ -423,21 +432,24 @@ export function EmailContextMenu({
         </>
       )}
 
-      <ContextMenuSeparator />
+      {showBulkOrFullActions && (
+        <>
+          <ContextMenuSeparator />
 
-      {/* Mark as read/unread */}
-      <ContextMenuItem
-        icon={isUnread ? MailOpen : Mail}
-        label={isUnread ? t("mark_read") : t("mark_unread")}
-        testId={isUnread ? "ctx-mark-read" : "ctx-mark-unread"}
-        onClick={() =>
-          handleAction(() =>
-            showBatchActions
-              ? onBatchMarkAsRead?.(isUnread)
-              : onMarkAsRead?.(isUnread)
-          )
-        }
-      />
+          <ContextMenuItem
+            icon={isUnread ? MailOpen : Mail}
+            label={isUnread ? t("mark_read") : t("mark_unread")}
+            testId={isUnread ? "ctx-mark-read" : "ctx-mark-unread"}
+            onClick={() =>
+              handleAction(() =>
+                showBatchActions
+                  ? onBatchMarkAsRead?.(isUnread)
+                  : onMarkAsRead?.(isUnread)
+              )
+            }
+          />
+        </>
+      )}
         </>
       )}
 
