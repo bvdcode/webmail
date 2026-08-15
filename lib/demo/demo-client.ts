@@ -1,4 +1,4 @@
-import type { IJMAPClient } from '@/lib/jmap/client-interface';
+import type { IJMAPClient, KeywordDiscoveryResult } from '@/lib/jmap/client-interface';
 import type { Email, Mailbox, StateChange, AccountStates, Thread, Identity, EmailAddress, ContactCard, AddressBook, VacationResponse, Calendar, CalendarEvent, CalendarEventFilter, CalendarTask, FileNode, ScheduledEmail, SendEmailResult, SharedAccount } from '@/lib/jmap/types';
 import type { SieveScript, SieveCapabilities } from '@/lib/jmap/sieve-types';
 import { getDemoData, type DemoData } from './demo-data';
@@ -230,6 +230,43 @@ export class DemoJMAPClient implements IJMAPClient {
       };
     }
     return result;
+  }
+
+  async discoverKeywords(options?: {
+    limit?: number;
+    onProgress?: (scanned: number, total: number) => void;
+    signal?: AbortSignal;
+  }): Promise<{ keywords: Record<string, number>; scanned: number; total: number; complete: boolean }> {
+    const total = this.data.emails.length;
+    const scanned = Math.min(total, Math.max(0, options?.limit ?? total));
+    const keywords: Record<string, number> = {};
+    for (const email of this.data.emails.slice(0, scanned)) {
+      for (const [keyword, isSet] of Object.entries(email.keywords || {})) {
+        if (isSet) keywords[keyword] = (keywords[keyword] ?? 0) + 1;
+      }
+    }
+    options?.onProgress?.(scanned, total);
+    return { keywords, scanned, total, complete: scanned >= total };
+  }
+
+  async getKeywords(options?: {
+    limit?: number;
+    onProgress?: (scanned: number, total: number) => void;
+    signal?: AbortSignal;
+  }): Promise<KeywordDiscoveryResult> {
+    const scan = await this.discoverKeywords(options);
+    return {
+      ...scan,
+      labels: Object.entries(scan.keywords).map(([id, total]) => ({
+        id,
+        name: id.startsWith('$label:') ? id.slice('$label:'.length) : id,
+        color: null,
+        total,
+        unread: 0,
+        isProviderLabel: false,
+        source: 'message' as const,
+      })),
+    };
   }
 
   async getCategoryUnreadCounts(mailboxId: string, tabs: Array<{ id: string; filter: Record<string, unknown> | null }>, _accountId?: string): Promise<Record<string, number>> {

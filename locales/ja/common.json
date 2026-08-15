@@ -122,7 +122,8 @@
     "mobile": {
       "search": "検索",
       "compose": "作成",
-      "go_back": "戻る"
+      "go_back": "戻る",
+      "toggle_menu": "メニューを切り替え"
     },
     "clear_search": "検索をクリア",
     "vacation_active": "不在応答が有効です",
@@ -635,7 +636,6 @@
     "validation": {
       "recipient_required": "送信するには宛先を追加してください",
       "from_invalid": "有効な差出人アドレスを入力してください",
-      "subject_required": "件名を追加してください",
       "body_required": "メッセージを入力するかファイルを添付してください",
       "attachments_uploading": "添付ファイルをアップロード中です。完了次第送信します",
       "attachment_upload_failed": "送信されませんでした。添付ファイルのアップロードに失敗しました。削除してもう一度お試しください。"
@@ -653,6 +653,7 @@
     "smime_unlock_message": "S/MIME 鍵を解除するためのパスフレーズを入力してください。",
     "smime_unlock_button": "ロック解除",
     "smime_passphrase_placeholder": "S/MIME パスフレーズ",
+    "send_timeout": "サーバーが応答しなくなりました。再送信する前に送信済みフォルダーを確認してください。メッセージはすでに送信されている可能性があります。",
     "continue_draft": "下書きを続ける",
     "close_draft_title": "下書きを保存または破棄しますか？",
     "close_draft_message": "未保存の変更があります。下書きとして保存しますか、それとも破棄しますか？",
@@ -661,6 +662,13 @@
     "forgot_attachment": {
       "title": "添付ファイルを忘れていませんか？",
       "message": "メッセージに「{keyword}」が含まれていますが、ファイルが添付されていません。このまま送信しますか？",
+      "send_anyway": "そのまま送信",
+      "back": "編集に戻る"
+    },
+    "empty_subject": {
+      "title": "件名なしで送信しますか？",
+      "message": "このメッセージには件名がありません。このまま送信しますか？",
+      "dont_ask_again": "今後は確認しない",
       "send_anyway": "そのまま送信",
       "back": "編集に戻る"
     },
@@ -1039,6 +1047,18 @@
         "show": "表示する",
         "unread": "未読がある場合に表示",
         "hide": "表示しない"
+      },
+      "unrecognized": {
+        "title": "サーバーからラベルを復元",
+        "description": "ラベルの名前と色はこのブラウザーに保存されますが、ラベル自体はJMAPキーワードとしてメールに保存されています。ここに定義のないキーワードをメールから検索し、ラベルとして追加し直せます。",
+        "scan": "ラベルを検索",
+        "rescan": "再検索",
+        "scanning": "検索中… {total}件中{scanned}件",
+        "none": "メールに付いているラベルはすべてここに定義済みです。",
+        "messages": "{count, plural, one {#件} other {#件}}",
+        "add_all": "{count}件すべて追加",
+        "partial": "{total}件のうち最新の{scanned}件のみを検索しました。古いメールにのみ使われているラベルは見つからない場合があります。",
+        "error": "メールからラベルを検索できませんでした。"
       }
     },
     "notifications": {
@@ -1080,6 +1100,7 @@
         "description": "このサイトが閉じているときに新着メールのシステム通知を受信します。Bulwark プッシュリレー経由で配信され、リレーがメール内容を見ることはありません。",
         "disable": "無効化",
         "enable": "有効化",
+        "dismiss_aria": "通知プロンプトを閉じる",
         "ios_hint": "iOS では、最初にサイトをホーム画面にインストールしてください。Safari はインストールされた PWA にのみ Web Push を配信します。",
         "reenable": "再登録",
         "relay_desc": "デフォルトはホストされた Bulwark リレーです。セルフホストする場合のみ変更してください。",
@@ -1318,6 +1339,10 @@
         "add": "Add",
         "remove": "削除"
       },
+      "empty_subject_warning": {
+        "label": "件名なしの警告",
+        "description": "件名のないメッセージを送信する前に確認します。"
+      },
       "hide_inline_image_attachments": {
         "label": "添付ファイル一覧からインライン画像を隠す",
         "description": "本文に埋め込まれた画像を個別の添付ファイルとして表示しません"
@@ -1519,7 +1544,16 @@
         "inactive": "無効",
         "enabled": "保存時の暗号化が有効になりました",
         "disabled_success": "保存時の暗号化が無効になりました",
-        "error": "暗号化設定を更新できませんでした"
+        "error": "暗号化設定を更新できませんでした",
+        "algorithm_label": "暗号化アルゴリズム",
+        "encrypt_on_append": "アップロード時に新しいメールを暗号化",
+        "allow_spam_training": "メールを暗号化する前に迷惑メール学習を許可",
+        "enable_encryption": "暗号化を有効にする",
+        "enable_tooltip": "この鍵で暗号化を有効にする",
+        "configure_title": "この鍵で暗号化を有効にする",
+        "enable_button": "有効にする",
+        "disable_tooltip": "暗号化を無効にする",
+        "enabled_success": "保存時の暗号化が有効になりました"
       },
       "email_client": {
         "title": "メールクライアントの設定",
@@ -1539,6 +1573,13 @@
         "expired": "このコードは期限切れです。",
         "generating": "生成中…",
         "error": "ペアリングコードを作成できませんでした。もう一度お試しください。"
+      },
+      "public_keys": {
+        "name_label": "公開鍵の名前",
+        "name_placeholder": "例：マイキー",
+        "key_label": "公開鍵（S/MIME または PGP の ASCII 形式）",
+        "key_placeholder": "ここに公開鍵を貼り付けてください",
+        "none": "公開鍵が設定されていません"
       }
     },
     "identities": {
@@ -2036,7 +2077,7 @@
     "advanced": "詳細オプション",
     "applies_to_new_mail": "今後受信するメールに適用されます。",
     "load_failed": "フィルターを読み込めませんでした。フィルター設定からやり直してください。",
-    "opaque": "フィルタースクリプトは手動で編集されています。フィルター設定で管理してください。",
+    "opaque": "フィルタースクリプトは手動で編集されています。フィルター設定で管理してください。",
     "backfill_question": "このフォルダーにすでにあるメールにも適用しますか？適用しない場合、新着メールのみが対象になります。",
     "backfill_apply": "適用",
     "backfill_skip": "後で",
@@ -3344,5 +3385,18 @@
     "install": "インストール",
     "dont_remind": "今後表示しない",
     "dismiss_aria": "インストールプロンプトを閉じる"
+  },
+  "deep_link": {
+    "message_not_found": "このメッセージは利用できなくなりました。",
+    "thread_not_found": "この会話は利用できなくなりました。",
+    "folder_not_found": "このフォルダーは利用できなくなりました。",
+    "event_not_found": "この予定は利用できなくなりました。",
+    "file_not_found": "このファイルは利用できなくなりました。",
+    "account_unavailable": "このリンクを開くには、そのアカウントにサインインしてください。",
+    "copy_message": "メッセージのリンクをコピー",
+    "copy_conversation": "会話のリンクをコピー",
+    "copy_event": "予定のリンクをコピー",
+    "copied": "リンクをコピーしました",
+    "copy_failed": "リンクをコピーできませんでした"
   }
 }

@@ -12,7 +12,7 @@ A self-hosted webmail client for [Stalwart Mail Server](https://stalw.art/), bui
 
 [![License: AGPL v3](https://img.shields.io/badge/license-AGPL%20v3-blue.svg?logo=gnu&logoColor=white)](LICENSE)
 [![Discord](https://img.shields.io/discord/1482128142939455674?color=7289da&label=discord&logo=discord&logoColor=white)](https://discord.gg/tYCujymGrT)
-[![Version](https://img.shields.io/badge/version-1.7.8-green.svg?logo=git&logoColor=white)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-1.8.1-green.svg?logo=git&logoColor=white)](CHANGELOG.md)
 [![Docker](https://img.shields.io/badge/docker-ghcr.io%2Fbulwarkmail%2Fwebmail-blue?logo=docker&logoColor=white)](https://ghcr.io/bulwarkmail/webmail)
 </div>
 
@@ -157,6 +157,10 @@ OAUTH_CLIENT_SECRET_FILE=         # path to a file containing the secret
 OAUTH_ISSUER_URL=                 # optional, for external IdPs
 OAUTH_AUTHORIZE_URL=              # override only the user-facing authorize endpoint
 OAUTH_ALLOW_PRIVATE_ENDPOINTS=    # allow discovery to resolve to RFC-1918 addresses
+
+OAUTH_SCOPES=                     # replace the requested scopes (space-separated)
+OAUTH_EXTRA_SCOPES=               # append to the defaults instead of replacing them
+AUTO_SSO_ENABLED=true             # skip the login form, go straight to the IdP
 ```
 
 Endpoints are auto-discovered via `.well-known/oauth-authorization-server` or `.well-known/openid-configuration`. `OAUTH_ALLOW_PRIVATE_ENDPOINTS` is off by default as an SSRF guard. Enable it only for split-DNS deployments where the issuer's public hostname resolves to an internal IP.
@@ -191,13 +195,18 @@ Credentials are encrypted with AES-256-GCM and stored in an httpOnly cookie (30-
 </details>
 
 <details>
-<summary>Custom JMAP endpoint</summary>
+<summary>Multiple JMAP servers & custom endpoints</summary>
 
 ```env
 ALLOW_CUSTOM_JMAP_ENDPOINT=true
+
+JMAP_SERVERS=[{"id":"eu","label":"Europe","url":"https://eu.example.com","domains":["example.com"]},{"id":"us","label":"US","url":"https://us.example.com"}]
+JMAP_SERVER_AUTO_PICK_BY_DOMAIN=true
 ```
 
-Shows a "JMAP Server" field on the login form. External servers must CORS-allow the webmail origin.
+`ALLOW_CUSTOM_JMAP_ENDPOINT` shows a "JMAP Server" field on the login form. External servers must CORS-allow the webmail origin.
+
+`JMAP_SERVERS` offers a fixed list instead; each entry needs `id`, `label`, and `url`, and may carry `domains` and its own `oauth` block. With `JMAP_SERVER_AUTO_PICK_BY_DOMAIN`, the domain of the address the user types selects the server. The admin dashboard manages the same list — the env form is for stateless deployments.
 
 </details>
 
@@ -224,6 +233,10 @@ LOGIN_WEBSITE_URL=https://example.com
 LOGIN_IMPRINT_URL=https://example.com/imprint
 LOGIN_PRIVACY_POLICY_URL=https://example.com/privacy
 
+# Web push goes through a hosted relay, so no VAPID keys or Firebase project
+# of your own. Point this at your own relay to opt out. Build-time variable.
+NEXT_PUBLIC_PUSH_RELAY_URL=https://notifications.relay.bulwarkmail.org
+
 # Per-domain overrides (optional). When the webmail is served on multiple
 # hostnames, each host can override any subset of the branding fields above.
 # Match is on the request Host (or X-Forwarded-Host). Use "*.example.com" to
@@ -238,9 +251,65 @@ DOMAIN_BRANDING=[{"host":"maildomain1.com","loginCompanyName":"Company One","log
 
 ```env
 EXTENSION_DIRECTORY_URL=https://extensions.bulwarkmail.org
+PLUGIN_DEV_DIR=../my-plugins          # load plugins from disk instead of ZIPs
 ```
 
-Enables the admin marketplace for browsing and installing plugins and themes.
+`EXTENSION_DIRECTORY_URL` enables the admin marketplace for browsing and installing plugins and themes. `PLUGIN_DEV_DIR` is for plugin authors: each immediate subfolder is one plugin with a `manifest.json`, and an entrypoint under `src/` is bundled on demand with esbuild, so editing sources needs only a browser refresh.
+
+Sandboxed plugins that integrate provider-side labels can use the native
+`api.keywords` facade exposed by `@plugin-host`:
+
+```js
+const api = require('@plugin-host');
+
+const known = await api.keywords.list();                 // settings:read
+const scan = await api.jmap.getKeywords();               // email:read
+const providerLabel = scan.labels
+  .find((label) => label.id.startsWith('$label:'));
+if (providerLabel) {
+  await api.keywords.add([{                              // settings:write
+    id: providerLabel.id.slice('$label:'.length),
+    label: providerLabel.name,
+    // color is optional; Bulwark picks a palette colour when omitted
+    visibility: 'show',
+  }]);
+}
+const current = await api.keywords.list();               // settings:read
+await api.keywords.reorder(current.map(({ id }) => id), { // settings:write
+  caseSensitive: false, // default
+});
+const counts = await api.keywords.refreshCounts();        // email:read
+
+// Complete replacement: keywords omitted here are removed from the message.
+await api.jmap.setKeywords('email-id', {                 // email:write
+  '$seen': true,
+  '$label:provider-label-id': true,
+});
+await api.jmap.setKeyword('email-id', '$label:work');     // email:write
+await api.jmap.removeKeyword('email-id', '$label:work');  // email:write
+```
+
+`jmap.getKeywords()` is a narrow read-only facade rather than an arbitrary JMAP
+request API. When the JMAP server advertises
+`https://bulwarkmail.com/ns/jmap/keywords`, it returns all cached keywords with
+exact total/unread counts and provider-label metadata, including empty provider
+labels. On servers without the capability it falls back to a bounded scan of
+message keywords. `keywords.discover()` retains its original message-scan
+response for compatibility.
+
+`jmap.setKeywords()` replaces one message's complete keyword map via
+`Email/set`. Omitted keywords are removed, so extensions should use the existing
+`jmap.setKeyword()` and `jmap.removeKeyword()` methods for incremental edits.
+The existing `email.setKeyword()` and `email.removeKeyword()` names remain as
+compatibility aliases.
+
+`keywords.add()` is append-only and case-insensitive by id: it returns added
+and skipped definitions without overwriting the user's existing label name,
+colour, visibility, or order. `keywords.reorder()` accepts a complete
+permutation of the existing label ids and changes only their order; missing,
+unknown, or duplicate ids are rejected without changing settings. Matching is
+case-insensitive by default; pass `{ caseSensitive: true }` to require exact id
+casing. Keyword discovery reports whether its bounded scan was complete.
 
 </details>
 

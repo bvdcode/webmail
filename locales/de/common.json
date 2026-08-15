@@ -122,7 +122,8 @@
     "mobile": {
       "search": "Suchen",
       "compose": "Verfassen",
-      "go_back": "Zurück"
+      "go_back": "Zurück",
+      "toggle_menu": "Menü umschalten"
     },
     "clear_search": "Suche löschen",
     "vacation_active": "Abwesenheitsnotiz ist aktiv",
@@ -635,7 +636,6 @@
     "validation": {
       "recipient_required": "Empfänger hinzufügen zum Senden",
       "from_invalid": "Gültige Absenderadresse eingeben",
-      "subject_required": "Betreff hinzufügen",
       "body_required": "Nachricht schreiben oder Datei anhängen",
       "attachments_uploading": "Anhänge werden noch hochgeladen – wird gesendet, sobald sie fertig sind",
       "attachment_upload_failed": "Nicht gesendet - ein Anhang konnte nicht hochgeladen werden. Entfernen Sie ihn und versuchen Sie es erneut."
@@ -653,6 +653,7 @@
     "smime_unlock_message": "Geben Sie die Passphrase ein, um Ihren S/MIME-Schlüssel zu entsperren.",
     "smime_unlock_button": "Entsperren",
     "smime_passphrase_placeholder": "S/MIME-Passphrase",
+    "send_timeout": "Der Server antwortet nicht mehr. Prüfen Sie den Ordner „Gesendet“, bevor Sie erneut senden – die Nachricht wurde möglicherweise bereits verschickt.",
     "continue_draft": "Entwurf fortsetzen",
     "close_draft_title": "Entwurf speichern oder verwerfen?",
     "close_draft_message": "Sie haben ungespeicherte Änderungen. Möchten Sie diese als Entwurf speichern oder verwerfen?",
@@ -661,6 +662,13 @@
     "forgot_attachment": {
       "title": "Haben Sie den Anhang vergessen?",
       "message": "Ihre Nachricht enthält \"{keyword}\", aber es ist keine Datei angehängt. Trotzdem senden?",
+      "send_anyway": "Trotzdem senden",
+      "back": "Zurück zur Bearbeitung"
+    },
+    "empty_subject": {
+      "title": "Ohne Betreff senden?",
+      "message": "Diese Nachricht hat keinen Betreff. Trotzdem senden?",
+      "dont_ask_again": "Nicht mehr fragen",
       "send_anyway": "Trotzdem senden",
       "back": "Zurück zur Bearbeitung"
     },
@@ -1039,6 +1047,18 @@
         "show": "Anzeigen",
         "unread": "Bei Ungelesenen anzeigen",
         "hide": "Ausblenden"
+      },
+      "unrecognized": {
+        "title": "Labels vom Server wiederherstellen",
+        "description": "Labelnamen und -farben werden in diesem Browser gespeichert, die Labels selbst liegen jedoch als JMAP-Keywords auf Ihren E-Mails. Durchsuchen Sie Ihre E-Mails nach Keywords, zu denen es hier kein Label gibt, und fügen Sie diese wieder hinzu.",
+        "scan": "Nach Labels suchen",
+        "rescan": "Erneut suchen",
+        "scanning": "Suche läuft… {scanned} von {total} E-Mails",
+        "none": "Alle Labels auf Ihren E-Mails sind hier bereits definiert.",
+        "messages": "{count, plural, one {# E-Mail} other {# E-Mails}}",
+        "add_all": "Alle {count} hinzufügen",
+        "partial": "Es wurden nur die {scanned} neuesten von {total} E-Mails durchsucht. Labels, die nur in älteren E-Mails vorkommen, fehlen möglicherweise.",
+        "error": "Ihre E-Mails konnten nicht nach Labels durchsucht werden."
       }
     },
     "notifications": {
@@ -1080,6 +1100,7 @@
         "description": "Systembenachrichtigungen für neue E-Mails empfangen, wenn diese Seite geschlossen ist. Zustellung über das Bulwark Push-Relay; das Relay sieht niemals E-Mail-Inhalte.",
         "disable": "Deaktivieren",
         "enable": "Aktivieren",
+        "dismiss_aria": "Benachrichtigungshinweis schließen",
         "ios_hint": "Installieren Sie die Seite unter iOS zuerst auf dem Startbildschirm – Safari liefert Web Push nur an installierte PWAs.",
         "reenable": "Neu registrieren",
         "relay_desc": "Standardmäßig wird das gehostete Bulwark-Relay verwendet. Nur ändern, wenn Sie selbst hosten.",
@@ -1318,6 +1339,10 @@
         "add": "Hinzufügen",
         "remove": "Entfernen"
       },
+      "empty_subject_warning": {
+        "label": "Warnung bei leerem Betreff",
+        "description": "Vor dem Senden einer Nachricht ohne Betreff nachfragen."
+      },
       "hide_inline_image_attachments": {
         "label": "Eingebettete Bilder in Anhangsliste ausblenden",
         "description": "Im Nachrichtentext eingebettete Bilder werden nicht als separate Anhänge aufgeführt"
@@ -1519,7 +1544,16 @@
         "inactive": "Deaktiviert",
         "enabled": "Verschlüsselung im Ruhezustand aktiviert",
         "disabled_success": "Verschlüsselung im Ruhezustand deaktiviert",
-        "error": "Verschlüsselungseinstellungen konnten nicht aktualisiert werden"
+        "error": "Verschlüsselungseinstellungen konnten nicht aktualisiert werden",
+        "algorithm_label": "Verschlüsselungsalgorithmus",
+        "encrypt_on_append": "Neue E-Mails beim Hochladen verschlüsseln",
+        "allow_spam_training": "Spam-Training zulassen, bevor E-Mails verschlüsselt werden",
+        "enable_encryption": "Verschlüsselung aktivieren",
+        "enable_tooltip": "Verschlüsselung mit diesem Schlüssel aktivieren",
+        "configure_title": "Verschlüsselung mit diesem Schlüssel aktivieren",
+        "enable_button": "Aktivieren",
+        "disable_tooltip": "Verschlüsselung deaktivieren",
+        "enabled_success": "Verschlüsselung im Ruhezustand aktiviert"
       },
       "email_client": {
         "title": "E-Mail-Client-Einrichtung",
@@ -1539,6 +1573,13 @@
         "expired": "Dieser Code ist abgelaufen.",
         "generating": "Wird erstellt…",
         "error": "Kopplungscode konnte nicht erstellt werden. Bitte versuchen Sie es erneut."
+      },
+      "public_keys": {
+        "name_label": "Name des öffentlichen Schlüssels",
+        "name_placeholder": "z.B. Mein Schlüssel",
+        "key_label": "Öffentlicher Schlüssel (S/MIME oder PGP im ASCII-Format)",
+        "key_placeholder": "Fügen Sie hier Ihren öffentlichen Schlüssel ein",
+        "none": "Keine öffentlichen Schlüssel konfiguriert"
       }
     },
     "identities": {
@@ -2036,7 +2077,7 @@
     "advanced": "Weitere Optionen",
     "applies_to_new_mail": "Gilt für E-Mails, die ab jetzt eingehen.",
     "load_failed": "Ihre Filter konnten nicht geladen werden. Versuchen Sie es erneut in den Filter-Einstellungen.",
-    "opaque": "Ihr Filterskript wurde manuell bearbeitet. Verwalten Sie es in den Filter-Einstellungen.",
+    "opaque": "Ihr Filterskript wurde manuell bearbeitet. Verwalten Sie es in den Filter-Einstellungen.",
     "backfill_question": "Auf die E-Mails anwenden, die bereits in diesem Ordner liegen? Sonst wird nur neue Post gefiltert.",
     "backfill_apply": "Anwenden",
     "backfill_skip": "Jetzt nicht",
@@ -3344,5 +3385,18 @@
     "install": "Installieren",
     "dont_remind": "Nicht mehr erinnern",
     "dismiss_aria": "Installationshinweis schließen"
+  },
+  "deep_link": {
+    "message_not_found": "Diese Nachricht ist nicht mehr verfügbar.",
+    "thread_not_found": "Diese Unterhaltung ist nicht mehr verfügbar.",
+    "folder_not_found": "Dieser Ordner ist nicht mehr verfügbar.",
+    "event_not_found": "Dieser Termin ist nicht mehr verfügbar.",
+    "file_not_found": "Diese Datei ist nicht mehr verfügbar.",
+    "account_unavailable": "Melde dich bei diesem Konto an, um den Link zu öffnen.",
+    "copy_message": "Link zur Nachricht kopieren",
+    "copy_conversation": "Link zur Unterhaltung kopieren",
+    "copy_event": "Link zum Termin kopieren",
+    "copied": "Link kopiert",
+    "copy_failed": "Link konnte nicht kopiert werden"
   }
 }

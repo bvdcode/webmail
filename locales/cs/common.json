@@ -122,7 +122,8 @@
     "mobile": {
       "search": "Hledat",
       "compose": "Napsat",
-      "go_back": "Zpět"
+      "go_back": "Zpět",
+      "toggle_menu": "Přepnout nabídku"
     },
     "clear_search": "Vymazat hledání",
     "vacation_active": "Automatická odpověď je aktivní",
@@ -635,7 +636,6 @@
     "validation": {
       "recipient_required": "Chcete-li zprávu odeslat, přidejte příjemce",
       "from_invalid": "Zadejte platnou adresu odesílatele",
-      "subject_required": "Přidejte předmět",
       "body_required": "Napište zprávu nebo připojte soubor",
       "attachments_uploading": "Přílohy se stále nahrávají – odeslání proběhne po dokončení",
       "attachment_upload_failed": "Neodesláno - přílohu se nepodařilo nahrát. Odeberte ji a zkuste to znovu."
@@ -646,6 +646,7 @@
     "drop_files": "Přetáhněte soubory sem a připojte je",
     "show_less": "Zobrazit méně",
     "send_failed": "Odeslání zprávy selhalo",
+    "send_timeout": "Server přestal odpovídat. Než odešlete znovu, zkontrolujte složku Odeslané – zpráva už mohla odejít.",
     "continue_draft": "Pokračovat v úpravě konceptu",
     "close_draft_title": "Uložit nebo zahodit koncept?",
     "close_draft_message": "Máte neuložené změny. Chcete je uložit jako koncept, nebo zahodit?",
@@ -661,6 +662,13 @@
     "forgot_attachment": {
       "title": "Nezapomněli jste na přílohu?",
       "message": "Vaše zpráva obsahuje slovo \"{keyword}\", ale není k ní připojen žádný soubor. Přesto odeslat?",
+      "send_anyway": "Přesto odeslat",
+      "back": "Zpět k úpravám"
+    },
+    "empty_subject": {
+      "title": "Odeslat bez předmětu?",
+      "message": "Tato zpráva nemá předmět. Přesto odeslat?",
+      "dont_ask_again": "Znovu se neptat",
       "send_anyway": "Přesto odeslat",
       "back": "Zpět k úpravám"
     },
@@ -1039,6 +1047,18 @@
         "show": "Zobrazit",
         "unread": "Zobrazit při nepřečtených",
         "hide": "Skrýt"
+      },
+      "unrecognized": {
+        "title": "Obnovit štítky ze serveru",
+        "description": "Názvy a barvy štítků jsou uloženy v tomto prohlížeči, ale samotné štítky jsou na vašich zprávách jako klíčová slova JMAP. Prohledejte poštu na klíčová slova, která zde žádný štítek nepokrývá, a přidejte je zpět.",
+        "scan": "Vyhledat štítky",
+        "rescan": "Hledat znovu",
+        "scanning": "Prohledávání… {scanned} z {total} zpráv",
+        "none": "Všechny štítky na vašich zprávách jsou zde už definované.",
+        "messages": "{count, plural, one {# zpráva} few {# zprávy} other {# zpráv}}",
+        "add_all": "Přidat všech {count}",
+        "partial": "Prohledáno bylo jen {scanned} nejnovějších zpráv z {total}. Štítky použité pouze ve starší poště mohou chybět.",
+        "error": "Poštu se nepodařilo prohledat na štítky."
       }
     },
     "notifications": {
@@ -1080,6 +1100,7 @@
         "description": "Přijímat systémová oznámení o nové poště, když je tento web zavřený. Doručováno přes push relay Bulwark; relay nikdy nevidí obsah pošty.",
         "disable": "Zakázat",
         "enable": "Povolit",
+        "dismiss_aria": "Zavřít výzvu k oznámením",
         "ios_hint": "Na iOS nejprve nainstalujte web na domovskou obrazovku – Safari doručuje Web Push pouze nainstalovaným PWA.",
         "reenable": "Znovu zaregistrovat",
         "relay_desc": "Výchozí je hostovaný relay Bulwark. Změňte pouze pokud používáte vlastní hosting.",
@@ -1318,6 +1339,10 @@
         "add": "Přidat",
         "remove": "Odstranit"
       },
+      "empty_subject_warning": {
+        "label": "Upozornění na prázdný předmět",
+        "description": "Před odesláním zprávy bez předmětu požádat o potvrzení."
+      },
       "hide_inline_image_attachments": {
         "label": "Skrýt vložené obrázky ze seznamu příloh",
         "description": "Obrázky vložené přímo do textu zprávy se nezobrazí jako samostatné přílohy"
@@ -1519,7 +1544,16 @@
         "inactive": "Vypnuto",
         "enabled": "Šifrování dat v klidu zapnuto",
         "disabled_success": "Šifrování dat v klidu vypnuto",
-        "error": "Nepodařilo se aktualizovat nastavení šifrování"
+        "error": "Nepodařilo se aktualizovat nastavení šifrování",
+        "algorithm_label": "Šifrovací algoritmus",
+        "encrypt_on_append": "Šifrovat nové e-maily při nahrání",
+        "allow_spam_training": "Povolit trénování spamového filtru před zašifrováním e-mailů",
+        "enable_encryption": "Zapnout šifrování",
+        "enable_tooltip": "Zapnout šifrování tímto klíčem",
+        "configure_title": "Zapnout šifrování tímto klíčem",
+        "enable_button": "Zapnout",
+        "disable_tooltip": "Vypnout šifrování",
+        "enabled_success": "Šifrování dat v klidu zapnuto"
       },
       "email_client": {
         "title": "Konfigurace poštovního klienta",
@@ -1539,6 +1573,13 @@
         "expired": "Platnost tohoto kódu vypršela.",
         "generating": "Generování…",
         "error": "Párovací kód se nepodařilo vytvořit. Zkuste to prosím znovu."
+      },
+      "public_keys": {
+        "name_label": "Název veřejného klíče",
+        "name_placeholder": "např. Můj klíč",
+        "key_label": "Veřejný klíč (S/MIME nebo PGP ve formátu ASCII)",
+        "key_placeholder": "Sem vložte svůj veřejný klíč",
+        "none": "Nejsou nastaveny žádné veřejné klíče"
       }
     },
     "identities": {
@@ -2036,7 +2077,7 @@
     "advanced": "Další možnosti",
     "applies_to_new_mail": "Platí pro poštu, která přijde od této chvíle.",
     "load_failed": "Filtry se nepodařilo načíst. Zkuste to znovu v nastavení Filtry.",
-    "opaque": "Skript filtrů byl upraven ručně. Spravujte jej v nastavení Filtry.",
+    "opaque": "Skript filtrů byl upraven ručně. Spravujte jej v nastavení Filtry.",
     "backfill_question": "Použít je i na zprávy, které už v této složce jsou? Jinak se filtruje jen nová pošta.",
     "backfill_apply": "Použít",
     "backfill_skip": "Teď ne",
@@ -3344,5 +3385,18 @@
     "install": "Nainstalovat",
     "dont_remind": "Už mi to nepřipomínat",
     "dismiss_aria": "Zavřít výzvu k instalaci"
+  },
+  "deep_link": {
+    "message_not_found": "Tato zpráva už není dostupná.",
+    "thread_not_found": "Tato konverzace už není dostupná.",
+    "folder_not_found": "Tato složka už není dostupná.",
+    "event_not_found": "Tato událost už není dostupná.",
+    "file_not_found": "Tento soubor už není dostupný.",
+    "account_unavailable": "Přihlaste se k tomuto účtu, abyste odkaz otevřeli.",
+    "copy_message": "Kopírovat odkaz na zprávu",
+    "copy_conversation": "Kopírovat odkaz na konverzaci",
+    "copy_event": "Kopírovat odkaz na událost",
+    "copied": "Odkaz zkopírován",
+    "copy_failed": "Odkaz se nepodařilo zkopírovat"
   }
 }

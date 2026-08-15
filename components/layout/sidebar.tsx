@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo, ReactNode } from "react";
+import { useState, useEffect, useMemo, Fragment, ReactNode } from "react";
 import { useTranslations } from "next-intl";
 import { useRouter } from "@/i18n/navigation";
 import { PluginSlot } from "@/components/plugins/plugin-slot";
@@ -67,6 +67,7 @@ import { toast } from "@/stores/toast-store";
 import { debug } from "@/lib/debug";
 import { AccountSwitcher } from "./account-switcher";
 import { useIsEmbedded } from "@/hooks/use-is-embedded";
+import { buildSettingsPath } from "@/lib/deep-links";
 import { useTour } from "@/components/tour/tour-provider";
 
 interface SidebarProps {
@@ -984,6 +985,22 @@ export function Sidebar({
       })
     : [];
 
+  const renderScheduledRow = (key: string) => showScheduledMailbox ? (
+    <SidebarRow
+      key={key}
+      icon={<CalendarClock className="w-4 h-4 flex-shrink-0 text-sky-600 dark:text-sky-400" />}
+      label={t('scheduled')}
+      depth={0}
+      isSelected={!selectedKeyword && selectedMailbox === '__scheduled__'}
+      total={scheduledTotal}
+      onClick={() => onMailboxSelect?.('__scheduled__')}
+      isCollapsed={isCollapsed}
+      testRole="scheduled"
+      testName="scheduled"
+      testMailboxId="__scheduled__"
+    />
+  ) : null;
+
   const getUnifiedIcon = (role: UnifiedMailboxRole) => {
     switch (role) {
       case 'inbox': return Inbox;
@@ -1078,14 +1095,11 @@ export function Sidebar({
     });
   };
 
-  const openFolderSettings = () => {
-    try { sessionStorage.setItem('settings-deep-link-tab', 'folders'); } catch { /* */ }
-    router.push('/settings');
-  };
-  const openKeywordSettings = () => {
-    try { sessionStorage.setItem('settings-deep-link-tab', 'keywords'); } catch { /* */ }
-    router.push('/settings');
-  };
+  // The tab now travels in the URL (#733) rather than through sessionStorage,
+  // so a gear click is a link the user can also bookmark or share. It still
+  // steers only this one open - the persisted default is written on tab click.
+  const openFolderSettings = () => { router.push(buildSettingsPath('folders')); };
+  const openKeywordSettings = () => { router.push(buildSettingsPath('keywords')); };
 
   const {
     contextMenu: mailboxContextMenu,
@@ -1237,32 +1251,24 @@ export function Sidebar({
                     ) : (
                       <>
                         {tree.map((node) => (
-                          <MailboxTreeItem
-                            key={node.id}
-                            node={node}
-                            selectedMailbox={selectedKeyword || !isViewing ? "" : selectedMailbox}
-                            expandedFolders={expandedFolders}
-                            onMailboxSelect={(mailboxId) =>
-                              onAccountMailboxSelect?.(isActive ? null : account.id, mailboxId)
-                            }
-                            onToggleExpand={handleToggleExpand}
-                            isCollapsed={isCollapsed}
-                            onUnreadFilterClick={isActive ? onUnreadFilterClick : undefined}
-                            colorful={colorfulSidebarIcons}
-                            onContextMenu={isActive ? handleMailboxContextMenu : undefined}
-                          />
+                          <Fragment key={node.id}>
+                            <MailboxTreeItem
+                              node={node}
+                              selectedMailbox={selectedKeyword || !isViewing ? "" : selectedMailbox}
+                              expandedFolders={expandedFolders}
+                              onMailboxSelect={(mailboxId) =>
+                                onAccountMailboxSelect?.(isActive ? null : account.id, mailboxId)
+                              }
+                              onToggleExpand={handleToggleExpand}
+                              isCollapsed={isCollapsed}
+                              onUnreadFilterClick={isActive ? onUnreadFilterClick : undefined}
+                              colorful={colorfulSidebarIcons}
+                              onContextMenu={isActive ? handleMailboxContextMenu : undefined}
+                            />
+                            {isActive && node.role === 'drafts' && renderScheduledRow(`scheduled-${account.id}`)}
+                          </Fragment>
                         ))}
-                        {isActive && showScheduledMailbox && (
-                          <SidebarRow
-                            icon={<CalendarClock className={cn("w-4 h-4 flex-shrink-0", selectedMailbox === '__scheduled__' ? "text-foreground" : "text-muted-foreground")} />}
-                            label={t('scheduled')}
-                            depth={0}
-                            isSelected={!selectedKeyword && selectedMailbox === '__scheduled__'}
-                            total={scheduledTotal}
-                            onClick={() => onMailboxSelect?.('__scheduled__')}
-                            isCollapsed={isCollapsed}
-                          />
-                        )}
+                        {isActive && !tree.some((node) => node.role === 'drafts') && renderScheduledRow(`scheduled-${account.id}`)}
                       </>
                     )}
                   </>
@@ -1290,8 +1296,8 @@ export function Sidebar({
                 ) : (
                   <>
                     {ownTree.map((node) => (
+                      <Fragment key={node.id}>
                         <MailboxTreeItem
-                          key={node.id}
                           node={node}
                           selectedMailbox={selectedKeyword ? "" : selectedMailbox}
                           expandedFolders={expandedFolders}
@@ -1302,18 +1308,10 @@ export function Sidebar({
                           colorful={colorfulSidebarIcons}
                           onContextMenu={handleMailboxContextMenu}
                         />
+                        {node.role === 'drafts' && renderScheduledRow('scheduled')}
+                      </Fragment>
                     ))}
-                    {showScheduledMailbox && (
-                      <SidebarRow
-                        icon={<CalendarClock className={cn("w-4 h-4 flex-shrink-0", selectedMailbox === '__scheduled__' ? "text-foreground" : "text-muted-foreground")} />}
-                        label={t('scheduled')}
-                        depth={0}
-                        isSelected={!selectedKeyword && selectedMailbox === '__scheduled__'}
-                        total={scheduledTotal}
-                        onClick={() => onMailboxSelect?.('__scheduled__')}
-                        isCollapsed={isCollapsed}
-                      />
-                    )}
+                    {!ownTree.some((node) => node.role === 'drafts') && renderScheduledRow('scheduled')}
                   </>
                 )}
               </>

@@ -15,6 +15,7 @@ const MAIL = 'urn:ietf:params:jmap:mail';
 const SIEVE = 'urn:ietf:params:jmap:sieve';
 const PRINCIPALS = 'urn:ietf:params:jmap:principals';
 const SUBMISSION = 'urn:ietf:params:jmap:submission';
+const FILENODE = 'urn:ietf:params:jmap:filenode';
 
 /** Rights granted on a shared mailbox (JMAP ACL). */
 export const FULL_MAILBOX_RIGHTS = {
@@ -45,6 +46,10 @@ export class JmapClient {
   private apiUrl: string;
   private uploadUrl = '';
   accountId = '';
+  /** Account that holds this user's Files drive (FileNode). On Stalwart's
+   *  personal mailboxes this equals the mail account, but read it from the
+   *  session so the helper stays correct if that ever diverges. */
+  filesAccountId = '';
   /** Every account visible in this user's session (own + shared/group),
    *  keyed by accountId -> account name (its email address). */
   accounts: Record<string, string> = {};
@@ -73,6 +78,7 @@ export class JmapClient {
     advertisedUploadUrl.protocol = reachableOrigin.protocol;
     advertisedUploadUrl.host = reachableOrigin.host;
     c.uploadUrl = advertisedUploadUrl.toString();
+    c.filesAccountId = session.primaryAccounts?.[FILENODE] ?? primary;
     c.accounts = Object.fromEntries(
       Object.entries(session.accounts ?? {}).map(([id, a]) => [id, (a as { name: string }).name]),
     );
@@ -365,6 +371,12 @@ export class JmapClient {
     ]);
   }
 
+  async setFlagged(emailId: string, flagged: boolean): Promise<void> {
+    await this.request([
+      ['Email/set', { accountId: this.accountId, update: { [emailId]: { [`keywords/$flagged`]: flagged ? true : null } } }, '0'],
+    ]);
+  }
+
   /** Look up an email id by subject within an optional mailbox. */
   async findEmailBySubject(subject: string, mailboxId?: string): Promise<any | undefined> {
     const filter: Record<string, unknown> = { subject };
@@ -389,5 +401,43 @@ export class JmapClient {
       if (Date.now() > deadline) throw new Error(`Timed out waiting for email "${subject}" (${this.email})`);
       await new Promise((r) => setTimeout(r, 500));
     }
+  }
+
+  // ─── Files (JMAP FileNode) ────────────────────────────────────────────────
+
+  /** Ids of every FileNode in this account's drive. */
+  private async allFileNodeIds(): Promise<string[]> {
+    const r = await this.request(
+      [['FileNode/query', { accountId: this.filesAccountId, filter: {}, limit: 5000 }, '0']],
+      [CORE, FILENODE],
+    );
+    return r.methodResponses[0][1].ids as string[];
+  }
+
+  /** Wipe the account's drive so a test starts from a known-empty root. */
+  async resetFiles(): Promise<void> {
+    const ids = await this.allFileNodeIds();
+    if (!ids.length) return;
+    await this.request(
+      [['FileNode/set', { accountId: this.filesAccountId, destroy: ids }, '0']],
+      [CORE, FILENODE],
+    );
+  }
+
+  /**
+   * Create a top-level directory FileNode and return its id. A directory is a
+   * FileNode with no blob/type/size (server stores it with `file == null`),
+   * mirroring how the app's createFileDirectory seeds one.
+   */
+  async createFileDirectory(name: string, parentId: string | null = null): Promise<string> {
+    const props: Record<string, unknown> = { name };
+    if (parentId !== null) props.parentId = parentId;
+    const r = await this.request(
+      [['FileNode/set', { accountId: this.filesAccountId, create: { dir0: props } }, '0']],
+      [CORE, FILENODE],
+    );
+    const created = r.methodResponses[0][1].created?.dir0;
+    if (!created) throw new Error(`createFileDirectory failed: ${JSON.stringify(r.methodResponses[0][1])}`);
+    return created.id as string;
   }
 }

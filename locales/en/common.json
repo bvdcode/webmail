@@ -122,7 +122,8 @@
     "mobile": {
       "search": "Search",
       "compose": "Compose",
-      "go_back": "Go back"
+      "go_back": "Go back",
+      "toggle_menu": "Toggle menu"
     },
     "clear_search": "Clear search",
     "vacation_active": "Vacation responder is active",
@@ -638,7 +639,6 @@
     "validation": {
       "recipient_required": "Add a recipient to send",
       "from_invalid": "Enter a valid sender address",
-      "subject_required": "Add a subject",
       "body_required": "Write a message or attach a file",
       "attachments_uploading": "Attachments are still uploading — sending as soon as they finish",
       "attachment_upload_failed": "Not sent — an attachment failed to upload. Remove it and try again."
@@ -649,6 +649,7 @@
     "drop_files": "Drop files to attach",
     "show_less": "Show less",
     "send_failed": "Failed to send email",
+    "send_timeout": "The server stopped responding. Check your Sent folder before sending again — the message may have gone out.",
     "continue_draft": "Continue draft",
     "close_draft_title": "Save or discard draft?",
     "close_draft_message": "You have unsaved changes. Would you like to save this as a draft or discard it?",
@@ -664,6 +665,13 @@
     "forgot_attachment": {
       "title": "Did you forget an attachment?",
       "message": "Your message mentions \"{keyword}\" but no file is attached. Send anyway?",
+      "send_anyway": "Send anyway",
+      "back": "Back to editing"
+    },
+    "empty_subject": {
+      "title": "Send without a subject?",
+      "message": "This message has no subject. Send it anyway?",
+      "dont_ask_again": "Don't ask again",
       "send_anyway": "Send anyway",
       "back": "Back to editing"
     },
@@ -1042,6 +1050,18 @@
         "show": "Show",
         "unread": "Show if unread",
         "hide": "Hide"
+      },
+      "unrecognized": {
+        "title": "Recover tags from the server",
+        "description": "Tag names and colors are stored in this browser, but the tags themselves live on your messages as JMAP keywords. Scan your mail for keywords no tag here explains, then add them back.",
+        "scan": "Scan for tags",
+        "rescan": "Scan again",
+        "scanning": "Scanning… {scanned} of {total} messages",
+        "none": "Every tag on your messages is already defined here.",
+        "messages": "{count, plural, one {# message} other {# messages}}",
+        "add_all": "Add all {count}",
+        "partial": "Only the {scanned} most recent of {total} messages were scanned. Tags used solely on older mail may be missing.",
+        "error": "Could not scan your mail for tags."
       }
     },
     "notifications": {
@@ -1070,6 +1090,7 @@
         "disable": "Disable",
         "confirm_disable_title": "Disable background notifications?",
         "confirm_disable_message": "This device will stop receiving alerts when the site is closed.",
+        "dismiss_aria": "Dismiss notification prompt",
         "ios_hint": "On iOS, install the site to your home screen first - Safari only delivers Web Push to installed PWAs."
       },
       "sound_selection": {
@@ -1321,6 +1342,10 @@
         "add": "Add",
         "remove": "Remove"
       },
+      "empty_subject_warning": {
+        "label": "Empty subject warning",
+        "description": "Ask for confirmation before sending a message with no subject."
+      },
       "hide_inline_image_attachments": {
         "label": "Hide inline images from attachments",
         "description": "Images embedded in the message body are not listed as separate attachments"
@@ -1526,7 +1551,23 @@
         "inactive": "Disabled",
         "enabled": "Encryption at rest enabled",
         "disabled_success": "Encryption at rest disabled",
-        "error": "Failed to update encryption settings"
+        "error": "Failed to update encryption settings",
+        "algorithm_label": "Encryption Algorithm",
+        "encrypt_on_append": "Encrypt new emails on upload",
+        "allow_spam_training": "Allow spam training before encrypting emails",
+        "enable_encryption": "Enable encryption",
+        "enable_tooltip": "Enable encryption with this key",
+        "configure_title": "Enable encryption with this key",
+        "enable_button": "Enable",
+        "disable_tooltip": "Disable encryption",
+        "enabled_success": "Encryption at rest enabled"
+      },
+      "public_keys":{
+        "name_label": "Public Key name",
+        "name_placeholder": "e.g. My Key",
+        "key_label": "Public Key (S/MIME or PGP ASCII-armored)",
+        "key_placeholder": "Paste your public key here",
+        "none": "No public keys configured"
       },
       "email_client": {
         "title": "Email Client Setup",
@@ -2036,7 +2077,7 @@
     "advanced": "More options",
     "applies_to_new_mail": "Applies to mail that arrives from now on.",
     "load_failed": "Could not load your filters. Try again from the Filters settings.",
-    "opaque": "Your filter script was edited by hand. Manage it in the Filters settings.",
+    "opaque": "Your filter script was edited by hand. Manage it in the Filters settings.",
     "backfill_question": "Apply it to the messages already in this folder? Only new mail is filtered otherwise.",
     "backfill_apply": "Apply",
     "backfill_skip": "Not now",
@@ -3344,5 +3385,18 @@
     "install": "Install",
     "dont_remind": "Don't remind me again",
     "dismiss_aria": "Dismiss install prompt"
+  },
+  "deep_link": {
+    "message_not_found": "This message is no longer available.",
+    "thread_not_found": "This conversation is no longer available.",
+    "folder_not_found": "This folder is no longer available.",
+    "event_not_found": "This event is no longer available.",
+    "file_not_found": "This file is no longer available.",
+    "account_unavailable": "Sign in to that account to open this link.",
+    "copy_message": "Copy link to message",
+    "copy_conversation": "Copy link to conversation",
+    "copy_event": "Copy link to event",
+    "copied": "Link copied",
+    "copy_failed": "Couldn't copy the link"
   }
 }

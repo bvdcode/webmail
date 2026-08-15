@@ -1,6 +1,24 @@
 import type { Email, Mailbox, StateChange, AccountStates, Thread, Identity, EmailAddress, ContactCard, AddressBook, AddressBookRights, VacationResponse, Calendar, CalendarRights, CalendarEvent, CalendarEventFilter, CalendarTask, FileNode, FileNodeRights, Principal, PushSubscription, ScheduledEmail, SendEmailResult, SharedAccount } from "./types";
 import type { SieveScript, SieveCapabilities } from "./sieve-types";
 
+export interface KeywordInfo {
+  id: string;
+  name: string;
+  color: string | null;
+  total: number;
+  unread: number;
+  isProviderLabel: boolean;
+  source: 'provider' | 'message';
+}
+
+export interface KeywordDiscoveryResult {
+  keywords: Record<string, number>;
+  labels: KeywordInfo[];
+  scanned: number;
+  total: number;
+  complete: boolean;
+}
+
 /**
  * Interface defining the public JMAP client contract.
  *
@@ -88,6 +106,27 @@ export interface IJMAPClient {
   getEmail(emailId: string, accountId?: string): Promise<Email | null>;
   getSomeEmails(emailsId: string[], accountId?: string): Promise<Email[]>
   getTagCounts(tagIds: string[]): Promise<Record<string, { total: number; unread: number }>>;
+  /**
+   * Enumerate account keywords for extensions. Servers supporting Keyword/get
+   * can return exact counts and provider-label metadata; other servers use the
+   * bounded scan.
+   */
+  getKeywords(options?: {
+    limit?: number;
+    onProgress?: (scanned: number, total: number) => void;
+    signal?: AbortSignal;
+  }): Promise<KeywordDiscoveryResult>;
+  /**
+   * Every keyword currently set on the account's messages and how many of the
+   * walked messages carry it, found by walking the message list - JMAP offers no
+   * way to ask for the keywords in use. `complete` is false when `limit` (or an
+   * abort) ended the walk early, which also makes every count a floor.
+   */
+  discoverKeywords(options?: {
+    limit?: number;
+    onProgress?: (scanned: number, total: number) => void;
+    signal?: AbortSignal;
+  }): Promise<{ keywords: Record<string, number>; scanned: number; total: number; complete: boolean }>;
   /** Per-tab unread counts for message-list category tabs (filter = resolved tab fragment, null = unfiltered). */
   getCategoryUnreadCounts(mailboxId: string, tabs: Array<{ id: string; filter: Record<string, unknown> | null }>, accountId?: string): Promise<Record<string, number>>;
   searchEmails(query: string, mailboxId?: string, accountId?: string, limit?: number, position?: number): Promise<{ emails: Email[]; hasMore: boolean; total: number }>;
@@ -234,7 +273,7 @@ export interface IJMAPClient {
   getBlobDownloadUrl(blobId: string, name?: string, type?: string, accountId?: string): string;
   fetchBlob(blobId: string, name?: string, type?: string, accountId?: string): Promise<Blob>;
   fetchBlobAsObjectUrl(blobId: string, name?: string, type?: string, accountId?: string): Promise<string>;
-  fetchBlobArrayBuffer(blobId: string, name?: string, type?: string, accountId?: string): Promise<ArrayBuffer>;
+  fetchBlobArrayBuffer(blobId: string, name?: string, type?: string, accountId?: string, rangeHeader?: number): Promise<ArrayBuffer>;
   downloadBlob(blobId: string, name?: string, type?: string, accountId?: string): Promise<void>;
 
   // ── Identities ────────────────────────────────────────────────
@@ -265,12 +304,12 @@ export interface IJMAPClient {
 
   // ── Contacts ──────────────────────────────────────────────────
   getContactsAccountId(): string;
-  getAddressBooks(): Promise<AddressBook[]>;
+  getAddressBooks(options?: { throwOnError?: boolean }): Promise<AddressBook[]>;
   getAllAddressBooks(): Promise<AddressBook[]>;
   createAddressBook(name: string): Promise<AddressBook>;
   updateAddressBook(addressBookId: string, updates: Partial<AddressBook>, targetAccountId?: string): Promise<void>;
   deleteAddressBook(addressBookId: string, targetAccountId?: string): Promise<void>;
-  getContacts(addressBookId?: string): Promise<ContactCard[]>;
+  getContacts(addressBookId?: string, options?: { throwOnError?: boolean }): Promise<ContactCard[]>;
   getAllContacts(): Promise<ContactCard[]>;
   getContact(contactId: string, accountId?: string): Promise<ContactCard | null>;
   createContact(contact: Partial<ContactCard>, targetAccountId?: string): Promise<ContactCard>;

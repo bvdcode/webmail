@@ -122,7 +122,8 @@
     "mobile": {
       "search": "Rechercher",
       "compose": "Composer",
-      "go_back": "Retour"
+      "go_back": "Retour",
+      "toggle_menu": "Afficher/masquer le menu"
     },
     "clear_search": "Effacer la recherche",
     "vacation_active": "Répondeur d'absence activé",
@@ -635,7 +636,6 @@
     "validation": {
       "recipient_required": "Ajoutez un destinataire pour envoyer",
       "from_invalid": "Saisissez une adresse d'expéditeur valide",
-      "subject_required": "Ajoutez un objet",
       "body_required": "Rédigez un message ou joignez un fichier",
       "attachments_uploading": "Les pièces jointes sont en cours d'envoi — le message partira une fois terminé",
       "attachment_upload_failed": "Non envoyé - le téléversement d'une pièce jointe a échoué. Supprimez-la et réessayez."
@@ -653,6 +653,7 @@
     "smime_unlock_message": "Entrez la phrase secrète pour déverrouiller votre clé S/MIME.",
     "smime_unlock_button": "Déverrouiller",
     "smime_passphrase_placeholder": "Phrase secrète S/MIME",
+    "send_timeout": "Le serveur ne répond plus. Vérifiez le dossier Envoyés avant de renvoyer : le message est peut-être déjà parti.",
     "continue_draft": "Continuer le brouillon",
     "close_draft_title": "Enregistrer ou supprimer le brouillon ?",
     "close_draft_message": "Vous avez des modifications non enregistrées. Voulez-vous enregistrer comme brouillon ou supprimer ?",
@@ -661,6 +662,13 @@
     "forgot_attachment": {
       "title": "Avez-vous oublié une pièce jointe ?",
       "message": "Votre message mentionne \"{keyword}\" mais aucun fichier n'est joint. Envoyer quand même ?",
+      "send_anyway": "Envoyer quand même",
+      "back": "Retour à l'édition"
+    },
+    "empty_subject": {
+      "title": "Envoyer sans objet ?",
+      "message": "Ce message n'a pas d'objet. L'envoyer quand même ?",
+      "dont_ask_again": "Ne plus me demander",
       "send_anyway": "Envoyer quand même",
       "back": "Retour à l'édition"
     },
@@ -1039,6 +1047,18 @@
         "show": "Afficher",
         "unread": "Afficher si non lus",
         "hide": "Masquer"
+      },
+      "unrecognized": {
+        "title": "Récupérer les étiquettes depuis le serveur",
+        "description": "Les noms et couleurs des étiquettes sont enregistrés dans ce navigateur, mais les étiquettes elles-mêmes se trouvent sur vos e-mails sous forme de mots-clés JMAP. Analysez votre messagerie à la recherche de mots-clés qu'aucune étiquette ici n'explique, puis rajoutez-les.",
+        "scan": "Rechercher des étiquettes",
+        "rescan": "Analyser à nouveau",
+        "scanning": "Analyse en cours… {scanned} e-mails sur {total}",
+        "none": "Toutes les étiquettes présentes sur vos e-mails sont déjà définies ici.",
+        "messages": "{count, plural, one {# e-mail} other {# e-mails}}",
+        "add_all": "Ajouter les {count}",
+        "partial": "Seuls les {scanned} e-mails les plus récents sur {total} ont été analysés. Les étiquettes utilisées uniquement sur des e-mails plus anciens peuvent manquer.",
+        "error": "Impossible d'analyser votre messagerie à la recherche d'étiquettes."
       }
     },
     "notifications": {
@@ -1080,6 +1100,7 @@
         "description": "Recevez des notifications système pour les nouveaux courriers quand ce site est fermé. Livré via le relais push Bulwark ; le relais ne voit jamais le contenu des courriers.",
         "disable": "Désactiver",
         "enable": "Activer",
+        "dismiss_aria": "Fermer l'invite de notifications",
         "ios_hint": "Sur iOS, installez d'abord le site sur l'écran d'accueil – Safari ne livre Web Push qu'aux PWA installées.",
         "reenable": "Réenregistrer",
         "relay_desc": "Utilise par défaut le relais Bulwark hébergé. Ne le changez que si vous l'hébergez vous-même.",
@@ -1318,6 +1339,10 @@
         "add": "Add",
         "remove": "Supprimer"
       },
+      "empty_subject_warning": {
+        "label": "Avertissement d'objet vide",
+        "description": "Demander confirmation avant d'envoyer un message sans objet."
+      },
       "hide_inline_image_attachments": {
         "label": "Masquer les images intégrées des pièces jointes",
         "description": "Les images intégrées au corps du message ne sont pas listées comme pièces jointes séparées"
@@ -1519,7 +1544,16 @@
         "inactive": "Désactivé",
         "enabled": "Chiffrement au repos activé",
         "disabled_success": "Chiffrement au repos désactivé",
-        "error": "Impossible de mettre à jour les paramètres de chiffrement"
+        "error": "Impossible de mettre à jour les paramètres de chiffrement",
+        "algorithm_label": "Algorithme de chiffrement",
+        "encrypt_on_append": "Chiffrer les nouveaux e-mails lors du téléversement",
+        "allow_spam_training": "Autoriser l'apprentissage antispam avant le chiffrement des e-mails",
+        "enable_encryption": "Activer le chiffrement",
+        "enable_tooltip": "Activer le chiffrement avec cette clé",
+        "configure_title": "Activer le chiffrement avec cette clé",
+        "enable_button": "Activer",
+        "disable_tooltip": "Désactiver le chiffrement",
+        "enabled_success": "Chiffrement au repos activé"
       },
       "email_client": {
         "title": "Configuration du client de messagerie",
@@ -1539,6 +1573,13 @@
         "expired": "Ce code a expiré.",
         "generating": "Génération…",
         "error": "Impossible de créer un code d'association. Veuillez réessayer."
+      },
+      "public_keys": {
+        "name_label": "Nom de la clé publique",
+        "name_placeholder": "ex. Ma clé",
+        "key_label": "Clé publique (S/MIME ou PGP au format ASCII)",
+        "key_placeholder": "Collez votre clé publique ici",
+        "none": "Aucune clé publique configurée"
       }
     },
     "identities": {
@@ -2036,7 +2077,7 @@
     "advanced": "Plus d'options",
     "applies_to_new_mail": "S'applique au courrier reçu à partir de maintenant.",
     "load_failed": "Impossible de charger vos filtres. Réessayez depuis les paramètres Filtres.",
-    "opaque": "Votre script de filtres a été modifié à la main. Gérez-le dans les paramètres Filtres.",
+    "opaque": "Votre script de filtres a été modifié à la main. Gérez-le dans les paramètres Filtres.",
     "backfill_question": "L'appliquer aux messages déjà présents dans ce dossier ? Sinon, seul le courrier nouveau est filtré.",
     "backfill_apply": "Appliquer",
     "backfill_skip": "Pas maintenant",
@@ -3344,5 +3385,18 @@
     "install": "Installer",
     "dont_remind": "Ne plus me le rappeler",
     "dismiss_aria": "Fermer l'invite d'installation"
+  },
+  "deep_link": {
+    "message_not_found": "Ce message n'est plus disponible.",
+    "thread_not_found": "Cette conversation n'est plus disponible.",
+    "folder_not_found": "Ce dossier n'est plus disponible.",
+    "event_not_found": "Cet événement n'est plus disponible.",
+    "file_not_found": "Ce fichier n'est plus disponible.",
+    "account_unavailable": "Connectez-vous à ce compte pour ouvrir ce lien.",
+    "copy_message": "Copier le lien du message",
+    "copy_conversation": "Copier le lien de la conversation",
+    "copy_event": "Copier le lien de l'événement",
+    "copied": "Lien copié",
+    "copy_failed": "Impossible de copier le lien"
   }
 }

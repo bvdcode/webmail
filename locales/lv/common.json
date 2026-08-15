@@ -122,7 +122,8 @@
     "mobile": {
       "search": "Meklēt",
       "compose": "Rakstīt",
-      "go_back": "Atpakaļ"
+      "go_back": "Atpakaļ",
+      "toggle_menu": "Pārslēgt izvēlni"
     },
     "clear_search": "Notīrīt meklēšanu",
     "vacation_active": "Atvaļinājuma atbilde ir aktīva",
@@ -635,7 +636,6 @@
     "validation": {
       "recipient_required": "Norādiet vismaz vienu saņēmēju",
       "from_invalid": "Norādiet derīgu sūtītāja adresi",
-      "subject_required": "Norādiet tematu",
       "body_required": "Ierakstiet ziņojumu vai pievienojiet failu",
       "attachments_uploading": "Pielikumi joprojām tiek augšupielādēti — nosūtīs, tiklīdz tas pabeigts",
       "attachment_upload_failed": "Nav nosūtīts - pielikumu neizdevās augšupielādēt. Noņemiet to un mēģiniet vēlreiz."
@@ -646,6 +646,7 @@
     "drop_files": "Velciet failus šeit, lai pievienotu",
     "show_less": "Rādīt mazāk",
     "send_failed": "Neizdevās nosūtīt vēstuli",
+    "send_timeout": "Serveris pārstāja atbildēt. Pirms sūtīt vēlreiz, pārbaudiet mapi Nosūtītie — ziņojums, iespējams, jau ir aizsūtīts.",
     "continue_draft": "Turpināt melnrakstu",
     "close_draft_title": "Saglabāt vai atmest melnrakstu?",
     "close_draft_message": "Ir nesaglabātas izmaiņas. Vai vēlaties saglabāt kā melnrakstu vai atmest?",
@@ -661,6 +662,13 @@
     "forgot_attachment": {
       "title": "Vai aizmirsāt pielikumu?",
       "message": "Jūsu ziņojumā minēts \"{keyword}\", bet nav pievienots neviens fails. Vai tomēr sūtīt?",
+      "send_anyway": "Sūtīt tik un tā",
+      "back": "Atpakaļ pie rediģēšanas"
+    },
+    "empty_subject": {
+      "title": "Sūtīt bez temata?",
+      "message": "Šai ziņai nav temata. Vai tomēr sūtīt?",
+      "dont_ask_again": "Vairs nejautāt",
       "send_anyway": "Sūtīt tik un tā",
       "back": "Atpakaļ pie rediģēšanas"
     },
@@ -1039,6 +1047,18 @@
         "show": "Rādīt",
         "unread": "Rādīt, ja ir nelasīti",
         "hide": "Slēpt"
+      },
+      "unrecognized": {
+        "title": "Atgūt tagus no servera",
+        "description": "Tagu nosaukumi un krāsas tiek glabāti šajā pārlūkā, bet paši tagi atrodas jūsu vēstulēs kā JMAP atslēgvārdi. Pārmeklējiet pastu, lai atrastu atslēgvārdus, kuriem šeit nav taga, un pievienojiet tos atpakaļ.",
+        "scan": "Meklēt tagus",
+        "rescan": "Meklēt vēlreiz",
+        "scanning": "Notiek meklēšana… {scanned} no {total} vēstulēm",
+        "none": "Visi jūsu vēstulēs esošie tagi jau ir definēti šeit.",
+        "messages": "{count, plural, one {# vēstule} other {# vēstules}}",
+        "add_all": "Pievienot visus ({count})",
+        "partial": "Tika pārmeklētas tikai {scanned} jaunākās no {total} vēstulēm. Tagi, kas izmantoti tikai vecākās vēstulēs, var nebūt atrasti.",
+        "error": "Neizdevās pārmeklēt pastu, lai atrastu tagus."
       }
     },
     "notifications": {
@@ -1080,6 +1100,7 @@
         "description": "Saņem sistēmas paziņojumus par jaunu pastu, kad šī vietne ir aizvērta. Piegādāts caur Bulwark push releju; relejs nekad neredz pasta saturu.",
         "disable": "Atspējot",
         "enable": "Iespējot",
+        "dismiss_aria": "Aizvērt paziņojumu uzaicinājumu",
         "ios_hint": "Operētājsistēmā iOS vispirms instalējiet vietni sākuma ekrānā – Safari piegādā Web Push tikai instalētajām PWA.",
         "reenable": "Reģistrēt vēlreiz",
         "relay_desc": "Pēc noklusējuma izmanto izmitināto Bulwark releju. Mainiet tikai tad, ja izmitināt pats.",
@@ -1318,6 +1339,10 @@
         "add": "Add",
         "remove": "Noņemt"
       },
+      "empty_subject_warning": {
+        "label": "Brīdinājums par tukšu tematu",
+        "description": "Pieprasīt apstiprinājumu pirms ziņas sūtīšanas bez temata."
+      },
       "hide_inline_image_attachments": {
         "label": "Slēpt iegultos attēlus no pielikumu saraksta",
         "description": "Ziņojuma pamattekstā iegultie attēli netiek rādīti kā atsevišķi pielikumi"
@@ -1519,7 +1544,16 @@
         "inactive": "Izslēgta",
         "enabled": "Krātuves šifrēšana ir iespējota",
         "disabled_success": "Krātuves šifrēšana ir izslēgta",
-        "error": "Neizdevās atjaunināt šifrēšanas iestatījumus"
+        "error": "Neizdevās atjaunināt šifrēšanas iestatījumus",
+        "algorithm_label": "Šifrēšanas algoritms",
+        "encrypt_on_append": "Šifrēt jaunās vēstules to augšupielādes laikā",
+        "allow_spam_training": "Atļaut mēstuļu filtra apmācību pirms vēstuļu šifrēšanas",
+        "enable_encryption": "Ieslēgt šifrēšanu",
+        "enable_tooltip": "Ieslēgt šifrēšanu ar šo atslēgu",
+        "configure_title": "Ieslēgt šifrēšanu ar šo atslēgu",
+        "enable_button": "Ieslēgt",
+        "disable_tooltip": "Izslēgt šifrēšanu",
+        "enabled_success": "Krātuves šifrēšana ir iespējota"
       },
       "email_client": {
         "title": "Pasta klienta iestatīšana",
@@ -1539,6 +1573,13 @@
         "expired": "Šī koda derīgums ir beidzies.",
         "generating": "Ģenerē…",
         "error": "Neizdevās izveidot pārošanas kodu. Lūdzu, mēģiniet vēlreiz."
+      },
+      "public_keys": {
+        "name_label": "Publiskās atslēgas nosaukums",
+        "name_placeholder": "piem., Mana atslēga",
+        "key_label": "Publiskā atslēga (S/MIME vai PGP ASCII formātā)",
+        "key_placeholder": "Ielīmējiet šeit savu publisko atslēgu",
+        "none": "Nav konfigurēta neviena publiskā atslēga"
       }
     },
     "identities": {
@@ -2036,7 +2077,7 @@
     "advanced": "Vairāk opciju",
     "applies_to_new_mail": "Attiecas uz pastu, kas pienāks no šī brīža.",
     "load_failed": "Neizdevās ielādēt filtrus. Mēģiniet vēlreiz filtru iestatījumos.",
-    "opaque": "Filtru skripts ir rediģēts manuāli. Pārvaldiet to filtru iestatījumos.",
+    "opaque": "Filtru skripts ir rediģēts manuāli. Pārvaldiet to filtru iestatījumos.",
     "backfill_question": "Vai piemērot to vēstulēm, kas jau ir šajā mapē? Citādi tiek filtrēts tikai jaunais pasts.",
     "backfill_apply": "Piemērot",
     "backfill_skip": "Ne tagad",
@@ -3344,5 +3385,18 @@
     "install": "Instalēt",
     "dont_remind": "Vairs man neatgādināt",
     "dismiss_aria": "Aizvērt instalēšanas paziņojumu"
+  },
+  "deep_link": {
+    "message_not_found": "Šī ziņa vairs nav pieejama.",
+    "thread_not_found": "Šī sarakste vairs nav pieejama.",
+    "folder_not_found": "Šī mape vairs nav pieejama.",
+    "event_not_found": "Šis notikums vairs nav pieejams.",
+    "file_not_found": "Šis fails vairs nav pieejams.",
+    "account_unavailable": "Piesakieties šajā kontā, lai atvērtu saiti.",
+    "copy_message": "Kopēt saiti uz ziņu",
+    "copy_conversation": "Kopēt saiti uz saraksti",
+    "copy_event": "Kopēt saiti uz notikumu",
+    "copied": "Saite nokopēta",
+    "copy_failed": "Neizdevās nokopēt saiti"
   }
 }

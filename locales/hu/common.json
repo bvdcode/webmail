@@ -122,7 +122,8 @@
     "mobile": {
       "search": "Keresés",
       "compose": "Új levél",
-      "go_back": "Vissza"
+      "go_back": "Vissza",
+      "toggle_menu": "Menü be/ki"
     },
     "clear_search": "Keresés törlése",
     "vacation_active": "Automatikus válasz aktív",
@@ -638,7 +639,6 @@
     "validation": {
       "recipient_required": "Adj meg egy címzettet a küldéshez",
       "from_invalid": "Adj meg egy érvényes feladócímet",
-      "subject_required": "Adj meg egy tárgyat",
       "body_required": "Írj üzenetet vagy csatolj fájlt",
       "attachments_uploading": "A mellékletek még feltöltés alatt vannak – küldés a feltöltés befejezése után",
       "attachment_upload_failed": "Nincs elküldve - egy melléklet feltöltése nem sikerült. Távolítsa el, és próbálja újra."
@@ -649,6 +649,7 @@
     "drop_files": "Fájlok ejtése a csatoláshoz",
     "show_less": "Kevesebb mutatása",
     "send_failed": "Nem sikerült elküldeni az e-mailt",
+    "send_timeout": "A kiszolgáló nem válaszol többé. Újraküldés előtt ellenőrizze az Elküldött mappát – az üzenet lehet, hogy már kiment.",
     "continue_draft": "Piszkozat folytatása",
     "close_draft_title": "Piszkozat mentése vagy elvetése?",
     "close_draft_message": "Nem mentett változtatások vannak. Szeretnéd piszkozatként menteni vagy elvetni?",
@@ -664,6 +665,13 @@
     "forgot_attachment": {
       "title": "Elfelejtettél egy csatolmányt?",
       "message": "Az üzeneted említi a \"{keyword}\" kifejezést, de nincs fájl csatolva. Elküldöd így is?",
+      "send_anyway": "Küldés így is",
+      "back": "Vissza a szerkesztéshez"
+    },
+    "empty_subject": {
+      "title": "Küldés tárgy nélkül?",
+      "message": "Ennek az üzenetnek nincs tárgya. Mégis elküldi?",
+      "dont_ask_again": "Ne kérdezze többé",
       "send_anyway": "Küldés így is",
       "back": "Vissza a szerkesztéshez"
     },
@@ -1042,6 +1050,18 @@
         "show": "Megjelenítés",
         "unread": "Megjelenítés olvasatlanoknál",
         "hide": "Elrejtés"
+      },
+      "unrecognized": {
+        "title": "Címkék helyreállítása a szerverről",
+        "description": "A címkék nevét és színét ez a böngésző tárolja, maguk a címkék azonban JMAP kulcsszavakként az e-mailjein vannak. Keresse meg a levelein azokat a kulcsszavakat, amelyekhez itt nem tartozik címke, majd adja hozzá őket újra.",
+        "scan": "Címkék keresése",
+        "rescan": "Keresés újra",
+        "scanning": "Keresés… {total} e-mailből {scanned}",
+        "none": "Az e-mailjein szereplő összes címke már definiálva van itt.",
+        "messages": "{count, plural, one {# e-mail} other {# e-mail}}",
+        "add_all": "Mind a(z) {count} hozzáadása",
+        "partial": "A(z) {total} e-mailből csak a {scanned} legutóbbi lett átvizsgálva. A csak régebbi leveleken használt címkék hiányozhatnak.",
+        "error": "Nem sikerült átvizsgálni a leveleket címkék után."
       }
     },
     "notifications": {
@@ -1070,6 +1090,7 @@
         "disable": "Letiltás",
         "confirm_disable_title": "Háttérértesítések letiltása?",
         "confirm_disable_message": "Ez az eszköz nem fog figyelmeztetéseket kapni, amikor az oldal be van zárva.",
+        "dismiss_aria": "Értesítési ablak elutasítása",
         "ios_hint": "iOS-en először telepítsd az oldalt a kezdőképernyőre - a Safari csak telepített PWA-knak kézbesít Web Push értesítéseket."
       },
       "sound_selection": {
@@ -1321,6 +1342,10 @@
         "add": "Hozzáadás",
         "remove": "Eltávolítás"
       },
+      "empty_subject_warning": {
+        "label": "Figyelmeztetés üres tárgy esetén",
+        "description": "Megerősítés kérése tárgy nélküli üzenet küldése előtt."
+      },
       "hide_inline_image_attachments": {
         "label": "Beágyazott képek elrejtése a csatolmányok közül",
         "description": "Az üzenet törzsébe ágyazott képek nem jelennek meg külön csatolmányként"
@@ -1522,7 +1547,16 @@
         "inactive": "Letiltva",
         "enabled": "Titkosítás nyugalmi állapotban engedélyezve",
         "disabled_success": "Titkosítás nyugalmi állapotban letiltva",
-        "error": "Nem sikerült frissíteni a titkosítási beállításokat"
+        "error": "Nem sikerült frissíteni a titkosítási beállításokat",
+        "algorithm_label": "Titkosítási algoritmus",
+        "encrypt_on_append": "Új e-mailek titkosítása feltöltéskor",
+        "allow_spam_training": "Spam-tanítás engedélyezése az e-mailek titkosítása előtt",
+        "enable_encryption": "Titkosítás engedélyezése",
+        "enable_tooltip": "Titkosítás engedélyezése ezzel a kulccsal",
+        "configure_title": "Titkosítás engedélyezése ezzel a kulccsal",
+        "enable_button": "Engedélyezés",
+        "disable_tooltip": "Titkosítás letiltása",
+        "enabled_success": "Titkosítás nyugalmi állapotban engedélyezve"
       },
       "email_client": {
         "title": "E-mail kliens beállítás",
@@ -1542,6 +1576,13 @@
         "expired": "Ez a kód lejárt.",
         "generating": "Generálás…",
         "error": "Nem sikerült párosítási kódot létrehozni. Próbáld újra."
+      },
+      "public_keys": {
+        "name_label": "Nyilvános kulcs neve",
+        "name_placeholder": "pl. A kulcsom",
+        "key_label": "Nyilvános kulcs (S/MIME vagy PGP ASCII formátumban)",
+        "key_placeholder": "Illessze be ide a nyilvános kulcsát",
+        "none": "Nincs beállítva nyilvános kulcs"
       }
     },
     "identities": {
@@ -2036,7 +2077,7 @@
     "advanced": "További beállítások",
     "applies_to_new_mail": "A mostantól érkező levelekre vonatkozik.",
     "load_failed": "A szűrők betöltése nem sikerült. Próbáld újra a Szűrők beállításainál.",
-    "opaque": "A szűrőszkriptet kézzel szerkesztették. Kezeld a Szűrők beállításainál.",
+    "opaque": "A szűrőszkriptet kézzel szerkesztették. Kezeld a Szűrők beállításainál.",
     "backfill_question": "Alkalmazzuk a mappában már meglévő levelekre is? Egyébként csak az új levelek szűrődnek.",
     "backfill_apply": "Alkalmaz",
     "backfill_skip": "Most nem",
@@ -3344,5 +3385,18 @@
     "install": "Telepítés",
     "dont_remind": "Ne emlékeztess többet",
     "dismiss_aria": "Telepítési ablak elutasítása"
+  },
+  "deep_link": {
+    "message_not_found": "Ez az üzenet már nem érhető el.",
+    "thread_not_found": "Ez a beszélgetés már nem érhető el.",
+    "folder_not_found": "Ez a mappa már nem érhető el.",
+    "event_not_found": "Ez az esemény már nem érhető el.",
+    "file_not_found": "Ez a fájl már nem érhető el.",
+    "account_unavailable": "Jelentkezz be ebbe a fiókba a link megnyitásához.",
+    "copy_message": "Üzenet linkjének másolása",
+    "copy_conversation": "Beszélgetés linkjének másolása",
+    "copy_event": "Esemény linkjének másolása",
+    "copied": "Link másolva",
+    "copy_failed": "Nem sikerült másolni a linket"
   }
 }

@@ -122,7 +122,8 @@
     "mobile": {
       "search": "Buscar",
       "compose": "Escrever",
-      "go_back": "Voltar"
+      "go_back": "Voltar",
+      "toggle_menu": "Alternar menu"
     },
     "clear_search": "Limpar busca",
     "vacation_active": "Resposta automática ativa",
@@ -635,7 +636,6 @@
     "validation": {
       "recipient_required": "Adicione um destinatário para enviar",
       "from_invalid": "Informe um endereço de remetente válido",
-      "subject_required": "Adicione um assunto",
       "body_required": "Escreva uma mensagem ou anexe um arquivo",
       "attachments_uploading": "Os anexos ainda estão sendo enviados — será enviado assim que terminar",
       "attachment_upload_failed": "Não enviado - falha ao carregar um anexo. Remova-o e tente novamente."
@@ -653,6 +653,7 @@
     "smime_unlock_message": "Insira a frase secreta para desbloquear sua chave S/MIME.",
     "smime_unlock_button": "Desbloquear",
     "smime_passphrase_placeholder": "Frase secreta S/MIME",
+    "send_timeout": "O servidor deixou de responder. Verifique a pasta Enviados antes de enviar novamente — a mensagem pode já ter saído.",
     "continue_draft": "Continuar rascunho",
     "close_draft_title": "Salvar ou descartar rascunho?",
     "close_draft_message": "Você tem alterações não salvas. Deseja salvar como rascunho ou descartar?",
@@ -661,6 +662,13 @@
     "forgot_attachment": {
       "title": "Esqueceu um anexo?",
       "message": "A sua mensagem menciona \"{keyword}\" mas nenhum arquivo está anexado. Enviar mesmo assim?",
+      "send_anyway": "Enviar mesmo assim",
+      "back": "Voltar à edição"
+    },
+    "empty_subject": {
+      "title": "Enviar sem assunto?",
+      "message": "Esta mensagem não tem assunto. Enviar mesmo assim?",
+      "dont_ask_again": "Não perguntar novamente",
       "send_anyway": "Enviar mesmo assim",
       "back": "Voltar à edição"
     },
@@ -1039,6 +1047,18 @@
         "show": "Mostrar",
         "unread": "Mostrar se não lidas",
         "hide": "Ocultar"
+      },
+      "unrecognized": {
+        "title": "Recuperar etiquetas do servidor",
+        "description": "Os nomes e as cores das etiquetas são guardados neste navegador, mas as etiquetas em si estão nos seus e-mails como palavras-chave JMAP. Analise o seu correio à procura de palavras-chave sem etiqueta definida aqui e volte a adicioná-las.",
+        "scan": "Procurar etiquetas",
+        "rescan": "Analisar novamente",
+        "scanning": "A analisar… {scanned} de {total} e-mails",
+        "none": "Todas as etiquetas dos seus e-mails já estão definidas aqui.",
+        "messages": "{count, plural, one {# e-mail} other {# e-mails}}",
+        "add_all": "Adicionar todas ({count})",
+        "partial": "Apenas os {scanned} e-mails mais recentes de {total} foram analisados. Podem faltar etiquetas usadas apenas em correio mais antigo.",
+        "error": "Não foi possível analisar o seu correio à procura de etiquetas."
       }
     },
     "notifications": {
@@ -1080,6 +1100,7 @@
         "description": "Receba notificações do sistema para novas mensagens quando este site estiver fechado. Entregue através do relay push do Bulwark; o relay nunca vê o conteúdo da mensagem.",
         "disable": "Desativar",
         "enable": "Ativar",
+        "dismiss_aria": "Dispensar aviso de notificações",
         "ios_hint": "No iOS, instale o site primeiro na tela inicial – o Safari só entrega Web Push para PWAs instalados.",
         "reenable": "Registrar novamente",
         "relay_desc": "Usa o relay Bulwark hospedado por padrão. Altere apenas se você hospedar.",
@@ -1318,6 +1339,10 @@
         "add": "Add",
         "remove": "Remover"
       },
+      "empty_subject_warning": {
+        "label": "Aviso de assunto vazio",
+        "description": "Pedir confirmação antes de enviar uma mensagem sem assunto."
+      },
       "hide_inline_image_attachments": {
         "label": "Ocultar imagens incorporadas dos anexos",
         "description": "As imagens incorporadas no corpo da mensagem não são listadas como anexos separados"
@@ -1519,7 +1544,16 @@
         "inactive": "Desabilitado",
         "enabled": "Criptografia em repouso habilitada",
         "disabled_success": "Criptografia em repouso desabilitada",
-        "error": "Não foi possível atualizar as configurações de criptografia"
+        "error": "Não foi possível atualizar as configurações de criptografia",
+        "algorithm_label": "Algoritmo de criptografia",
+        "encrypt_on_append": "Criptografar novos e-mails ao carregar",
+        "allow_spam_training": "Permitir treino de spam antes de criptografar os e-mails",
+        "enable_encryption": "Ativar criptografia",
+        "enable_tooltip": "Ativar criptografia com esta chave",
+        "configure_title": "Ativar criptografia com esta chave",
+        "enable_button": "Ativar",
+        "disable_tooltip": "Desativar criptografia",
+        "enabled_success": "Criptografia em repouso habilitada"
       },
       "email_client": {
         "title": "Configuração do Cliente de E-mail",
@@ -1539,6 +1573,13 @@
         "expired": "Este código expirou.",
         "generating": "Gerando…",
         "error": "Não foi possível criar um código de pareamento. Tente novamente."
+      },
+      "public_keys": {
+        "name_label": "Nome da chave pública",
+        "name_placeholder": "ex. A minha chave",
+        "key_label": "Chave pública (S/MIME ou PGP em formato ASCII)",
+        "key_placeholder": "Cole aqui a sua chave pública",
+        "none": "Nenhuma chave pública configurada"
       }
     },
     "identities": {
@@ -2036,7 +2077,7 @@
     "advanced": "Mais opções",
     "applies_to_new_mail": "Aplica-se ao e-mail que chegar a partir de agora.",
     "load_failed": "Não foi possível carregar seus filtros. Tente novamente nas configurações de Filtros.",
-    "opaque": "Seu script de filtros foi editado manualmente. Gerencie-o nas configurações de Filtros.",
+    "opaque": "Seu script de filtros foi editado manualmente. Gerencie-o nas configurações de Filtros.",
     "backfill_question": "Aplicar às mensagens que já estão nesta pasta? Caso contrário, apenas o e-mail novo é filtrado.",
     "backfill_apply": "Aplicar",
     "backfill_skip": "Agora não",
@@ -3344,5 +3385,18 @@
     "install": "Instalar",
     "dont_remind": "Não lembrar novamente",
     "dismiss_aria": "Dispensar aviso de instalação"
+  },
+  "deep_link": {
+    "message_not_found": "Esta mensagem não está mais disponível.",
+    "thread_not_found": "Esta conversa não está mais disponível.",
+    "folder_not_found": "Esta pasta não está mais disponível.",
+    "event_not_found": "Este evento não está mais disponível.",
+    "file_not_found": "Este arquivo não está mais disponível.",
+    "account_unavailable": "Entre nessa conta para abrir este link.",
+    "copy_message": "Copiar link da mensagem",
+    "copy_conversation": "Copiar link da conversa",
+    "copy_event": "Copiar link do evento",
+    "copied": "Link copiado",
+    "copy_failed": "Não foi possível copiar o link"
   }
 }

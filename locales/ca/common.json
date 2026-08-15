@@ -122,7 +122,8 @@
     "mobile": {
       "search": "Cerca",
       "compose": "Redacta",
-      "go_back": "Torna enrere"
+      "go_back": "Torna enrere",
+      "toggle_menu": "Commuta el menú"
     },
     "clear_search": "Neteja la cerca",
     "vacation_active": "La resposta automàtica està activa",
@@ -638,7 +639,6 @@
     "validation": {
       "recipient_required": "Afegiu un destinatari per enviar",
       "from_invalid": "Introduïu una adreça de remitent vàlida",
-      "subject_required": "Afegiu un assumpte",
       "body_required": "Escriviu un missatge o adjunteu un fitxer",
       "attachments_uploading": "Els fitxers adjunts encara s'estan pujant — s'enviarà en acabar",
       "attachment_upload_failed": "No s'ha enviat — no s'ha pogut pujar un fitxer adjunt. Elimineu-lo i torneu-ho a provar."
@@ -649,6 +649,7 @@
     "drop_files": "Deixeu anar els fitxers per adjuntar-los",
     "show_less": "Mostra'n menys",
     "send_failed": "No s'ha pogut enviar el correu",
+    "send_timeout": "El servidor ha deixat de respondre. Comproveu la carpeta Enviats abans de tornar a enviar: el missatge pot haver sortit.",
     "continue_draft": "Continua l'esborrany",
     "close_draft_title": "Voleu desar o descartar l'esborrany?",
     "close_draft_message": "Teniu canvis sense desar. Voleu desar-los com a esborrany o descartar-los?",
@@ -664,6 +665,13 @@
     "forgot_attachment": {
       "title": "Us heu oblidat d'un fitxer adjunt?",
       "message": "El vostre missatge esmenta «{keyword}», però no hi ha cap fitxer adjunt. Voleu enviar-lo igualment?",
+      "send_anyway": "Envia igualment",
+      "back": "Torna a l'edició"
+    },
+    "empty_subject": {
+      "title": "Voleu enviar-lo sense assumpte?",
+      "message": "Aquest missatge no té assumpte. Voleu enviar-lo igualment?",
+      "dont_ask_again": "No ho tornis a preguntar",
       "send_anyway": "Envia igualment",
       "back": "Torna a l'edició"
     },
@@ -1042,6 +1050,18 @@
         "show": "Mostra",
         "unread": "Mostra si hi ha no llegits",
         "hide": "Amaga"
+      },
+      "unrecognized": {
+        "title": "Recupera etiquetes del servidor",
+        "description": "Els noms i els colors de les etiquetes es desen en aquest navegador, però les etiquetes viuen als vostres correus com a paraules clau JMAP. Analitzeu el correu per trobar paraules clau que cap etiqueta d'aquí no expliqui i torneu-les a afegir.",
+        "scan": "Cerca etiquetes",
+        "rescan": "Torna a cercar",
+        "scanning": "S'està analitzant… {scanned} de {total} correus",
+        "none": "Totes les etiquetes dels vostres correus ja estan definides aquí.",
+        "messages": "{count, plural, one {# correu} other {# correus}}",
+        "add_all": "Afegeix-les totes ({count})",
+        "partial": "Només s'han analitzat els {scanned} correus més recents de {total}. Poden faltar etiquetes usades únicament en correus més antics.",
+        "error": "No s'ha pogut analitzar el correu per cercar etiquetes."
       }
     },
     "notifications": {
@@ -1070,6 +1090,7 @@
         "disable": "Desactiva",
         "confirm_disable_title": "Voleu desactivar les notificacions en segon pla?",
         "confirm_disable_message": "Aquest dispositiu deixarà de rebre avisos quan el lloc estigui tancat.",
+        "dismiss_aria": "Descarta l'avís de notificacions",
         "ios_hint": "A l'iOS, primer instal·leu el lloc a la pantalla d'inici - el Safari només entrega Web Push a les PWA instal·lades."
       },
       "sound_selection": {
@@ -1321,6 +1342,10 @@
         "add": "Afegeix",
         "remove": "Elimina"
       },
+      "empty_subject_warning": {
+        "label": "Avís d'assumpte buit",
+        "description": "Demana confirmació abans d'enviar un missatge sense assumpte."
+      },
       "hide_inline_image_attachments": {
         "label": "Amaga les imatges incrustades dels fitxers adjunts",
         "description": "Les imatges incrustades al cos del missatge no es llisten com a fitxers adjunts separats"
@@ -1526,7 +1551,16 @@
         "inactive": "Desactivat",
         "enabled": "Xifratge en repòs activat",
         "disabled_success": "Xifratge en repòs desactivat",
-        "error": "No s'ha pogut actualitzar la configuració de xifratge"
+        "error": "No s'ha pogut actualitzar la configuració de xifratge",
+        "algorithm_label": "Algorisme de xifratge",
+        "encrypt_on_append": "Xifra els correus nous en pujar-los",
+        "allow_spam_training": "Permet l'entrenament antispam abans de xifrar els correus",
+        "enable_encryption": "Activa el xifratge",
+        "enable_tooltip": "Activa el xifratge amb aquesta clau",
+        "configure_title": "Activa el xifratge amb aquesta clau",
+        "enable_button": "Activa",
+        "disable_tooltip": "Desactiva el xifratge",
+        "enabled_success": "Xifratge en repòs activat"
       },
       "email_client": {
         "title": "Configuració del client de correu",
@@ -1546,6 +1580,13 @@
         "expired": "Aquest codi ha caducat.",
         "generating": "Generant…",
         "error": "No s'ha pogut crear el codi d'aparellament. Torneu-ho a provar."
+      },
+      "public_keys": {
+        "name_label": "Nom de la clau pública",
+        "name_placeholder": "p. ex. La meva clau",
+        "key_label": "Clau pública (S/MIME o PGP en ASCII armor)",
+        "key_placeholder": "Enganxeu aquí la vostra clau pública",
+        "none": "No hi ha cap clau pública configurada"
       }
     },
     "identities": {
@@ -2036,7 +2077,7 @@
     "advanced": "Més opcions",
     "applies_to_new_mail": "S'aplica al correu que arribi a partir d'ara.",
     "load_failed": "No s'han pogut carregar els filtres. Torneu-ho a provar des de la configuració de Filtres.",
-    "opaque": "L'script de filtres s'ha editat manualment. Gestioneu-lo des de la configuració de Filtres.",
+    "opaque": "L'script de filtres s'ha editat manualment. Gestioneu-lo des de la configuració de Filtres.",
     "backfill_question": "Voleu aplicar-lo als missatges que ja hi ha en aquesta carpeta? Altrament només es filtra el correu nou.",
     "backfill_apply": "Aplica",
     "backfill_skip": "Ara no",
@@ -3344,5 +3385,18 @@
     "install": "Instal·la",
     "dont_remind": "No m'ho tornis a recordar",
     "dismiss_aria": "Descarta l'avís d'instal·lació"
+  },
+  "deep_link": {
+    "message_not_found": "Aquest missatge ja no està disponible.",
+    "thread_not_found": "Aquesta conversa ja no està disponible.",
+    "folder_not_found": "Aquesta carpeta ja no està disponible.",
+    "event_not_found": "Aquest esdeveniment ja no està disponible.",
+    "file_not_found": "Aquest fitxer ja no està disponible.",
+    "account_unavailable": "Inicia la sessió en aquest compte per obrir l'enllaç.",
+    "copy_message": "Copia l'enllaç del missatge",
+    "copy_conversation": "Copia l'enllaç de la conversa",
+    "copy_event": "Copia l'enllaç de l'esdeveniment",
+    "copied": "Enllaç copiat",
+    "copy_failed": "No s'ha pogut copiar l'enllaç"
   }
 }

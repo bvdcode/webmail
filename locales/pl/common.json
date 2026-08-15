@@ -122,7 +122,8 @@
     "mobile": {
       "search": "Szukaj",
       "compose": "Napisz",
-      "go_back": "Wróć"
+      "go_back": "Wróć",
+      "toggle_menu": "Przełącz menu"
     },
     "clear_search": "Wyczyść wyszukiwanie",
     "vacation_active": "Autoresponder wakacyjny jest aktywny",
@@ -635,7 +636,6 @@
     "validation": {
       "recipient_required": "Dodaj odbiorcę, aby wysłać",
       "from_invalid": "Podaj prawidłowy adres nadawcy",
-      "subject_required": "Dodaj temat",
       "body_required": "Napisz wiadomość lub załącz plik",
       "attachments_uploading": "Załączniki wciąż się przesyłają — wiadomość zostanie wysłana po zakończeniu",
       "attachment_upload_failed": "Nie wysłano - nie udało się przesłać załącznika. Usuń go i spróbuj ponownie."
@@ -646,6 +646,7 @@
     "drop_files": "Upuść pliki, aby załączyć",
     "show_less": "Pokaż mniej",
     "send_failed": "Nie udało się wysłać wiadomości",
+    "send_timeout": "Serwer przestał odpowiadać. Przed ponownym wysłaniem sprawdź folder Wysłane — wiadomość mogła już zostać wysłana.",
     "continue_draft": "Kontynuuj szkic",
     "close_draft_title": "Zapisać czy odrzucić szkic?",
     "close_draft_message": "Masz niezapisane zmiany. Czy chcesz zapisać jako szkic czy odrzucić?",
@@ -661,6 +662,13 @@
     "forgot_attachment": {
       "title": "Czy zapomniałeś o załączniku?",
       "message": "Twoja wiadomość wspomina o \"{keyword}\", ale nie załączono żadnego pliku. Wysłać mimo to?",
+      "send_anyway": "Wyślij mimo to",
+      "back": "Wróć do edycji"
+    },
+    "empty_subject": {
+      "title": "Wysłać bez tematu?",
+      "message": "Ta wiadomość nie ma tematu. Wysłać mimo to?",
+      "dont_ask_again": "Nie pytaj ponownie",
       "send_anyway": "Wyślij mimo to",
       "back": "Wróć do edycji"
     },
@@ -1039,6 +1047,18 @@
         "show": "Pokaż",
         "unread": "Pokaż przy nieprzeczytanych",
         "hide": "Ukryj"
+      },
+      "unrecognized": {
+        "title": "Odzyskaj etykiety z serwera",
+        "description": "Nazwy i kolory etykiet są zapisane w tej przeglądarce, ale same etykiety znajdują się w wiadomościach jako słowa kluczowe JMAP. Przeskanuj pocztę w poszukiwaniu słów kluczowych, dla których nie ma tu etykiety, i dodaj je ponownie.",
+        "scan": "Szukaj etykiet",
+        "rescan": "Skanuj ponownie",
+        "scanning": "Skanowanie… {scanned} z {total} wiadomości",
+        "none": "Wszystkie etykiety w Twoich wiadomościach są już tutaj zdefiniowane.",
+        "messages": "{count, plural, one {# wiadomość} few {# wiadomości} other {# wiadomości}}",
+        "add_all": "Dodaj wszystkie ({count})",
+        "partial": "Przeskanowano tylko {scanned} najnowszych z {total} wiadomości. Etykiety używane wyłącznie w starszej poczcie mogą zostać pominięte.",
+        "error": "Nie udało się przeskanować poczty w poszukiwaniu etykiet."
       }
     },
     "notifications": {
@@ -1080,6 +1100,7 @@
         "description": "Otrzymuj powiadomienia systemowe o nowych wiadomościach, gdy ta strona jest zamknięta. Dostarczane przez przekaźnik push Bulwark; przekaźnik nigdy nie widzi treści wiadomości.",
         "disable": "Wyłącz",
         "enable": "Włącz",
+        "dismiss_aria": "Zamknij monit powiadomień",
         "ios_hint": "W systemie iOS najpierw zainstaluj stronę na ekranie głównym – Safari dostarcza Web Push tylko zainstalowanym PWA.",
         "reenable": "Zarejestruj ponownie",
         "relay_desc": "Domyślnie używa hostowanego przekaźnika Bulwark. Zmień tylko jeśli hostujesz samodzielnie.",
@@ -1318,6 +1339,10 @@
         "add": "Add",
         "remove": "Usuń"
       },
+      "empty_subject_warning": {
+        "label": "Ostrzeżenie o pustym temacie",
+        "description": "Poproś o potwierdzenie przed wysłaniem wiadomości bez tematu."
+      },
       "hide_inline_image_attachments": {
         "label": "Ukryj obrazy osadzone z listy załączników",
         "description": "Obrazy osadzone w treści wiadomości nie są wyświetlane jako osobne załączniki"
@@ -1519,7 +1544,16 @@
         "inactive": "Wyłączone",
         "enabled": "Szyfrowanie danych w spoczynku włączone",
         "disabled_success": "Szyfrowanie danych w spoczynku wyłączone",
-        "error": "Nie udało się zaktualizować ustawień szyfrowania"
+        "error": "Nie udało się zaktualizować ustawień szyfrowania",
+        "algorithm_label": "Algorytm szyfrowania",
+        "encrypt_on_append": "Szyfruj nowe wiadomości podczas przesyłania",
+        "allow_spam_training": "Zezwalaj na trenowanie filtra spamu przed zaszyfrowaniem wiadomości",
+        "enable_encryption": "Włącz szyfrowanie",
+        "enable_tooltip": "Włącz szyfrowanie tym kluczem",
+        "configure_title": "Włącz szyfrowanie tym kluczem",
+        "enable_button": "Włącz",
+        "disable_tooltip": "Wyłącz szyfrowanie",
+        "enabled_success": "Szyfrowanie danych w spoczynku włączone"
       },
       "email_client": {
         "title": "Konfiguracja klienta poczty",
@@ -1539,6 +1573,13 @@
         "expired": "Ten kod wygasł.",
         "generating": "Generowanie…",
         "error": "Nie udało się utworzyć kodu parowania. Spróbuj ponownie."
+      },
+      "public_keys": {
+        "name_label": "Nazwa klucza publicznego",
+        "name_placeholder": "np. Mój klucz",
+        "key_label": "Klucz publiczny (S/MIME lub PGP w formacie ASCII)",
+        "key_placeholder": "Wklej tutaj swój klucz publiczny",
+        "none": "Nie skonfigurowano żadnych kluczy publicznych"
       }
     },
     "identities": {
@@ -2036,7 +2077,7 @@
     "advanced": "Więcej opcji",
     "applies_to_new_mail": "Dotyczy poczty, która nadejdzie od teraz.",
     "load_failed": "Nie udało się wczytać filtrów. Spróbuj ponownie w ustawieniach Filtry.",
-    "opaque": "Skrypt filtrów został zmodyfikowany ręcznie. Zarządzaj nim w ustawieniach Filtry.",
+    "opaque": "Skrypt filtrów został zmodyfikowany ręcznie. Zarządzaj nim w ustawieniach Filtry.",
     "backfill_question": "Zastosować go do wiadomości, które już są w tym folderze? W przeciwnym razie filtrowana jest tylko nowa poczta.",
     "backfill_apply": "Zastosuj",
     "backfill_skip": "Nie teraz",
@@ -3344,5 +3385,18 @@
     "install": "Zainstaluj",
     "dont_remind": "Nie przypominaj mi więcej",
     "dismiss_aria": "Zamknij monit instalacji"
+  },
+  "deep_link": {
+    "message_not_found": "Ta wiadomość nie jest już dostępna.",
+    "thread_not_found": "Ta rozmowa nie jest już dostępna.",
+    "folder_not_found": "Ten folder nie jest już dostępny.",
+    "event_not_found": "To wydarzenie nie jest już dostępne.",
+    "file_not_found": "Ten plik nie jest już dostępny.",
+    "account_unavailable": "Zaloguj się na to konto, aby otworzyć ten link.",
+    "copy_message": "Kopiuj link do wiadomości",
+    "copy_conversation": "Kopiuj link do rozmowy",
+    "copy_event": "Kopiuj link do wydarzenia",
+    "copied": "Link skopiowany",
+    "copy_failed": "Nie udało się skopiować linku"
   }
 }
