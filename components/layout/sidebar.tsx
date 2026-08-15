@@ -4,7 +4,6 @@ import { useState, useEffect, useMemo, Fragment, ReactNode } from "react";
 import { useTranslations } from "next-intl";
 import { useRouter } from "@/i18n/navigation";
 import { PluginSlot } from "@/components/plugins/plugin-slot";
-import { Button } from "@/components/ui/button";
 import {
   Inbox,
   Send,
@@ -21,7 +20,6 @@ import {
   Users,
   Palmtree,
   Settings,
-  X,
   RotateCcw,
   Tag,
   FlaskConical,
@@ -62,10 +60,11 @@ import { useSettingsStore, getKeywordVisibility } from "@/stores/settings-store"
 import { useEmailStore } from "@/stores/email-store";
 import { toast } from "@/stores/toast-store";
 import { debug } from "@/lib/debug";
-import { AccountSwitcher } from "./account-switcher";
 import { useIsEmbedded } from "@/hooks/use-is-embedded";
 import { buildSettingsPath } from "@/lib/deep-links";
 import { useTour } from "@/components/tour/tour-provider";
+import { useUIStore } from "@/stores/ui-store";
+import { SidebarAccountHeader } from "./sidebar-account-header";
 
 interface SidebarProps {
   mailboxes: Mailbox[];
@@ -789,7 +788,10 @@ export function Sidebar({
   onAccountMailboxSelect,
 }: SidebarProps) {
   const router = useRouter();
-  const isCollapsed: boolean = false;
+  const sidebarCollapsed = useUIStore((state) => state.sidebarCollapsed);
+  const isDesktop = useUIStore((state) => state.isDesktop);
+  const toggleSidebarCollapsed = useUIStore((state) => state.toggleSidebarCollapsed);
+  const isCollapsed = sidebarCollapsed && isDesktop;
   const { primaryIdentity: _primaryIdentity, activeAccountId } = useAuthStore();
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
   const [expandedTags, setExpandedTags] = useState<Set<string>>(new Set());
@@ -1121,7 +1123,7 @@ export function Sidebar({
         "relative flex flex-col h-full border-e transition-all duration-300 overflow-hidden",
         "bg-secondary border-border",
         "max-lg:w-full",
-        "lg:w-full",
+        isCollapsed ? "lg:w-12" : "lg:w-full",
         className
       )}
     >
@@ -1131,19 +1133,11 @@ export function Sidebar({
         // Border lives on the wrapper (outside the h-14 box) so the bar's total
         // height matches the search/reply toolbars, which border-b their wrapper too.
         <div className="border-b border-border">
-          <div className="flex items-center h-14 gap-1 px-2">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={onSidebarClose}
-              className="lg:hidden h-9 w-9 flex-shrink-0"
-              aria-label={t("close")}
-            >
-              <X className="w-5 h-5" />
-            </Button>
-
-            <AccountSwitcher variant="expanded" className="flex-1" />
-          </div>
+          <SidebarAccountHeader
+            isCollapsed={isCollapsed}
+            onToggleCollapsed={toggleSidebarCollapsed}
+            onSidebarClose={onSidebarClose}
+          />
         </div>
       )}
 

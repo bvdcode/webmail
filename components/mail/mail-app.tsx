@@ -279,7 +279,7 @@ export function MailApp({ linkSegments }: MailAppProps = {}) {
   // Mobile/tablet responsive hooks
   const { isMobile, isTablet } = useDeviceDetection();
   const isEmbedded = useIsEmbedded();
-  const { activeView, sidebarOpen, setSidebarOpen, setActiveView, tabletListVisible, setTabletListVisible, sidebarWidth, emailListWidth, emailListHeight, setSidebarWidth, setEmailListWidth, setEmailListHeight, persistColumnWidths, resetSidebarWidth, resetEmailListWidth, resetEmailListHeight } = useUIStore();
+  const { activeView, sidebarOpen, setSidebarOpen, setActiveView, tabletListVisible, setTabletListVisible, sidebarWidth, emailListWidth, emailListHeight, setSidebarWidth, setEmailListWidth, setEmailListHeight, persistColumnWidths, sidebarCollapsed, resetSidebarWidth, resetEmailListWidth, resetEmailListHeight } = useUIStore();
   const {
     emails,
     mailboxes,
@@ -3166,7 +3166,7 @@ export function MailApp({ linkSegments }: MailAppProps = {}) {
                 ),
             inlineApp && "hidden"
           )}
-          style={!isMobile && !isTablet ? { width: sidebarWidth } : undefined}
+          style={!isMobile && !isTablet ? { width: sidebarCollapsed ? 48 : sidebarWidth } : undefined}
         >
           <ErrorBoundary fallback={SidebarErrorFallback}>
             <Sidebar
@@ -3211,8 +3211,8 @@ export function MailApp({ linkSegments }: MailAppProps = {}) {
           </ErrorBoundary>
         </div>
 
-        {/* Sidebar resize handle (desktop only) */}
-        {!isMobile && !isTablet && !inlineApp && (
+        {/* Sidebar resize handle (desktop only, hidden when collapsed) */}
+        {!isMobile && !isTablet && !sidebarCollapsed && !inlineApp && (
           <ResizeHandle
             onResizeStart={() => { dragStartWidth.current = sidebarWidth; setIsResizing(true); }}
             onResize={(delta) => setSidebarWidth(dragStartWidth.current + delta)}

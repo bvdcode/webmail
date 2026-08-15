@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback, useMemo, useId } from "react";
 import { createPortal } from "react-dom";
-import { Check, Plus, LogOut, Star, ChevronDown, AlertCircle, GripVertical, X } from "lucide-react";
+import { Check, Plus, LogOut, Star, AlertCircle, GripVertical, X } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useAccountStore, type AccountEntry } from "@/stores/account-store";
 import { useAuthStore } from "@/stores/auth-store";
@@ -226,7 +226,6 @@ export function AccountSwitcher({ variant = "rail", className }: AccountSwitcher
                   <p className="text-sm font-medium text-foreground truncate">{displayName}</p>
                   <p className="text-xs text-muted-foreground truncate">{displayEmail}</p>
                 </div>
-                <ChevronDown className={cn("w-3.5 h-3.5 text-muted-foreground flex-shrink-0 transition-transform", open && "rotate-180")} />
               </>
             )}
           </>
