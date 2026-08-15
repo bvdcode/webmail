@@ -232,4 +232,19 @@ describe('settings-store keywords', () => {
       expect(exported.nestedTags).toBe(true);
     });
   });
+
+  describe('showTagsInSidebar', () => {
+    it('is on by default', () => {
+      useSettingsStore.getState().resetToDefaults();
+      expect(useSettingsStore.getState().showTagsInSidebar).toBe(true);
+    });
+
+    it('is included in exported settings', () => {
+      useSettingsStore.getState().updateSetting('showTagsInSidebar', false);
+      const exported = JSON.parse(useSettingsStore.getState().exportSettings()) as {
+        showTagsInSidebar?: boolean;
+      };
+      expect(exported.showTagsInSidebar).toBe(false);
+    });
+  });
 });

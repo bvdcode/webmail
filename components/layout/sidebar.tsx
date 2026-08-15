@@ -848,6 +848,7 @@ export function Sidebar({
   const enableUnifiedMailbox = useSettingsStore(s => s.enableUnifiedMailbox);
   const includeGroupInUnified = useSettingsStore(s => s.includeGroupInUnified);
   const colorfulSidebarIcons = useSettingsStore(s => s.colorfulSidebarIcons);
+  const showTagsInSidebar = useSettingsStore(s => s.showTagsInSidebar);
   const tagCounts = useEmailStore(s => s.tagCounts);
   const accounts = useAccountStore(s => s.accounts);
   const connectedAccounts = accounts.filter(a => a.isConnected);
@@ -1365,7 +1366,7 @@ export function Sidebar({
           </div>
         )}
 
-        {emailKeywords.length > 0 && (
+        {showTagsInSidebar && emailKeywords.length > 0 && (
           <div data-tour="keyword-tags">
             <SidebarSectionHeader
               label={t("tags")}
