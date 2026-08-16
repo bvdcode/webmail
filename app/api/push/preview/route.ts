@@ -2,6 +2,12 @@ import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/logger';
 import { MAX_ACCOUNT_SLOTS } from '@/lib/account-utils';
+import {
+  fetchJmapSession,
+  postJmap,
+  rebaseApiUrl,
+  resolveJmapRequestServerUrl,
+} from '@/lib/stalwart/jmap-api';
 import { readStalwartAuthContextFromStore } from '@/lib/stalwart/auth-context';
 import {
   getStalwartCredentials,
@@ -15,15 +21,39 @@ interface ResolvedTarget {
   authHeader: string;
   apiUrl: string;
   accountId: string;
+  inboxId?: string | null;
 }
 
-// When the SW passes ?accountId=, we need the slot whose JMAP session owns
-// that account - not just "the first signed-in slot", which is what
-// getStalwartCredentials() defaults to. Probe each candidate's session in
-// parallel and return the first match.
-async function resolveTargetForAccount(accountId: string): Promise<ResolvedTarget | null> {
+interface AccountTargetResolution {
+  target: ResolvedTarget | null;
+  hasAuthContext: boolean;
+  hasJmapResponse: boolean;
+}
+
+interface AccountProbeResult {
+  target: ResolvedTarget | null;
+  hasJmapResponse: boolean;
+}
+
+function createInboxQueryBody(accountId: string): string {
+  return JSON.stringify({
+    using: ['urn:ietf:params:jmap:core', 'urn:ietf:params:jmap:mail'],
+    methodCalls: [
+      [
+        'Mailbox/query',
+        { accountId, filter: { role: 'inbox' }, limit: 1 },
+        'mb',
+      ],
+    ],
+  });
+}
+
+// When the SW passes ?accountId=, probe that account directly with every
+// stored credential. This both selects the correct multi-account slot and
+// resolves its Inbox without depending on JMAP session discovery.
+async function resolveTargetForAccount(accountId: string): Promise<AccountTargetResolution> {
   const cookieStore = await cookies();
-  const probes: Promise<ResolvedTarget | null>[] = [];
+  const probes: Promise<AccountProbeResult>[] = [];
   for (let slot = 0; slot < MAX_ACCOUNT_SLOTS; slot++) {
     const ctx = readStalwartAuthContextFromStore(cookieStore, slot);
     if (!ctx) continue;
@@ -31,39 +61,57 @@ async function resolveTargetForAccount(accountId: string): Promise<ResolvedTarge
     probes.push(
       (async () => {
         try {
-          const res = await fetch(`${serverUrl}/.well-known/jmap`, {
-            headers: { Authorization: ctx.authHeader },
-          });
-          if (!res.ok) return null;
-          const session = (await res.json()) as {
-            apiUrl?: string;
-            primaryAccounts?: Record<string, string>;
+          const apiUrl = `${resolveJmapRequestServerUrl(serverUrl)}/jmap/`;
+          const response = await postJmap(
+            apiUrl,
+            ctx.authHeader,
+            createInboxQueryBody(accountId),
+          );
+          if (!response.ok) {
+            return {
+              target: null,
+              hasJmapResponse: false,
+            };
+          }
+          const data = (await response.json()) as {
+            methodResponses?: [string, { ids?: string[] }, string][];
           };
-          const mailAccountId = session.primaryAccounts?.['urn:ietf:params:jmap:mail'];
-          if (!session.apiUrl || !mailAccountId) return null;
-          if (mailAccountId !== accountId) return null;
-          return { authHeader: ctx.authHeader, apiUrl: session.apiUrl, accountId: mailAccountId };
+          const inboxBody = data.methodResponses?.find(
+            ([method]) => method === 'Mailbox/query',
+          )?.[1];
+          if (!inboxBody) {
+            return { target: null, hasJmapResponse: true };
+          }
+          return {
+            target: {
+              authHeader: ctx.authHeader,
+              apiUrl,
+              accountId,
+              inboxId: inboxBody.ids?.[0] ?? null,
+            },
+            hasJmapResponse: true,
+          };
         } catch {
-          return null;
+          return {
+            target: null,
+            hasJmapResponse: false,
+          };
         }
       })(),
     );
   }
   const results = await Promise.all(probes);
-  return results.find((r): r is ResolvedTarget => r !== null) ?? null;
+  return {
+    target: results.find((result) => result.target !== null)?.target ?? null,
+    hasAuthContext: probes.length > 0,
+    hasJmapResponse: results.some((result) => result.hasJmapResponse),
+  };
 }
 
 async function resolveDefaultTarget(creds: StalwartCredentials): Promise<ResolvedTarget | null> {
-  const sessionRes = await fetch(`${creds.serverUrl}/.well-known/jmap`, {
-    headers: { Authorization: creds.authHeader },
-  });
-  if (!sessionRes.ok) return null;
-  const session = (await sessionRes.json()) as {
-    apiUrl?: string;
-    primaryAccounts?: Record<string, string>;
-  };
-  const apiUrl = session.apiUrl;
-  const accountId = session.primaryAccounts?.['urn:ietf:params:jmap:mail'];
+  const session = await fetchJmapSession(creds.serverUrl, creds.authHeader);
+  const apiUrl = rebaseApiUrl(session, creds.serverUrl);
+  const accountId = session?.primaryAccounts?.['urn:ietf:params:jmap:mail'];
   if (!apiUrl || !accountId) return null;
   return { authHeader: creds.authHeader, apiUrl, accountId };
 }
@@ -91,9 +139,16 @@ export async function GET(request: NextRequest) {
     let target: ResolvedTarget | null = null;
     let authHeader: string;
     if (requestedAccountId) {
-      target = await resolveTargetForAccount(requestedAccountId);
-      if (!target) {
+      const resolution = await resolveTargetForAccount(requestedAccountId);
+      target = resolution.target;
+      if (!resolution.hasAuthContext) {
         return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+      }
+      if (!resolution.hasJmapResponse) {
+        return NextResponse.json({ error: 'JMAP request failed' }, { status: 502 });
+      }
+      if (!target) {
+        return NextResponse.json({ error: 'Account not found' }, { status: 404 });
       }
       authHeader = target.authHeader;
     } else {
@@ -109,38 +164,24 @@ export async function GET(request: NextRequest) {
     }
 
     const { apiUrl, accountId } = target;
-
-    const inboxRes = await fetch(apiUrl, {
-      method: 'POST',
-      headers: {
-        Authorization: authHeader,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        using: ['urn:ietf:params:jmap:core', 'urn:ietf:params:jmap:mail'],
-        methodCalls: [
-          [
-            'Mailbox/query',
-            { accountId, filter: { role: 'inbox' }, limit: 1 },
-            'mb',
-          ],
-        ],
-      }),
-    });
-
-    if (!inboxRes.ok) {
-      return NextResponse.json({ error: 'JMAP mailbox query failed' }, { status: 502 });
+    let inboxId = target.inboxId;
+    if (inboxId === undefined) {
+      const inboxRes = await postJmap(
+        apiUrl,
+        authHeader,
+        createInboxQueryBody(accountId),
+      );
+      if (!inboxRes.ok) {
+        return NextResponse.json({ error: 'JMAP mailbox query failed' }, { status: 502 });
+      }
+      const inboxData = (await inboxRes.json()) as {
+        methodResponses: [string, Record<string, unknown>, string][];
+      };
+      const inboxBody = inboxData.methodResponses.find(
+        ([method]) => method === 'Mailbox/query',
+      )?.[1] as { ids?: string[] } | undefined;
+      inboxId = inboxBody?.ids?.[0] ?? null;
     }
-
-    const inboxData = (await inboxRes.json()) as {
-      methodResponses: [string, Record<string, unknown>, string][];
-    };
-
-    const inboxBody = inboxData.methodResponses.find(
-      ([method]) => method === 'Mailbox/query',
-    )?.[1] as { ids?: string[] } | undefined;
-
-    const inboxId = inboxBody?.ids?.[0];
 
     if (!inboxId) {
       return NextResponse.json({
@@ -186,14 +227,7 @@ export async function GET(request: NextRequest) {
       ],
     };
 
-    const jmapRes = await fetch(apiUrl, {
-      method: 'POST',
-      headers: {
-        Authorization: authHeader,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(requestBody),
-    });
+    const jmapRes = await postJmap(apiUrl, authHeader, JSON.stringify(requestBody));
     if (!jmapRes.ok) {
       return NextResponse.json({ error: 'JMAP request failed' }, { status: 502 });
     }

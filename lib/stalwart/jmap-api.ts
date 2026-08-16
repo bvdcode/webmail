@@ -19,6 +19,28 @@
 
 const MAX_REDIRECTS = 3;
 
+function normalizeServerUrl(serverUrl: string): string {
+  return serverUrl.trim().replace(/\/+$/, '');
+}
+
+export function resolveJmapRequestServerUrl(serverUrl: string): string {
+  const publicServerUrl = normalizeServerUrl(serverUrl);
+  const internalServerUrl = process.env.JMAP_INTERNAL_SERVER_URL?.trim();
+  const configuredServerUrl = (
+    process.env.JMAP_SERVER_URL
+    ?? process.env.NEXT_PUBLIC_JMAP_SERVER_URL
+    ?? ''
+  ).trim();
+
+  if (!internalServerUrl || !configuredServerUrl) {
+    return publicServerUrl;
+  }
+  if (normalizeServerUrl(configuredServerUrl) !== publicServerUrl) {
+    return publicServerUrl;
+  }
+  return normalizeServerUrl(internalServerUrl);
+}
+
 export interface JmapSessionDocument {
   apiUrl?: string;
   capabilities?: Record<string, unknown>;
@@ -92,7 +114,11 @@ export async function fetchJmapSession(
   serverUrl: string,
   authHeader: string,
 ): Promise<JmapSessionDocument | null> {
-  const candidates = [`${serverUrl}/jmap/session`, `${serverUrl}/.well-known/jmap`];
+  const requestServerUrl = resolveJmapRequestServerUrl(serverUrl);
+  const candidates = [
+    `${requestServerUrl}/jmap/session`,
+    `${requestServerUrl}/.well-known/jmap`,
+  ];
   for (const url of candidates) {
     try {
       const res = await fetch(url, {
@@ -124,7 +150,7 @@ export function rebaseApiUrl(
   if (!session?.apiUrl) return null;
   try {
     const api = new URL(session.apiUrl, `${serverUrl}/`);
-    const base = new URL(serverUrl);
+    const base = new URL(resolveJmapRequestServerUrl(serverUrl));
     return new URL(api.pathname + api.search, base.origin).toString();
   } catch {
     return null;

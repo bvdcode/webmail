@@ -123,12 +123,13 @@ async function syncStalwartAuthContext(
   username: string,
   authHeader: string,
   slot: number,
+  persistent: boolean,
 ): Promise<void> {
   try {
     const response = await apiFetch('/api/auth/stalwart-context', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ serverUrl, username, authHeader, slot }),
+      body: JSON.stringify({ serverUrl, username, authHeader, slot, persistent }),
     });
 
     if (!response.ok) {
@@ -684,7 +685,13 @@ export const useAuthStore = create<AuthState>()(
           const [rawIdentities] = await Promise.all([
             identitiesPromise,
             sessionWrite,
-            syncStalwartAuthContext(serverUrl, username, client.getAuthHeader(), cookieSlot),
+            syncStalwartAuthContext(
+              serverUrl,
+              username,
+              client.getAuthHeader(),
+              cookieSlot,
+              upgradedToOAuth || !!rememberMe,
+            ),
           ]);
 
           const { identities, primaryIdentity } = loadIdentities(rawIdentities, username);
@@ -933,7 +940,7 @@ export const useAuthStore = create<AuthState>()(
           accountStore.updateAccount(accountId, { cookieSlot: slot });
           accountStore.setActiveAccount(accountId);
 
-          await syncStalwartAuthContext(serverUrl, username, client.getAuthHeader(), slot);
+          await syncStalwartAuthContext(serverUrl, username, client.getAuthHeader(), slot, true);
 
           set({
             isAuthenticated: true,
@@ -1072,7 +1079,7 @@ export const useAuthStore = create<AuthState>()(
           accountStore.updateAccount(accountId, { cookieSlot: slot });
           accountStore.setActiveAccount(accountId);
 
-          await syncStalwartAuthContext(ssoServerUrl, username, client.getAuthHeader(), slot);
+          await syncStalwartAuthContext(ssoServerUrl, username, client.getAuthHeader(), slot, true);
 
           set({
             isAuthenticated: true,
@@ -1171,6 +1178,7 @@ export const useAuthStore = create<AuthState>()(
                 account.username,
                 `Bearer ${access_token}`,
                 slot,
+                true,
               );
             }
 
@@ -1427,6 +1435,7 @@ export const useAuthStore = create<AuthState>()(
                   targetAccount.username,
                   targetClient.getAuthHeader(),
                   targetAccount.cookieSlot,
+                  true,
                 );
               }
             } else if (targetAccount.authMode === 'basic' && targetAccount.rememberMe) {
@@ -1437,7 +1446,13 @@ export const useAuthStore = create<AuthState>()(
                 bindClientStatusHandlers(targetClient, set, get, accountId);
                 await targetClient.connect();
                 clients.set(accountId, targetClient);
-                await syncStalwartAuthContext(serverUrl, username, targetClient.getAuthHeader(), targetAccount.cookieSlot);
+                await syncStalwartAuthContext(
+                  serverUrl,
+                  username,
+                  targetClient.getAuthHeader(),
+                  targetAccount.cookieSlot,
+                  targetAccount.rememberMe,
+                );
               }
             }
           } catch (err) {
@@ -1684,7 +1699,13 @@ export const useAuthStore = create<AuthState>()(
                   await client.connect();
                   clients.set(account.id, client);
                   scheduleRefresh(expires_in, get().refreshAccessToken, account.id);
-                  await syncStalwartAuthContext(account.serverUrl, account.username, client.getAuthHeader(), account.cookieSlot);
+                  await syncStalwartAuthContext(
+                    account.serverUrl,
+                    account.username,
+                    client.getAuthHeader(),
+                    account.cookieSlot,
+                    true,
+                  );
                   accountStore.updateAccount(account.id, { isConnected: true, hasError: false });
                 } else if (res.status >= 500) {
                   throw new TransientAuthError('Token refresh failed', res.status);
@@ -1699,7 +1720,13 @@ export const useAuthStore = create<AuthState>()(
                   bindClientStatusHandlers(client, set, get, account.id);
                   await client.connect();
                   clients.set(account.id, client);
-                  await syncStalwartAuthContext(serverUrl, username, client.getAuthHeader(), account.cookieSlot);
+                  await syncStalwartAuthContext(
+                    serverUrl,
+                    username,
+                    client.getAuthHeader(),
+                    account.cookieSlot,
+                    account.rememberMe,
+                  );
                   accountStore.updateAccount(account.id, { isConnected: true, hasError: false });
                 } else if (res.status >= 500) {
                   throw new TransientAuthError('Session restore failed', res.status);
@@ -1929,7 +1956,13 @@ export const useAuthStore = create<AuthState>()(
                 accountStore.setActiveAccount(accountId);
 
                 const cookieSlot = accountStore.getAccountById(accountId)?.cookieSlot ?? 0;
-                await syncStalwartAuthContext(serverUrl, username, client.getAuthHeader(), cookieSlot);
+                await syncStalwartAuthContext(
+                  serverUrl,
+                  username,
+                  client.getAuthHeader(),
+                  cookieSlot,
+                  state.rememberMe,
+                );
 
                 const { identities, primaryIdentity } = loadIdentities(await client.getIdentities(), username);
                 initializeFeatureStores(client);

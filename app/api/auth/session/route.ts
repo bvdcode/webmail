@@ -95,7 +95,7 @@ export async function POST(request: NextRequest) {
       serverUrl: normalizedServerUrl,
       username,
       authHeader,
-    });
+    }, true);
 
     void recordLogin(username, normalizedServerUrl);
 
@@ -132,7 +132,7 @@ export async function GET(request: NextRequest) {
       serverUrl: credentials.serverUrl,
       username: credentials.username,
       authHeader: `Basic ${Buffer.from(`${credentials.username}:${credentials.password}`).toString('base64')}`,
-    });
+    }, true);
 
     // Only return non-sensitive fields. Use PUT to retrieve full credentials.
     const { serverUrl, username } = credentials;
@@ -182,7 +182,7 @@ export async function PUT(request: NextRequest) {
       serverUrl: credentials.serverUrl,
       username: credentials.username,
       authHeader: `Basic ${Buffer.from(`${credentials.username}:${credentials.password}`).toString('base64')}`,
-    });
+    }, true);
 
     return NextResponse.json(credentials, {
       headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' },

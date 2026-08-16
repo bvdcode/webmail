@@ -132,6 +132,8 @@ Nearly all variables are evaluated at runtime, so Docker deployments can be reco
 ```env
 # Optional – overrides whatever the wizard writes
 JMAP_SERVER_URL=https://mail.example.com
+# Optional server-only route for Docker or split-DNS deployments
+JMAP_INTERNAL_SERVER_URL=http://stalwart:8080
 APP_NAME=My Webmail
 ```
 

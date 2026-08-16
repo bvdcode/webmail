@@ -22,7 +22,7 @@ function getSlot(request: NextRequest, bodySlot: unknown): number {
 
 export async function POST(request: NextRequest) {
   try {
-    const { serverUrl, username, authHeader, slot: bodySlot } = await request.json();
+    const { serverUrl, username, authHeader, slot: bodySlot, persistent } = await request.json();
 
     if (!serverUrl || !username || !authHeader) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
@@ -78,7 +78,7 @@ export async function POST(request: NextRequest) {
       serverUrl: normalizedServerUrl,
       username,
       authHeader,
-    });
+    }, persistent === true);
 
     void recordLogin(username, normalizedServerUrl);
 

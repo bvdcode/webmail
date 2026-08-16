@@ -27,9 +27,14 @@ function isValidContext(payload: unknown): payload is StalwartAuthContext {
     && typeof candidate.authHeader === 'string';
 }
 
-function getSessionCookieOptions() {
-  const { maxAge: _maxAge, ...cookieOptions } = getCookieOptions();
-  return cookieOptions;
+export function getStalwartAuthContextCookieOptions(persistent: boolean) {
+  const cookieOptions = getCookieOptions();
+  if (persistent) {
+    return cookieOptions;
+  }
+
+  const { maxAge: _maxAge, ...sessionCookieOptions } = cookieOptions;
+  return sessionCookieOptions;
 }
 
 export function readStalwartAuthContextFromStore(
@@ -52,17 +57,22 @@ export function setStalwartAuthContextInStore(
   cookieStore: CookieStore,
   slot: number,
   context: StalwartAuthContext,
+  persistent = false,
 ): void {
   cookieStore.set(
     stalwartAuthContextCookieName(slot),
     encryptPayload(context as unknown as Record<string, unknown>),
-    getSessionCookieOptions(),
+    getStalwartAuthContextCookieOptions(persistent),
   );
 }
 
-export async function setStalwartAuthContext(slot: number, context: StalwartAuthContext): Promise<void> {
+export async function setStalwartAuthContext(
+  slot: number,
+  context: StalwartAuthContext,
+  persistent = false,
+): Promise<void> {
   const cookieStore = await cookies();
-  setStalwartAuthContextInStore(cookieStore, slot, context);
+  setStalwartAuthContextInStore(cookieStore, slot, context, persistent);
 }
 
 export function clearStalwartAuthContextInStore(cookieStore: CookieStore, slot: number): void {
