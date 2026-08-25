@@ -4,6 +4,7 @@ export function createDemoSieveCapabilities(): SieveCapabilities {
   return {
     implementation: 'Demo Sieve Engine',
     maxSizeScript: 65536,
+    maxNumberRedirects: 1,
     sieveExtensions: ['fileinto', 'reject', 'vacation', 'imap4flags', 'comparator-i;ascii-casemap', 'body', 'envelope'],
     notificationMethods: [],
     externalLists: [],

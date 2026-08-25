@@ -342,7 +342,7 @@ describe('filter-store', () => {
     });
 
     it('should set sieveCapabilities from client', async () => {
-      const caps = { implementation: 'test', maxSizeScript: 10000, sieveExtensions: ['fileinto'], notificationMethods: [], externalLists: [] };
+      const caps = { implementation: 'test', maxSizeScript: 10000, maxNumberRedirects: 1, sieveExtensions: ['fileinto'], notificationMethods: [], externalLists: [] };
       const mockClient = {
         ...sieveAccountMock,
         getSieveCapabilities: () => caps,

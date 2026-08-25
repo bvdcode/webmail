@@ -170,6 +170,7 @@ export function FilterSettings() {
     isSaving,
     error,
     isSupported,
+    sieveCapabilities,
     isOpaque,
     rawScript,
     vacationSettings,
@@ -698,6 +699,7 @@ export function FilterSettings() {
         <FilterRuleModal
           rule={editingRule}
           mailboxes={mailboxes}
+          maxNumberRedirects={sieveCapabilities?.maxNumberRedirects}
           onSave={handleSaveRule}
           onClose={() => {
             setShowRuleModal(false);

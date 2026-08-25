@@ -8,6 +8,7 @@ export interface SieveScript {
 export interface SieveCapabilities {
   implementation: string;
   maxSizeScript: number;
+  maxNumberRedirects: number;
   sieveExtensions: string[];
   notificationMethods: string[];
   externalLists: string[];

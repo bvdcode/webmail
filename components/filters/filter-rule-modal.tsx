@@ -28,6 +28,11 @@ import { generateUUID } from "@/lib/utils";
 import { buildSieveMailboxOptions } from "@/lib/sieve/mailbox-paths";
 import { useSettingsStore } from "@/stores/settings-store";
 import { useKeywordFormat } from "@/hooks/use-keyword-format";
+import { ForwardingPolicyNotice } from "@/components/filters/forwarding-policy-notice";
+import {
+  countForwardActions,
+  exceedsRedirectLimit,
+} from "@/lib/sieve/forwarding-policy";
 
 interface FilterRuleModalProps {
   rule?: FilterRule;
@@ -37,6 +42,7 @@ interface FilterRuleModalProps {
    * "create" when the rule is only a prefilled draft that does not exist yet.
    */
   mode?: "create" | "edit";
+  maxNumberRedirects?: number;
   onSave: (rule: FilterRule) => void;
   onClose: () => void;
 }
@@ -74,6 +80,7 @@ export function FilterRuleModal({
   rule,
   mailboxes,
   mode,
+  maxNumberRedirects,
   onSave,
   onClose,
 }: FilterRuleModalProps) {
@@ -91,6 +98,11 @@ export function FilterRuleModal({
     rule?.actions.length ? [...rule.actions] : [makeEmptyAction()]
   );
   const [stopProcessing, setStopProcessing] = useState(rule?.stopProcessing ?? false);
+  const forwardCount = useMemo(() => countForwardActions(actions), [actions]);
+  const redirectLimitExceeded = useMemo(
+    () => exceedsRedirectLimit(actions, maxNumberRedirects),
+    [actions, maxNumberRedirects]
+  );
 
   const modalRef = useFocusTrap({ isActive: true, onEscape: onClose });
 
@@ -147,6 +159,13 @@ export function FilterRuleModal({
       toast.error(t("validation_empty_actions"));
       return;
     }
+    if (
+      maxNumberRedirects !== undefined &&
+      exceedsRedirectLimit(validActions, maxNumberRedirects)
+    ) {
+      toast.error(t("validation_forward_limit", { limit: maxNumberRedirects }));
+      return;
+    }
 
     onSave({
       id: rule?.id || generateUUID(),
@@ -157,7 +176,7 @@ export function FilterRuleModal({
       actions: validActions,
       stopProcessing,
     });
-  }, [name, matchType, conditions, actions, stopProcessing, rule, onSave, t]);
+  }, [name, matchType, conditions, actions, stopProcessing, rule, maxNumberRedirects, onSave, t]);
 
   const updateCondition = (index: number, updates: Partial<FilterCondition>) => {
     setConditions((prev) =>
@@ -216,6 +235,15 @@ export function FilterRuleModal({
     if (actions.length <= 1) return;
     setActions((prev) => prev.filter((_, i) => i !== index));
   };
+
+  const addKeepAction = useCallback(() => {
+    setActions((prev) => {
+      if (prev.some((action) => action.type === "keep")) {
+        return prev;
+      }
+      return [...prev, { type: "keep" }];
+    });
+  }, []);
 
   const selectClass =
     "px-2.5 py-1.5 text-sm rounded-md bg-muted border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-ring transition-colors duration-150 cursor-pointer hover:border-muted-foreground";
@@ -421,7 +449,16 @@ export function FilterRuleModal({
                     aria-label={t("actions")}
                   >
                     {FILTER_ACTION_TYPES.map((a) => (
-                      <option key={a} value={a}>
+                      <option
+                        key={a}
+                        value={a}
+                        disabled={
+                          a === "forward" &&
+                          action.type !== "forward" &&
+                          maxNumberRedirects !== undefined &&
+                          forwardCount >= maxNumberRedirects
+                        }
+                      >
                         {t(`action_types.${a}`)}
                       </option>
                     ))}
@@ -496,6 +533,11 @@ export function FilterRuleModal({
               <Plus className="w-3.5 h-3.5" />
               {t("add_action")}
             </button>
+            <ForwardingPolicyNotice
+              actions={actions}
+              maxNumberRedirects={maxNumberRedirects}
+              onAddKeep={addKeepAction}
+            />
           </div>
 
           <div className="flex items-center gap-2">
@@ -516,7 +558,7 @@ export function FilterRuleModal({
           <Button variant="outline" onClick={onClose}>
             {t("cancel")}
           </Button>
-          <Button onClick={handleSave} disabled={!name.trim()}>
+          <Button onClick={handleSave} disabled={!name.trim() || redirectLimitExceeded}>
             {t("save")}
           </Button>
         </div>

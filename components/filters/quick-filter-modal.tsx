@@ -43,6 +43,9 @@ export function QuickFilterModal({
   const tFilters = useTranslations("settings.filters");
   const tNotifications = useTranslations("notifications");
   const client = useAuthStore((state) => state.client);
+  const maxNumberRedirects = useFilterStore(
+    (state) => state.sieveCapabilities?.maxNumberRedirects
+  );
 
   const [draft, setDraft] = useState<QuickFilterDraft>(() => createQuickFilterDraft(email));
   const [loadState, setLoadState] = useState<LoadState>("loading");
@@ -147,6 +150,7 @@ export function QuickFilterModal({
         rule={buildQuickFilterDraftRule(draft, fieldLabel)}
         mailboxes={mailboxes}
         mode="create"
+        maxNumberRedirects={maxNumberRedirects}
         onSave={(rule) => void persist(rule)}
         onClose={onClose}
       />
