@@ -300,6 +300,10 @@
     "move": "Sposta",
     "print": "Stampa",
     "view_source": "Visualizza sorgente",
+
+    "fullscreen": "Schermo intero",
+
+    "exit_fullscreen": "Esci da schermo intero",
     "export_email": "Esporta come .eml",
     "forward_as_attachment": "Forward as attachment",
     "import_email": "Importa .eml o .zip",
@@ -574,6 +578,7 @@
     "read_receipt_on": "Conferma di lettura richiesta (clicca per disattivare)",
     "read_receipt_off": "Richiedi una conferma di lettura",
     "new_message": "Nuovo messaggio",
+    "signature_edit_hint": "Doppio clic per modificare la firma",
     "reply": "Rispondi",
     "reply_all": "Rispondi a tutti",
     "forward": "Inoltra",
@@ -751,7 +756,10 @@
     "rate_limited_title": "L'autenticazione del server e temporaneamente limitata.",
     "rate_limited_detail": "Bulwark ha sospeso le richieste in background per evitare il blocco. Nuovo tentativo tra {seconds}s.",
     "rate_limited_action_title": "Richiesta sospesa per evitare il blocco.",
-    "rate_limited_action_detail": "Bulwark attende che termini il cooldown del server prima di inviare altre richieste autenticate. Riprova tra {seconds}s."
+    "rate_limited_action_detail": "Bulwark attende che termini il cooldown del server prima di inviare altre richieste autenticate. Riprova tra {seconds}s.",
+    "pull_to_refresh": "Trascina per aggiornare",
+    "release_to_refresh": "Rilascia per aggiornare",
+    "refreshing": "Aggiornamento…"
   },
   "notifications": {
     "email_sent": "Messaggio inviato con successo",
@@ -858,7 +866,10 @@
     "zh": "简体中文",
     "fa": "فارسی",
     "farsi": "فارسی",
-    "switch_to_farsi": "Passa al persiano"
+    "switch_to_farsi": "Passa al persiano",
+    "mn": "Монгол",
+    "mongolian": "Монгол",
+    "switch_to_mongolian": "Passa al mongolo"
   },
   "settings": {
     "title": "Impostazioni",
@@ -1107,12 +1118,27 @@
         "relay_label": "Relay push",
         "relay_locked": "Impostato dall'amministratore",
         "relay_locked_desc": "L'URL del relay push è stato impostato dall'amministratore e non può essere modificato.",
-        "relay_placeholder": "https://notifications.relay.example.com",
         "status_active": "Attivo su questo dispositivo",
         "status_busy": "In elaborazione…",
         "status_inactive": "Non abilitato su questo dispositivo",
         "status_unsupported": "Questo browser non supporta Web Push",
-        "title": "Notifiche in background"
+        "title": "Notifiche in background",
+        "devices_title": "Dispositivi registrati",
+        "devices_desc": "Tutti i dispositivi registrati per ricevere le notifiche in background di questo account. Revocandone uno, smette subito di riceverle.",
+        "devices_loading": "Caricamento dei dispositivi registrati…",
+        "devices_empty": "Nessun dispositivo è registrato per le notifiche in background.",
+        "devices_error": "Impossibile caricare i dispositivi registrati.",
+        "devices_refresh": "Aggiorna",
+        "device_this": "Questo dispositivo",
+        "device_other": "Altro dispositivo",
+        "device_status_active": "Consegna le notifiche",
+        "device_status_inactive": "Non ha mai consegnato una notifica",
+        "device_status_unknown": "Sconosciuto a questo relay",
+        "device_expires": "Scade il {date}",
+        "revoke": "Revoca",
+        "confirm_revoke_title": "Revocare questo dispositivo?",
+        "confirm_revoke_message": "Smetterà subito di ricevere le notifiche in background. Riattivando il push su quel dispositivo verrà registrato di nuovo.",
+        "confirm_revoke_message_this": "Questo dispositivo smetterà subito di ricevere le notifiche in background."
       }
     },
     "language_region": {
@@ -1191,6 +1217,12 @@
         "auto": "Automatica (consigliata)",
         "always": "Aggiungi sempre spaziatura",
         "edge": "Da bordo a bordo"
+      },
+      "plain_text_font": {
+        "label": "Carattere del testo semplice",
+        "description": "Carattere usato per le email in testo semplice",
+        "mono": "Monospazio",
+        "sans": "Normale (come l'app)"
       },
       "archive_mode": {
         "label": "Archivia in",
@@ -1361,6 +1393,22 @@
       "return_to_list_after_action": {
         "label": "Torna all'elenco dopo l'eliminazione o il contrassegno come non letto",
         "description": "Dopo aver eliminato o segnato come non letto il messaggio aperto, torna all'elenco dei messaggi invece di aprire il messaggio successivo."
+      },
+      "swipe_right_action": {
+        "label": "Azione scorrimento a destra (mobile)",
+        "description": "Sui dispositivi touch, l’azione eseguita quando scorri un messaggio verso destra nell’elenco."
+      },
+      "swipe_left_action": {
+        "label": "Azione scorrimento a sinistra (mobile)",
+        "description": "Sui dispositivi touch, l’azione eseguita quando scorri un messaggio verso sinistra nell’elenco."
+      },
+      "swipe_actions": {
+        "none": "Nessuna",
+        "archive": "Archivia",
+        "delete": "Elimina",
+        "mark_read": "Cambia stato di lettura",
+        "star": "Cambia stella",
+        "spam": "Segna come spam"
       },
       "rtl_editing": {
         "label": "Supporto alla scrittura da destra a sinistra",
@@ -1664,6 +1712,7 @@
       "create_subfolder": "Crea sottocartella",
       "reorder": "Trascina per riordinare",
       "reorder_error": "Impossibile riordinare le cartelle",
+      "move_error": "Impossibile spostare la cartella",
       "subfolder_of": "Dentro {name}",
       "subfolder_name": "Nome della sottocartella",
       "new_folder_name": "Nome della cartella",

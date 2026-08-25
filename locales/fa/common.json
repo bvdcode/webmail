@@ -300,6 +300,10 @@
     "move": "انتقال",
     "print": "چاپ",
     "view_source": "مشاهده منبع",
+
+    "fullscreen": "تمام‌صفحه",
+
+    "exit_fullscreen": "خروج از تمام‌صفحه",
     "export_email": "خروجی .eml",
     "forward_as_attachment": "Forward as attachment",
     "import_email": "وارد کردن .eml یا .zip",
@@ -574,6 +578,7 @@
     "read_receipt_on": "درخواست تأیید خواندن فعال (کلیک برای غیرفعال کردن)",
     "read_receipt_off": "درخواست تأیید خواندن",
     "new_message": "پیام جدید",
+    "signature_edit_hint": "برای ویرایش امضا دوبار کلیک کنید",
     "reply": "پاسخ",
     "reply_all": "پاسخ به همه",
     "forward": "ارسال مجدد",
@@ -751,7 +756,10 @@
     "rate_limited_title": "احراز هویت سرور موقتاً محدود شده است.",
     "rate_limited_detail": "Bulwark درخواست‌های پس‌زمینه را متوقف کرده است. تلاش مجدد در {seconds} ثانیه.",
     "rate_limited_action_title": "درخواست برای جلوگیری از قفل متوقف شد.",
-    "rate_limited_action_detail": "Bulwark منتظر پایان زمان انتظار سرور است. در {seconds} ثانیه دوباره تلاش کنید."
+    "rate_limited_action_detail": "Bulwark منتظر پایان زمان انتظار سرور است. در {seconds} ثانیه دوباره تلاش کنید.",
+    "pull_to_refresh": "برای تازه‌سازی بکشید",
+    "release_to_refresh": "برای تازه‌سازی رها کنید",
+    "refreshing": "در حال تازه‌سازی…"
   },
   "notifications": {
     "email_sent": "ایمیل با موفقیت ارسال شد",
@@ -858,7 +866,10 @@
     "zh": "简体中文",
     "fa": "فارسی",
     "farsi": "فارسی",
-    "switch_to_farsi": "تغییر به فارسی"
+    "switch_to_farsi": "تغییر به فارسی",
+    "mn": "Монгол",
+    "mongolian": "Монгол",
+    "switch_to_mongolian": "تغییر به مغولی"
   },
   "settings": {
     "title": "تنظیمات",
@@ -1080,7 +1091,6 @@
         "relay_desc": "پیش‌فرض رله میزبانی شده Bulwark",
         "relay_locked": "تنظیم شده توسط مدیر",
         "relay_locked_desc": "قابل تغییر نیست",
-        "relay_placeholder": "https://notifications.relay.example.com",
         "status_active": "فعال روی این دستگاه",
         "status_inactive": "فعال نشده",
         "status_unsupported": "مرورگر پشتیبانی نمی‌کند",
@@ -1091,7 +1101,23 @@
         "confirm_disable_title": "غیرفعال کردن اعلان‌های پس‌زمینه؟",
         "confirm_disable_message": "این دستگاه دیگر هشدار دریافت نمی‌کند",
         "dismiss_aria": "رد کردن پیشنهاد اعلان‌ها",
-        "ios_hint": "در iOS ابتدا سایت را به صفحه اصلی اضافه کنید"
+        "ios_hint": "در iOS ابتدا سایت را به صفحه اصلی اضافه کنید",
+        "devices_title": "دستگاه‌های ثبت‌شده",
+        "devices_desc": "همهٔ دستگاه‌هایی که برای دریافت اعلان‌های پس‌زمینهٔ این حساب ثبت شده‌اند. با لغو یک دستگاه، دریافت بی‌درنگ متوقف می‌شود.",
+        "devices_loading": "در حال بارگذاری دستگاه‌های ثبت‌شده…",
+        "devices_empty": "هیچ دستگاهی برای اعلان‌های پس‌زمینه ثبت نشده است.",
+        "devices_error": "بارگذاری دستگاه‌های ثبت‌شده ممکن نشد.",
+        "devices_refresh": "بازخوانی",
+        "device_this": "این دستگاه",
+        "device_other": "دستگاه دیگر",
+        "device_status_active": "در حال تحویل اعلان‌ها",
+        "device_status_inactive": "هرگز اعلانی تحویل نداده است",
+        "device_status_unknown": "برای این بازپخش ناشناس",
+        "device_expires": "انقضا در {date}",
+        "revoke": "لغو",
+        "confirm_revoke_title": "این دستگاه لغو شود؟",
+        "confirm_revoke_message": "بی‌درنگ دریافت اعلان‌های پس‌زمینه را متوقف می‌کند. با روشن‌کردن دوبارهٔ پوش روی آن دستگاه، دوباره ثبت می‌شود.",
+        "confirm_revoke_message_this": "این دستگاه بی‌درنگ دریافت اعلان‌های پس‌زمینه را متوقف می‌کند."
       },
       "sound_selection": {
         "title": "صدای اعلان",
@@ -1194,6 +1220,12 @@
         "auto": "خودکار (پیشنهادی)",
         "always": "همیشه فاصله اضافه شود",
         "edge": "لبه به لبه"
+      },
+      "plain_text_font": {
+        "label": "قلم متن ساده",
+        "description": "قلم مورد استفاده برای ایمیل‌های متن ساده",
+        "mono": "تک‌عرض",
+        "sans": "معمولی (مانند برنامه)"
       },
       "archive_mode": {
         "label": "بایگانی در",
@@ -1364,6 +1396,22 @@
       "return_to_list_after_action": {
         "label": "بازگشت به فهرست پس از حذف یا علامت‌گذاری به‌عنوان خوانده‌نشده",
         "description": "پس از حذف یا علامت‌گذاری پیام باز به‌عنوان خوانده‌نشده، به‌جای باز کردن پیام بعدی به فهرست پیام‌ها بازگردید."
+      },
+      "swipe_right_action": {
+        "label": "عمل کشیدن به راست (موبایل)",
+        "description": "در دستگاه‌های لمسی، عملی که هنگام کشیدن پیام به راست در فهرست انجام می‌شود."
+      },
+      "swipe_left_action": {
+        "label": "عمل کشیدن به چپ (موبایل)",
+        "description": "در دستگاه‌های لمسی، عملی که هنگام کشیدن پیام به چپ در فهرست انجام می‌شود."
+      },
+      "swipe_actions": {
+        "none": "هیچ‌کدام",
+        "archive": "بایگانی",
+        "delete": "حذف",
+        "mark_read": "تغییر وضعیت خوانده‌شده",
+        "star": "تغییر ستاره",
+        "spam": "علامت‌گذاری به‌عنوان هرزنامه"
       },
       "rtl_editing": {
         "label": "پشتیبانی از ویرایش راست‌به‌چپ",
@@ -1671,6 +1719,7 @@
       "create_subfolder": "ایجاد زیرپوشه",
       "reorder": "برای تغییر ترتیب بکشید",
       "reorder_error": "تغییر ترتیب پوشه‌ها ناموفق بود",
+      "move_error": "انتقال پوشه ناموفق بود",
       "subfolder_of": "داخل {name}",
       "subfolder_name": "نام زیرپوشه",
       "new_folder_name": "نام پوشه",
