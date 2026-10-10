@@ -1,4 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
+import { openCalendarFromAccountMenu } from "./account-navigation";
 import { stalwartClientId, stalwartOrigin, stalwartPrefixes } from "./playwright.stalwart.config";
 
 /**
@@ -79,7 +80,10 @@ for (const prefix of stalwartPrefixes) {
       await expect(page.locator("body")).toContainText(/inbox/i, { timeout: 30_000 });
 
       seen.documents.length = 0;
-      for (const [name, url] of [["calendar", /\/calendar/], ["contacts", /\/contacts/], ["settings", /\/settings/]] as const) {
+      await openCalendarFromAccountMenu(page);
+      await page.waitForURL(/\/calendar/, { timeout: 30_000 });
+
+      for (const [name, url] of [["contacts", /\/contacts/], ["settings", /\/settings/]] as const) {
         await page.getByRole("link", { name: new RegExp(`^${name}`, "i") }).first().click();
         await page.waitForURL(url, { timeout: 30_000 });
         expect(new URL(page.url()).pathname.startsWith(`${prefix}/en/`)).toBe(true);

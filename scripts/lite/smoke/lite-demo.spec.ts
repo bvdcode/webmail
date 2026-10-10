@@ -1,4 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
+import { openCalendarFromAccountMenu } from "./account-navigation";
 import { externalBaseUrl, plainPort } from "./playwright.config";
 
 /**
@@ -69,7 +70,7 @@ test.describe("Bulwark Lite demo export", () => {
     await expect(page.locator("body")).toContainText(/inbox/i, { timeout: 30_000 });
 
     // Top-level navigation to other static shells.
-    await page.getByRole("link", { name: /calendar/i }).first().click();
+    await openCalendarFromAccountMenu(page);
     await page.waitForURL(/\/en\/calendar\/?/);
     await page.getByRole("link", { name: /contacts/i }).first().click();
     await page.waitForURL(/\/en\/contacts\/?/);
