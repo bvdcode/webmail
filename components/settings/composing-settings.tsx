@@ -3,10 +3,10 @@
 import { useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { useSettingsStore } from '@/stores/settings-store';
-import type { SendDelaySeconds } from '@/stores/settings-store';
+import type { ReplyIdentityMatch, SendDelaySeconds } from '@/stores/settings-store';
 import { useAuthStore } from '@/stores/auth-store';
 import { SettingsSection, SettingItem, Select, ToggleSwitch } from './settings-section';
-import { X } from 'lucide-react';
+import { X } from '@/components/icons';
 import {
   SUPPORTED_SUB_ADDRESS_DELIMITERS,
   isSupportedSubAddressDelimiter,
@@ -22,11 +22,13 @@ export function ComposingSettings() {
 
   const {
     autoSelectReplyIdentity,
+    replyIdentityMatch,
     plainTextMode,
     rtlEditingSupport,
     attachmentReminderEnabled,
     attachmentReminderKeywords,
     emptySubjectWarningEnabled,
+    recipientMentionsEnabled,
     sendDelaySeconds,
     subAddressDelimiter,
     signaturePosition,
@@ -46,6 +48,19 @@ export function ComposingSettings() {
           onChange={(checked) => updateSetting('autoSelectReplyIdentity', checked)}
         />
       </SettingItem>
+
+      {autoSelectReplyIdentity && (
+        <SettingItem label={t('reply_identity_match.label')} description={t('reply_identity_match.description')}>
+          <Select
+            value={replyIdentityMatch}
+            onChange={(value) => updateSetting('replyIdentityMatch', value as ReplyIdentityMatch)}
+            options={[
+              { value: 'exact', label: t('reply_identity_match.exact') },
+              { value: 'domain', label: t('reply_identity_match.domain') },
+            ]}
+          />
+        </SettingItem>
+      )}
 
       <SettingItem label={t('plain_text_mode.label')} description={t('plain_text_mode.description')}>
         <ToggleSwitch
@@ -163,6 +178,13 @@ export function ComposingSettings() {
         <ToggleSwitch
           checked={emptySubjectWarningEnabled}
           onChange={(checked) => updateSetting('emptySubjectWarningEnabled', checked)}
+        />
+      </SettingItem>
+
+      <SettingItem label={t('recipient_mentions.label')} description={t('recipient_mentions.description')}>
+        <ToggleSwitch
+          checked={recipientMentionsEnabled}
+          onChange={(checked) => updateSetting('recipientMentionsEnabled', checked)}
         />
       </SettingItem>
 

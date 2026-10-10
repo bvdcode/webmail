@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { NextIntlClientProvider } from 'next-intl';
 import { useLocaleStore } from '@/stores/locale-store';
+import { useSettingsStore } from '@/stores/settings-store';
+import { getBrowserTimeZone, resolveTimeZone } from '@/lib/timezone';
 import enMessages from '@/locales/en/common.json';
 import { getLocaleDirection } from '@/i18n/direction';
 import { mergeMessages } from '@/i18n/merge-messages';
@@ -33,6 +35,7 @@ export const LOCALE_LOADERS: Record<string, () => Promise<Messages>> = {
   ko: () => import('@/locales/ko/common.json').then((m) => m.default),
   lv: () => import('@/locales/lv/common.json').then((m) => m.default),
   mn: () => import('@/locales/mn/common.json').then((m) => m.default),
+  nb: () => import('@/locales/nb/common.json').then((m) => m.default),
   nl: () => import('@/locales/nl/common.json').then((m) => m.default),
   pl: () => import('@/locales/pl/common.json').then((m) => m.default),
   pt: () => import('@/locales/pt/common.json').then((m) => m.default),
@@ -42,6 +45,7 @@ export const LOCALE_LOADERS: Record<string, () => Promise<Messages>> = {
   tr: () => import('@/locales/tr/common.json').then((m) => m.default),
   uk: () => import('@/locales/uk/common.json').then((m) => m.default),
   zh: () => import('@/locales/zh/common.json').then((m) => m.default),
+  'zh-TW': () => import('@/locales/zh-TW/common.json').then((m) => m.default),
 };
 
 interface IntlProviderProps {
@@ -52,7 +56,11 @@ interface IntlProviderProps {
 
 export function IntlProvider({ locale: initialLocale, messages: initialMessages, children }: IntlProviderProps) {
   const currentLocale = useLocaleStore((state) => state.locale);
-  const [timeZone, setTimeZone] = useState<string>('UTC');
+  // Browser zone is detected on mount (SSR has no browser, so it renders UTC
+  // until then); the user's `timeZone` setting overrides it (#755).
+  const [browserTimeZone, setBrowserTimeZone] = useState<string>('UTC');
+  const timeZoneSetting = useSettingsStore((state) => state.timeZone);
+  const timeZone = resolveTimeZone(timeZoneSetting, browserTimeZone);
 
   // The catalog currently in use. Seeded with the server-provided messages for
   // the SSR-resolved locale, so the first render needs no async work and
@@ -67,16 +75,9 @@ export function IntlProvider({ locale: initialLocale, messages: initialMessages,
     [initialLocale]: initialMessages,
   });
 
-  // Detect user's timezone on mount
+  // Detect the browser's timezone on mount (falls back to UTC internally)
   useEffect(() => {
-    try {
-      const detectedTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-      setTimeZone(detectedTimeZone);
-    } catch (error) {
-      // Fallback to UTC if detection fails
-      console.warn('Failed to detect timezone, using UTC:', error);
-      setTimeZone('UTC');
-    }
+    setBrowserTimeZone(getBrowserTimeZone());
   }, []);
 
   // Resolve the active locale from the user's stored choice. Empty or 'auto'

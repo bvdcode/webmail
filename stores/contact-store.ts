@@ -122,6 +122,41 @@ function stripLocalAccountPrefix(id: string, localAccountId?: string): string {
   return id.startsWith(prefix) ? id.slice(prefix.length) : id;
 }
 
+/**
+ * Map the address-book ids the UI works with (namespaced per shared account
+ * as `accountId:bookId`, and per local account as `local::bookId` in
+ * multi-account Pro mode - possibly both) back to the raw server ids that
+ * `ContactCard/set` accepts. Resolution goes through the loaded address-book
+ * list first, since every book carries its `originalId`; ids that are not in
+ * the list (stale state, tests) fall back to stripping the known prefixes.
+ * Sending a namespaced id makes Stalwart reject the card with "Contact has
+ * to belong to at least one address book" (#133, #1043).
+ */
+function resolveRawAddressBookIds(
+  addressBookIds: Record<string, boolean>,
+  books: AddressBook[],
+  owner?: { localAccountId?: string; accountId?: string; isShared?: boolean },
+): { addressBookIds: Record<string, boolean>; sharedAccountId?: string; localAccountId?: string } {
+  const raw: Record<string, boolean> = {};
+  let sharedAccountId: string | undefined;
+  let localAccountId = owner?.localAccountId;
+  for (const [bookId, value] of Object.entries(addressBookIds)) {
+    const book = books.find(b => b.id === bookId);
+    if (book?.localAccountId) localAccountId = book.localAccountId;
+    if (book?.isShared && book.accountId) sharedAccountId = book.accountId;
+    if (book?.originalId) {
+      raw[book.originalId] = value;
+      continue;
+    }
+    let stripped = stripLocalAccountPrefix(bookId, localAccountId);
+    if (owner?.isShared && owner.accountId && stripped.startsWith(`${owner.accountId}:`)) {
+      stripped = stripped.slice(owner.accountId.length + 1);
+    }
+    raw[stripped] = value;
+  }
+  return { addressBookIds: raw, sharedAccountId, localAccountId };
+}
+
 export function getContactDisplayName(contact: ContactCard): string {
   if (contact.name) {
     // Try given + surname from components first
@@ -147,6 +182,34 @@ export function getContactDisplayName(contact: ContactCard): string {
     if (email?.address) return email.address;
   }
   return '';
+}
+
+// Name used to order (and letter-group) the contact list. With `byLastName`
+// the surname leads ("Smith, Alice") so family members sit together (#963).
+// Contacts without a structured surname fall back to the last word of
+// `name.full`; everything else (nickname, org, email) keeps the display name.
+export function getContactSortName(contact: ContactCard, byLastName: boolean): string {
+  const display = getContactDisplayName(contact);
+  if (!byLastName) return display;
+  const components = contact.name?.components;
+  if (components && components.length > 0) {
+    const pick = (...kinds: string[]) =>
+      components.filter(c => kinds.includes(c.kind) && c.value).map(c => c.value).join(' ');
+    const surname = pick('surname', 'surname2');
+    if (surname) {
+      const rest = pick('given', 'given2', 'middle', 'additional');
+      return rest ? `${surname}, ${rest}` : surname;
+    }
+  }
+  const full = contact.name?.full;
+  if (full && display === full) {
+    const words = full.trim().split(/\s+/);
+    if (words.length > 1) {
+      const last = words[words.length - 1];
+      return `${last}, ${words.slice(0, -1).join(' ')}`;
+    }
+  }
+  return display;
 }
 
 export function getContactPrimaryEmail(contact: ContactCard): string {
@@ -312,6 +375,7 @@ interface ContactStore {
   moveContactToAddressBook: (client: IJMAPClient, contactIds: string[], addressBook: AddressBook) => Promise<void>;
   createAddressBook: (client: IJMAPClient, name: string) => Promise<AddressBook>;
   renameAddressBook: (client: IJMAPClient, addressBook: AddressBook, newName: string) => Promise<void>;
+  setDefaultAddressBook: (client: IJMAPClient, addressBook: AddressBook) => Promise<void>;
   removeAddressBook: (client: IJMAPClient, addressBook: AddressBook) => Promise<void>;
   shareAddressBook: (client: IJMAPClient, addressBook: AddressBook, principalId: string, rights: AddressBookRights | null) => Promise<void>;
   renameKeyword: (client: IJMAPClient | null, oldKeyword: string, newKeyword: string) => Promise<void>;
@@ -479,28 +543,15 @@ export const useContactStore = create<ContactStore>()(
           let cleanedContact = contact;
           let localAccountId = contact.localAccountId;
 
-          // De-namespace addressBookIds if they reference a shared address book
+          // De-namespace addressBookIds (shared and/or local-account prefixes)
           if (contact.addressBookIds) {
-            const books = get().addressBooks;
-            const deNamespaced: Record<string, boolean> = {};
-            let sharedAccountId: string | undefined;
-            for (const [bookId, value] of Object.entries(contact.addressBookIds)) {
-              const book = books.find(b => b.id === bookId);
-              if (book?.localAccountId) localAccountId = book.localAccountId;
-              if (book?.isShared && book.originalId) {
-                deNamespaced[book.originalId] = value;
-                sharedAccountId = book.accountId;
-              } else if (book?.originalId) {
-                deNamespaced[book.originalId] = value;
-              } else {
-                deNamespaced[bookId] = value;
-              }
-            }
-            if (sharedAccountId) {
-              accountId = sharedAccountId;
-              cleanedContact = { ...contact, addressBookIds: deNamespaced, isShared: true, accountId: sharedAccountId };
+            const resolved = resolveRawAddressBookIds(contact.addressBookIds, get().addressBooks, contact);
+            localAccountId = resolved.localAccountId;
+            if (resolved.sharedAccountId) {
+              accountId = resolved.sharedAccountId;
+              cleanedContact = { ...contact, addressBookIds: resolved.addressBookIds, isShared: true, accountId: resolved.sharedAccountId };
             } else {
-              cleanedContact = { ...contact, addressBookIds: deNamespaced };
+              cleanedContact = { ...contact, addressBookIds: resolved.addressBookIds };
             }
           }
 
@@ -533,17 +584,13 @@ export const useContactStore = create<ContactStore>()(
           const accountId = contact?.isShared ? contact.accountId : undefined;
           client = resolveAccountClient(client, contact?.localAccountId);
 
-          // De-namespace addressBookIds for shared contacts before sending to JMAP server
+          // De-namespace addressBookIds before sending to the JMAP server. This
+          // applies to personal books too: in multi-account Pro mode every id
+          // carries the `local::` prefix, and the server rejects it (#1043).
           let cleanedUpdates = updates;
-          if (contact?.isShared && contact?.accountId && updates.addressBookIds) {
-            const prefix = `${contact.accountId}:`;
-            const deNamespaced = Object.fromEntries(
-              Object.entries(updates.addressBookIds).map(([k, v]) => [
-                k.startsWith(prefix) ? k.slice(prefix.length) : k,
-                v
-              ])
-            );
-            cleanedUpdates = { ...updates, addressBookIds: deNamespaced };
+          if (updates.addressBookIds) {
+            const resolved = resolveRawAddressBookIds(updates.addressBookIds, get().addressBooks, contact);
+            cleanedUpdates = { ...updates, addressBookIds: resolved.addressBookIds };
           }
 
           await client.updateContact(originalId, cleanedUpdates, accountId);
@@ -741,7 +788,9 @@ export const useContactStore = create<ContactStore>()(
 
         const groupData: Partial<ContactCard> = {
           kind: 'group',
-          name: { components: [{ kind: 'given', value: name }], isOrdered: true },
+          // `full` feeds the mandatory vCard FN; without it strict CardDAV
+          // clients (Apple Contacts) drop the card entirely (#430).
+          name: { components: [{ kind: 'given', value: name }], isOrdered: true, full: name },
           members,
         };
 
@@ -760,7 +809,7 @@ export const useContactStore = create<ContactStore>()(
 
       updateGroup: async (client, groupId, name) => {
         const updates: Partial<ContactCard> = {
-          name: { components: [{ kind: 'given', value: name }], isOrdered: true },
+          name: { components: [{ kind: 'given', value: name }], isOrdered: true, full: name },
         };
         if (client && get().supportsSync) {
           const group = get().contacts.find(c => c.id === groupId);
@@ -938,12 +987,13 @@ export const useContactStore = create<ContactStore>()(
 
           // Same account: just update the addressBookIds
           if ((sourceAccountId || primaryAccountId) === (targetAccountId || primaryAccountId)) {
-            await client.updateContact(originalId, { addressBookIds: { [targetBookOriginalId]: true } }, sourceAccountId);
-            const isTargetPrimary = !targetAccountId || targetAccountId === primaryAccountId;
-            const localBookId = isTargetPrimary ? targetBookOriginalId : `${targetAccountId}:${targetBookOriginalId}`;
+            const ownerClient = resolveAccountClient(client, contact.localAccountId);
+            await ownerClient.updateContact(originalId, { addressBookIds: { [targetBookOriginalId]: true } }, sourceAccountId);
+            // Keep the id in the same (possibly namespaced) form the sidebar
+            // filters by; `addressBook.id` already is that form.
             set((state) => ({
               contacts: state.contacts.map(c =>
-                c.id === id ? { ...c, addressBookIds: { [localBookId]: true } } : c
+                c.id === id ? { ...c, addressBookIds: { [addressBook.id]: true } } : c
               ),
             }));
           } else {
@@ -1013,13 +1063,43 @@ export const useContactStore = create<ContactStore>()(
         }
       },
 
+      setDefaultAddressBook: async (client, addressBook) => {
+        set({ error: null });
+        try {
+          const originalId = addressBook.originalId || stripLocalAccountPrefix(addressBook.id, addressBook.localAccountId);
+          const accountId = addressBook.isShared ? addressBook.accountId : undefined;
+          client = resolveAccountClient(client, addressBook.localAccountId);
+          await client.setDefaultAddressBook(originalId, accountId);
+          set((state) => ({
+            addressBooks: state.addressBooks.map(b => {
+              if (b.id === addressBook.id) return { ...b, isDefault: true };
+              // Only one default per account - clear the flag on siblings in the
+              // same local account / shared-account scope.
+              if (
+                b.isDefault
+                && (b.localAccountId ?? null) === (addressBook.localAccountId ?? null)
+                && (b.accountId ?? null) === (addressBook.accountId ?? null)
+              ) {
+                return { ...b, isDefault: false };
+              }
+              return b;
+            }),
+          }));
+        } catch (error) {
+          const msg = error instanceof Error ? error.message : 'Failed to set default address book';
+          set({ error: msg });
+          throw error;
+        }
+      },
+
       removeAddressBook: async (client, addressBook) => {
         set({ error: null });
         try {
           const originalId = addressBook.originalId || stripLocalAccountPrefix(addressBook.id, addressBook.localAccountId);
           const accountId = addressBook.isShared ? addressBook.accountId : undefined;
           client = resolveAccountClient(client, addressBook.localAccountId);
-          await client.deleteAddressBook(originalId, accountId);
+          // The confirm dialog tells the user the contacts go with the book.
+          await client.deleteAddressBook(originalId, accountId, { removeContents: true });
           set((state) => ({
             addressBooks: state.addressBooks.filter(b => b.id !== addressBook.id),
             contacts: state.contacts.filter(c => !c.addressBookIds?.[addressBook.id]),

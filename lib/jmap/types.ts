@@ -37,6 +37,10 @@ export interface Email {
   subject?: string;
   sentAt?: string;
   preview?: string;
+  // Server-side search highlighting (SearchSnippet/get, RFC 8621 §5): the
+  // subject / body excerpt with the matched terms in <mark>, set on search
+  // hits only. See lib/search-snippet.ts.
+  searchSnippet?: { subject: string | null; preview: string | null };
   textBody?: EmailBodyPart[];
   htmlBody?: EmailBodyPart[];
   bodyValues?: Record<string, EmailBodyValue>;
@@ -85,6 +89,12 @@ export interface Email {
   scheduledIdentityId?: string;
   scheduledUndoStatus?: 'pending' | 'final' | 'canceled';
   scheduledDeliveryStatus?: Record<string, DeliveryStatus>;
+  /**
+   * JMAP account that owns the EmailSubmission. Set when the scheduled send
+   * lives in a shared/group account rather than the primary submission
+   * account, so cancel/reschedule can be routed back to it.
+   */
+  scheduledAccountId?: string;
   isScheduled?: boolean;
   isSmimeScheduled?: boolean;
 }
@@ -96,11 +106,30 @@ export interface SendEmailResult {
   sendAt?: string;
   isSmime?: boolean;
   /**
+   * JMAP account the EmailSubmission was created in. Differs from the primary
+   * submission account when sending from a shared/group identity, and lets a
+   * later undo / send-now / cancel address the right account without having to
+   * search for it.
+   */
+  submissionAccountId?: string;
+  /**
    * Set when the submission succeeded but a post-send step was rejected
    * (the implicit onSuccessUpdateEmail filing patch, or destroying the
    * old draft). The mail left the server - callers should warn, not fail.
    */
   filingError?: string;
+  /**
+   * Recipients the server refused while accepting the submission (its
+   * deliveryStatus says delivered "no"). The message went out to the others
+   * only - callers should name these instead of reporting a plain success.
+   */
+  rejectedRecipients?: RejectedRecipient[];
+}
+
+/** A recipient refused at submission, with the SMTP reply the server gave. */
+export interface RejectedRecipient {
+  email: string;
+  smtpReply: string;
 }
 
 export interface ScheduledEmail extends Email {
@@ -109,6 +138,7 @@ export interface ScheduledEmail extends Email {
   scheduledIdentityId: string;
   scheduledUndoStatus: 'pending' | 'final' | 'canceled';
   scheduledDeliveryStatus?: Record<string, DeliveryStatus>;
+  scheduledAccountId?: string;
   isScheduled: true;
   isSmimeScheduled: boolean;
 }
@@ -133,6 +163,15 @@ export interface AuthenticationResults {
     result: 'pass' | 'fail' | 'policy' | 'neutral' | 'temperror' | 'permerror';
     domain?: string;
     selector?: string;
+    /**
+     * Every DKIM result when the message carried more than one signature;
+     * `result` above is the first.
+     */
+    all?: Array<{
+      result: 'pass' | 'fail' | 'policy' | 'neutral' | 'temperror' | 'permerror';
+      domain?: string;
+      selector?: string;
+    }>;
   };
   dmarc?: {
     result: 'pass' | 'fail' | 'none';
@@ -192,22 +231,30 @@ export interface Mailbox {
   unreadEmails: number;
   totalThreads: number;
   unreadThreads: number;
-  myRights: {
-    mayReadItems: boolean;
-    mayAddItems: boolean;
-    mayRemoveItems: boolean;
-    maySetSeen: boolean;
-    maySetKeywords: boolean;
-    mayCreateChild: boolean;
-    mayRename: boolean;
-    mayDelete: boolean;
-    maySubmit: boolean;
-  };
+  myRights: MailboxRights;
   isSubscribed: boolean;
+  // Sharing (urn:ietf:params:jmap:mail:share): principalId -> rights. Only
+  // present when explicitly requested (see getMailboxShareWith).
+  shareWith?: Record<string, MailboxRights> | null;
   // Shared folder support
   accountId?: string;
   accountName?: string;
   isShared?: boolean;
+}
+
+// Mailbox rights (RFC 8621 §2 myRights; `mayShare` from the mail:share
+// extension). Also the value type of Mailbox.shareWith.
+export interface MailboxRights {
+  mayReadItems: boolean;
+  mayAddItems: boolean;
+  mayRemoveItems: boolean;
+  maySetSeen: boolean;
+  maySetKeywords: boolean;
+  mayCreateChild: boolean;
+  mayRename: boolean;
+  mayDelete: boolean;
+  maySubmit: boolean;
+  mayShare?: boolean;
 }
 
 export interface Thread {
@@ -217,7 +264,8 @@ export interface Thread {
 
 // Thread grouping for UI display
 export interface ThreadGroup {
-  threadId: string;
+  threadId: string;          // JMAP thread id - unique only within its account; use for Thread/get
+  threadKey: string;         // Client-side identity, unique across accounts (see threadKeyFor)
   emails: Email[];           // Emails in this thread (sorted by receivedAt desc)
   latestEmail: Email;        // Most recent email
   participantNames: string[];// Unique participant names
@@ -285,6 +333,11 @@ export interface ContactCard {
     grammaticalGender?: string;
     pronouns?: Record<string, { pronouns: string; pref?: number; contexts?: Record<string, boolean> }>;
   };
+  calendars?: Record<string, { uri: string; kind?: 'calendar' | 'freeBusy'; mediaType?: string; contexts?: Record<string, boolean> }>;
+  schedulingAddresses?: Record<string, { uri: string; contexts?: Record<string, boolean>; pref?: number }>;
+  // Client-side flat views of `calendars`, `schedulingAddresses` and the
+  // `directories` entry (vCard CALURI / FBURL / CALADRURI / SOURCE). They are
+  // not RFC 9553 properties; lib/jmap/contact-wire.ts maps them.
   calendarUri?: string;
   schedulingUri?: string;
   freeBusyUri?: string;
@@ -484,6 +537,17 @@ export interface Principal {
   accountId?: string;
 }
 
+/**
+ * One busy interval from Principal/getAvailability (RFC 9670 §2.5 /
+ * draft-ietf-jmap-calendars). `busyStatus` null means the server did not
+ * classify the period (treated as busy).
+ */
+export interface BusyPeriod {
+  utcStart: string;
+  utcEnd: string;
+  busyStatus: 'confirmed' | 'tentative' | 'unavailable' | null;
+}
+
 export interface VacationResponse {
   id: string;
   isEnabled: boolean;
@@ -552,6 +616,19 @@ export interface Calendar {
   isTasksOnly?: boolean;
 }
 
+/**
+ * iCalendar component types a calendar advertises through the CalDAV
+ * supported-calendar-component-set. Sync clients such as DAVx5 use it to
+ * decide whether a collection is offered to calendar apps, todo apps, or both
+ * (#760). Only settable while the collection is created.
+ */
+export type CalendarComponentType = 'VEVENT' | 'VTODO';
+
+export interface CreateCalendarOptions {
+  /** Component set for the new calendar; defaults to events only (VEVENT). */
+  components?: CalendarComponentType[];
+}
+
 export interface CalendarRights {
   mayReadFreeBusy: boolean;
   mayReadItems: boolean;
@@ -566,6 +643,11 @@ export interface CalendarRights {
 export interface CalendarEvent {
   id: string;
   originalId?: string;
+  // Set by the server on every CalendarEvent/get result. For an occurrence
+  // handed out by CalendarEvent/query?expandRecurrences=true (a "synthetic"
+  // id) this is the id of the stored base event; for a base event it equals
+  // `id`. See lib/recurrence-instances.ts.
+  baseEventId?: string | null;
   calendarIds: Record<string, boolean>;
   originalCalendarIds?: Record<string, boolean>;
   accountId?: string;
@@ -646,8 +728,11 @@ export interface CalendarRecurrenceRule {
   '@type': 'RecurrenceRule';
   frequency: 'yearly' | 'monthly' | 'weekly' | 'daily' | 'hourly' | 'minutely' | 'secondly';
   interval: number;
-  rscale: string;
-  skip: 'omit' | 'backward' | 'forward';
+  // Optional and normally omitted: these RFC 7529 (RSCALE/SKIP) fields only
+  // apply to non-Gregorian scales / invalid-date handling. Emitting a default
+  // SKIP=OMIT breaks some CalDAV clients (DAVx5) - see lib/recurrence-rule.ts (#805).
+  rscale?: string;
+  skip?: 'omit' | 'backward' | 'forward';
   firstDayOfWeek: 'mo' | 'tu' | 'we' | 'th' | 'fr' | 'sa' | 'su';
   byDay: CalendarNDay[] | null;
   byMonthDay: number[] | null;
@@ -734,7 +819,7 @@ export interface CalendarTask {
   timeZone: string | null;
   showWithoutTime: boolean;
   progress: 'needs-action' | 'in-process' | 'completed' | 'cancelled';
-  progressUpdated: string | null;
+  progressUpdated?: string | null;
   priority: number;
   privacy: 'public' | 'private' | 'secret';
   keywords: Record<string, boolean> | null;
@@ -747,11 +832,17 @@ export interface CalendarTask {
   relatedTo: Record<string, CalendarRelation> | null;
 }
 
+/**
+ * A ParticipantIdentity (draft-ietf-jmap-calendars §6): one of the calendar
+ * addresses the user may act as when organising or replying to events. The
+ * server derives them from the account's addresses; the default one is what
+ * new invitations are sent from.
+ */
 export interface CalendarParticipantIdentity {
   id: string;
   name: string;
-  scheduleId: string;
-  sendTo: Record<string, string>;
+  /** `mailto:` URI of the scheduling address. */
+  calendarAddress: string;
   isDefault: boolean;
 }
 
@@ -804,8 +895,37 @@ export interface StateChange {
       Calendar?: string;
       CalendarEvent?: string;
       SieveScript?: string;
+      ShareNotification?: string;
+      CalendarEventNotification?: string;
     };
   };
+}
+
+/**
+ * A ShareNotification (RFC 9670 §3): someone changed this user's rights on
+ * one of their collections. `oldRights` null = newly shared, `newRights`
+ * null = access revoked.
+ */
+export interface ShareNotification {
+  id: string;
+  created: string;
+  changedBy: { name: string; email: string | null; principalId: string | null };
+  objectType: 'Mailbox' | 'Calendar' | 'AddressBook' | 'FileNode' | string;
+  objectAccountId: string;
+  objectId: string;
+  name: string;
+  oldRights: Record<string, boolean> | null;
+  newRights: Record<string, boolean> | null;
+}
+
+// draft-ietf-jmap-emailpush EmailPushConfig: the server evaluates `filter`
+// against every newly delivered message and only pushes when it matches, so a
+// client can keep spam (Junk) out of its push channel server-side. Keyed by
+// account id on PushSubscription.emailPush.
+export interface EmailPushConfig {
+  filter: Record<string, unknown> | null;
+  properties: string[];
+  urgency?: 'very-low' | 'low' | 'normal' | 'high';
 }
 
 export interface PushSubscription {
@@ -818,9 +938,29 @@ export interface PushSubscription {
   } | null;
   expires: string | null;
   types: string[] | null;
+  // Only present when the server advertises urn:ietf:params:jmap:emailpush
+  // and the property was requested; null when the subscription has no
+  // per-account delivery filter.
+  emailPush?: Record<string, EmailPushConfig> | null;
 }
 
 // For tracking last known states
+/**
+ * A `Foo/changes` response (RFC 8620 §5.2) as consumed by the stores' delta
+ * sync. `updatedProperties` is set when the server can tell that only those
+ * properties changed on the updated records (Stalwart reports the four
+ * Mailbox counters this way).
+ */
+export interface CollectionChanges {
+  oldState: string;
+  newState: string;
+  hasMoreChanges: boolean;
+  created: string[];
+  updated: string[];
+  destroyed: string[];
+  updatedProperties: string[] | null;
+}
+
 export interface AccountStates {
   [accountId: string]: {
     Email?: string;

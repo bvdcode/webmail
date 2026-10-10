@@ -8,6 +8,9 @@ export interface SearchFilters {
   dateBefore: string;
   isUnread: boolean | null;
   isStarred: boolean | null;
+  /** Message size bounds in KB (RFC 8621 §4.4.1 minSize / maxSize); "" = unset. */
+  minSizeKb: string;
+  maxSizeKb: string;
 }
 
 export const DEFAULT_SEARCH_FILTERS: SearchFilters = {
@@ -20,20 +23,15 @@ export const DEFAULT_SEARCH_FILTERS: SearchFilters = {
   dateBefore: "",
   isUnread: null,
   isStarred: null,
+  minSizeKb: "",
+  maxSizeKb: "",
 };
 
-/**
- * Appends wildcard `*` to each word in a query to enable prefix matching
- * in Stalwart's full-text search engine. For example, "prim" becomes "prim*"
- * which matches "prime", "primary", etc.
- */
-export function toWildcardQuery(query: string): string {
-  return query
-    .trim()
-    .split(/\s+/)
-    .filter(Boolean)
-    .map((word) => (word.endsWith('*') || word.endsWith('"') ? word : word + '*'))
-    .join(' ');
+/** The KB size field as a positive byte count, or null when unset/invalid. */
+export function sizeFilterBytes(value: string | undefined): number | null {
+  const kb = Number(value);
+  if (!value || !Number.isFinite(kb) || kb <= 0) return null;
+  return Math.round(kb * 1024);
 }
 
 export function buildJMAPFilter(
@@ -43,8 +41,11 @@ export function buildJMAPFilter(
 ): Record<string, unknown> {
   const conditions: Record<string, unknown>[] = [];
 
-  if (textQuery) {
-    conditions.push({ text: toWildcardQuery(textQuery) });
+  // Sent as typed. JMAP's text filter has no wildcard syntax: Stalwart's
+  // tokenizer drops a trailing "*" (so "runn*" finds nothing) and matches
+  // whole, stemmed words only.
+  if (textQuery.trim()) {
+    conditions.push({ text: textQuery.trim() });
   }
 
   if (filters.from) {
@@ -96,6 +97,16 @@ export function buildJMAPFilter(
     conditions.push({ notKeyword: "$flagged" });
   }
 
+  // minSize is inclusive, maxSize exclusive (RFC 8621 §4.4.1).
+  const minSize = sizeFilterBytes(filters.minSizeKb);
+  if (minSize !== null) {
+    conditions.push({ minSize });
+  }
+  const maxSize = sizeFilterBytes(filters.maxSizeKb);
+  if (maxSize !== null) {
+    conditions.push({ maxSize });
+  }
+
   if (mailboxId) {
     conditions.push({ inMailbox: mailboxId });
   }
@@ -114,6 +125,18 @@ export function buildJMAPFilter(
   };
 }
 
+type JmapFilter = Record<string, unknown>;
+
+/** `AND` two JMAP filters, flattening into an existing top-level `AND`. */
+export function andFilters(base: JmapFilter, extra: JmapFilter | null): JmapFilter {
+  if (!extra || Object.keys(extra).length === 0) return base;
+  if (Object.keys(base).length === 0) return extra;
+  if (base.operator === 'AND' && Array.isArray(base.conditions)) {
+    return { operator: 'AND', conditions: [...(base.conditions as JmapFilter[]), extra] };
+  }
+  return { operator: 'AND', conditions: [base, extra] };
+}
+
 export function isFilterEmpty(filters: SearchFilters): boolean {
   return (
     !filters.from &&
@@ -124,7 +147,9 @@ export function isFilterEmpty(filters: SearchFilters): boolean {
     !filters.dateAfter &&
     !filters.dateBefore &&
     filters.isUnread === null &&
-    filters.isStarred === null
+    filters.isStarred === null &&
+    sizeFilterBytes(filters.minSizeKb) === null &&
+    sizeFilterBytes(filters.maxSizeKb) === null
   );
 }
 
@@ -139,5 +164,7 @@ export function activeFilterCount(filters: SearchFilters): number {
   if (filters.dateBefore) count++;
   if (filters.isUnread !== null) count++;
   if (filters.isStarred !== null) count++;
+  if (sizeFilterBytes(filters.minSizeKb) !== null) count++;
+  if (sizeFilterBytes(filters.maxSizeKb) !== null) count++;
   return count;
 }

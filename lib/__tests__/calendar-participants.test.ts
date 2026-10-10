@@ -5,6 +5,7 @@ import {
   collectUserCalendarAddresses,
   getUserParticipantId,
   getUserStatus,
+  isDeclinedByUser,
   getParticipantList,
   getStatusCounts,
   getParticipantCount,
@@ -284,6 +285,29 @@ describe('getUserStatus', () => {
   });
 });
 
+describe('isDeclinedByUser', () => {
+  it("is true only for the user's own declined entry", () => {
+    const event = makeEvent({ att1: attendeeParticipant, dave: declinedAttendee });
+    expect(isDeclinedByUser(event, ['Dave@Example.com'])).toBe(true);
+    expect(isDeclinedByUser(event, ['bob@example.com'])).toBe(false);
+  });
+
+  it('matches the calendar address an occurrence override carries', () => {
+    // A reply to one occurrence comes back from Stalwart as an override
+    // participant with only a calendarAddress (#1110).
+    const event = makeEvent({
+      att: { '@type': 'Participant', calendarAddress: 'mailto:bob@example.com', participationStatus: 'declined' },
+    });
+    expect(isDeclinedByUser(event, ['alias@example.com', 'bob@example.com'])).toBe(true);
+  });
+
+  it('is false without user addresses or participants', () => {
+    expect(isDeclinedByUser(makeEvent({ dave: declinedAttendee }), [])).toBe(false);
+    expect(isDeclinedByUser(makeEvent({ dave: declinedAttendee }), undefined)).toBe(false);
+    expect(isDeclinedByUser(makeEvent(null), ['dave@example.com'])).toBe(false);
+  });
+});
+
 describe('getParticipantList', () => {
   it('returns all participants as info objects', () => {
     const event = makeEvent({
@@ -351,6 +375,100 @@ describe('getParticipantList', () => {
     );
     expect(getParticipantList(event)[0].isOrganizer).toBe(true);
   });
+
+  // #738: the organizer arrives twice — once as the participant our client
+  // wrote (owner role, accepted) and once as an ATTENDEE line the server's
+  // scheduling added — so every list showed a phantom fourth participant
+  // still "awaiting" a reply.
+  it('renders the organizer once when the server also emits them as an attendee', () => {
+    const event = makeEvent(
+      {
+        org: { ...orgParticipant, name: '' },
+        att1: attendeeParticipant,
+        att2: { ...attendeeParticipant, name: 'Carol', email: 'carol@example.com' },
+        orgDup: { ...attendeeParticipant, name: '', email: 'alice@example.com', sendTo: { imip: 'mailto:alice@example.com' } },
+      },
+      { organizerCalendarAddress: 'mailto:alice@example.com' }
+    );
+    const list = getParticipantList(event);
+    expect(list).toHaveLength(3);
+    const alices = list.filter(p => p.email === 'alice@example.com');
+    expect(alices).toHaveLength(1);
+    expect(alices[0]).toMatchObject({ isOrganizer: true, status: 'accepted' });
+  });
+
+  it('keeps the real RSVP when the duplicate is the needs-action entry', () => {
+    // Reverse insertion order: the spurious attendee entry comes first with
+    // no reply, the owner entry (accepted) second.
+    const event = makeEvent(
+      {
+        att1: { ...attendeeParticipant, name: '', email: 'alice@example.com' },
+        org: orgParticipant,
+      },
+      { organizerCalendarAddress: 'mailto:alice@example.com' }
+    );
+    const list = getParticipantList(event);
+    expect(list).toHaveLength(1);
+    expect(list[0]).toMatchObject({ isOrganizer: true, status: 'accepted', name: 'Alice' });
+  });
+
+  it('deduplicates plain attendees regardless of insertion order', () => {
+    const event = makeEvent({
+      att1: { ...attendeeParticipant, name: 'Bob' },
+      att2: { ...attendeeParticipant, name: 'Bobby', participationStatus: 'accepted' },
+      att3: { ...attendeeParticipant, name: 'Carol', email: 'carol@example.com' },
+    });
+    const list = getParticipantList(event);
+    expect(list).toHaveLength(2);
+    const bobs = list.filter(p => p.email === 'bob@example.com');
+    expect(bobs).toHaveLength(1);
+    expect(bobs[0].status).toBe('accepted');
+    expect(bobs[0].name).toBe('Bob'); // first-seen name wins
+  });
+
+  it('merges duplicate addresses case-insensitively', () => {
+    const event = makeEvent({
+      org: { ...orgParticipant, email: 'Alice@Example.com' },
+      orgDup: { ...attendeeParticipant, name: '', email: 'alice@example.com' },
+    });
+    expect(getParticipantList(event)).toHaveLength(1);
+  });
+
+  // The organizer owes no reply to their own invitation; the statusless
+  // participant Stalwart derives from ORGANIZER must not read as "pending".
+  it('shows the statusless organizer as accepted', () => {
+    const event = makeEvent(
+      { org: stalwartOrganizerParticipant },
+      { organizerCalendarAddress: 'mailto:alice@example.com' }
+    );
+    const list = getParticipantList(event);
+    expect(list[0].isOrganizer).toBe(true);
+    expect(list[0].status).toBe('accepted');
+  });
+
+  it('fills missing names from the resolveName option without overriding event data', () => {
+    const event = makeEvent({
+      org: { ...orgParticipant, name: '' },
+      att1: attendeeParticipant,
+    });
+    const resolveName = (email: string) =>
+      email === 'alice@example.com' ? '爱丽丝' : undefined;
+    const list = getParticipantList(event, { resolveName });
+    expect(list.find(p => p.email === 'alice@example.com')!.name).toBe('爱丽丝');
+    // Bob has a name in the event; the resolver must not clobber it (it
+    // returns undefined for him anyway, but the contract is "fill, not replace").
+    expect(list.find(p => p.email === 'bob@example.com')!.name).toBe('Bob');
+  });
+
+  it('keeps entries without an address unmerged', () => {
+    const event = makeEvent({
+      org: orgParticipant,
+      ghost1: { '@type': 'Participant', name: 'No Address', participationStatus: 'needs-action' },
+      ghost2: { '@type': 'Participant', name: 'Also No Address', participationStatus: 'accepted' },
+    });
+    const list = getParticipantList(event);
+    expect(list).toHaveLength(3);
+  });
 });
 
 describe('getStatusCounts', () => {
@@ -401,6 +519,26 @@ describe('getParticipantCount', () => {
   it('returns 0 when no participants', () => {
     const event = makeEvent(null);
     expect(getParticipantCount(event)).toBe(0);
+  });
+
+  // #738: the participant badge on event cards counted raw entries, so an
+  // organizer the server emits twice showed "4 participants" for three people.
+  it('counts addresses, not raw entries', () => {
+    const event = makeEvent({
+      org: { ...orgParticipant, name: '' },
+      att1: attendeeParticipant,
+      att2: { ...attendeeParticipant, name: 'Carol', email: 'carol@example.com' },
+      orgDup: { ...attendeeParticipant, name: '', email: 'alice@example.com' },
+    });
+    expect(getParticipantCount(event)).toBe(3);
+  });
+
+  it('counts address-less entries individually', () => {
+    const event = makeEvent({
+      org: orgParticipant,
+      ghost: { '@type': 'Participant', name: 'No Address' },
+    });
+    expect(getParticipantCount(event)).toBe(2);
   });
 });
 
@@ -465,6 +603,23 @@ describe('buildParticipantMap', () => {
     Object.values(map).forEach(p => {
       expect(p['@type']).toBe('Participant');
     });
+  });
+
+  it('omits blank names rather than sending an empty one', () => {
+    const map = buildParticipantMap(
+      { name: '', email: 'alice@example.com' },
+      [
+        { name: '   ', email: 'bob@example.com' },
+        { name: '  Carol  ', email: 'carol@example.com' },
+      ]
+    );
+    const entries = Object.values(map);
+
+    // An empty name becomes a bare `CN=` downstream, which renders as a dangling
+    // "- Organizer" and as guests listed with nothing before their address.
+    expect(entries.find(p => p.email === 'alice@example.com')).not.toHaveProperty('name');
+    expect(entries.find(p => p.email === 'bob@example.com')).not.toHaveProperty('name');
+    expect(entries.find(p => p.email === 'carol@example.com')!.name).toBe('Carol');
   });
 
   it('sets kind to individual for all entries', () => {

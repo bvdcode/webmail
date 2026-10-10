@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
-import { X, Loader2, Globe } from "lucide-react";
+import { X, Loader2, Globe } from "@/components/icons";
 import type { IJMAPClient } from '@/lib/jmap/client-interface';
 import { useCalendarStore, type ICalSubscription } from "@/stores/calendar-store";
 import { CalendarColorPicker } from "@/components/settings/calendar-management-settings";
@@ -73,8 +73,11 @@ export function ICalSubscriptionModal({ client, onClose, editSubscription, initi
           setError(t("error"));
         }
       }
-    } catch {
-      setError(isEdit ? t("update_error") : t("error"));
+    } catch (err) {
+      // The store rethrows the proxy's error text ("… larger than the 25 MB
+      // limit", "Remote server returned 404") - show it when there is one. (#692)
+      const message = err instanceof Error && err.message ? err.message : '';
+      setError(message || (isEdit ? t("update_error") : t("error")));
     } finally {
       setIsSubmitting(false);
     }

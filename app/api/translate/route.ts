@@ -1,4 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { rejectCrossOriginRequest } from '@/lib/security/same-origin';
+import { readFileEnv } from "@/lib/read-file-env";
+import { getStalwartCredentials } from '@/lib/stalwart/credentials';
 
 // Host-side proxy backing the "Translate" plugin (manifest apiPostPaths:
 // ["/api/translate"]). The plugin slot iframe POSTs { text, target, source,
@@ -10,7 +13,7 @@ import { NextRequest, NextResponse } from 'next/server';
 //                       langpair needs an explicit source language, so when the
 //                       plugin asks for "auto" we detect it locally first.
 //   - "libretranslate" — only available when the host sets LIBRETRANSLATE_URL
-//                       (and optionally LIBRETRANSLATE_API_KEY). Supports native
+//                       (and optionally LIBRETRANSLATE_API_KEY or LIBRETRANSLATE_API_KEY_FILE). Supports native
 //                       source auto-detection.
 
 export const runtime = 'nodejs';
@@ -224,7 +227,9 @@ async function translateLibre(
   if (!endpoint) {
     throw new Error('LibreTranslate is not configured on this server');
   }
-  const apiKey = process.env.LIBRETRANSLATE_API_KEY;
+  const apiKey =
+    process.env.LIBRETRANSLATE_API_KEY ||
+    readFileEnv(process.env.LIBRETRANSLATE_API_KEY_FILE);
   const url = endpoint.replace(/\/+$/, '') + '/translate';
   const res = await fetch(url, {
     method: 'POST',
@@ -256,6 +261,18 @@ async function translateLibre(
 // ─── Route ────────────────────────────────────────────────────
 
 export async function POST(request: NextRequest) {
+  // CSRF gate (GHSA-9mvj-98f5-9q6g): this handler acts with the caller's
+  // session cookie, which SameSite=Lax still sends from a same-site page.
+  const crossOrigin = rejectCrossOriginRequest(request);
+  if (crossOrigin) return crossOrigin;
+  // Same session gate as the other authenticated API routes: the plugin's
+  // api.http.post carries the session cookies, but nothing else should be
+  // able to relay requests through this deployment to the backends. (#903)
+  const creds = await getStalwartCredentials(request);
+  if (!creds) {
+    return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+  }
+
   let body: TranslateBody;
   try {
     body = (await request.json()) as TranslateBody;

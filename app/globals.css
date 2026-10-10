@@ -187,6 +187,69 @@ body {
     "calt" 1;
 }
 
+/* Native <select> option lists are painted by the browser, not by the
+   Tailwind classes on the control, so they only honour color-scheme and an
+   explicit option colour. Themes whose --color-muted is translucent (Aurora
+   Glass dark: rgba(255,255,255,0.05)) composited to a light popup with
+   near-white text (#999). Pin options to the popover tokens, which every
+   theme defines as an opaque surface, and let dark themes ask the browser
+   for a dark popup where option colours are ignored (Safari). */
+option {
+  background-color: var(--color-popover);
+  color: var(--color-popover-foreground);
+}
+
+/* The group labels (the From dropdown's accounts) are painted the same way.
+   Without colours of their own they kept the control's text colour on the
+   popup's base, which a transparent control leaves light: in dark themes,
+   light text on a white bar. */
+optgroup {
+  background-color: var(--color-popover);
+  color: var(--color-popover-foreground);
+}
+
+.dark select {
+  color-scheme: dark;
+}
+
+/* Tailwind v4's preflight no longer gives buttons a pointer cursor, so most
+   controls showed the arrow. Give everything clickable the pointer again, and
+   disabled controls not-allowed, as the components that style it themselves
+   already do. This sits in the base layer so a cursor utility on a component
+   (cursor-grab, cursor-text, disabled:cursor-default) still wins. */
+@layer base {
+  button:not(:disabled),
+  select:not(:disabled),
+  input:is([type="checkbox"], [type="radio"], [type="color"]):not(:disabled),
+  summary,
+  [role="button"]:not([aria-disabled="true"]),
+  [role="tab"]:not([aria-disabled="true"]),
+  [role="switch"]:not([aria-disabled="true"]),
+  [role="checkbox"]:not([aria-disabled="true"]),
+  [role="radio"]:not([aria-disabled="true"]),
+  [role="option"]:not([aria-disabled="true"]),
+  [role="menuitem"]:not([aria-disabled="true"]),
+  [role="menuitemcheckbox"]:not([aria-disabled="true"]),
+  [role="menuitemradio"]:not([aria-disabled="true"]) {
+    cursor: pointer;
+  }
+
+  button:disabled,
+  select:disabled,
+  input:is([type="checkbox"], [type="radio"], [type="color"]):disabled,
+  [role="button"][aria-disabled="true"],
+  [role="tab"][aria-disabled="true"],
+  [role="switch"][aria-disabled="true"],
+  [role="checkbox"][aria-disabled="true"],
+  [role="radio"][aria-disabled="true"],
+  [role="option"][aria-disabled="true"],
+  [role="menuitem"][aria-disabled="true"],
+  [role="menuitemcheckbox"][aria-disabled="true"],
+  [role="menuitemradio"][aria-disabled="true"] {
+    cursor: not-allowed;
+  }
+}
+
 /* Minimalist scrollbar */
 ::-webkit-scrollbar {
   width: 8px;
@@ -871,17 +934,17 @@ body {
 
 /* RTL: mirror directional icons (chevrons/arrows) so prev/next, back/forward,
    and panel-collapse affordances point the correct way in right-to-left layouts.
-   lucide-react emits a `lucide-<name>` class per icon, so we target the
+   Tabler emits a `tabler-icon-<name>` class per icon, so we target the
    directional ones only — vertical chevrons (up/down) are intentionally left. */
-[dir="rtl"] .lucide-chevron-left,
-[dir="rtl"] .lucide-chevron-right,
-[dir="rtl"] .lucide-chevrons-left,
-[dir="rtl"] .lucide-chevrons-right,
-[dir="rtl"] .lucide-arrow-left,
-[dir="rtl"] .lucide-arrow-right,
-[dir="rtl"] .lucide-arrow-big-left,
-[dir="rtl"] .lucide-arrow-big-right,
-[dir="rtl"] .lucide-panel-left,
-[dir="rtl"] .lucide-panel-right {
+[dir="rtl"] .tabler-icon-chevron-left,
+[dir="rtl"] .tabler-icon-chevron-right,
+[dir="rtl"] .tabler-icon-chevrons-left,
+[dir="rtl"] .tabler-icon-chevrons-right,
+[dir="rtl"] .tabler-icon-arrow-left,
+[dir="rtl"] .tabler-icon-arrow-right,
+[dir="rtl"] .tabler-icon-arrow-big-left,
+[dir="rtl"] .tabler-icon-arrow-big-right,
+[dir="rtl"] .tabler-icon-layout-sidebar-left,
+[dir="rtl"] .tabler-icon-layout-sidebar-right {
   transform: scaleX(-1);
 }

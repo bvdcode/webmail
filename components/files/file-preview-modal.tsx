@@ -2,9 +2,9 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useTranslations } from "next-intl";
-import { X, Download, Loader2, ExternalLink } from "lucide-react";
+import { X, Download, Loader2, ExternalLink } from "@/components/icons";
 import { Button } from "@/components/ui/button";
-import { getFilePreviewKind, isMimeTypeSafeForInlinePreview } from "@/lib/file-preview";
+import { getFilePreviewKind, imageBlobUrl, isMimeTypeSafeForInlinePreview, previewBlobType } from "@/lib/file-preview";
 import dynamic from "next/dynamic";
 import { EmlPreview, type ParsedEml } from "@/components/files/eml-preview";
 
@@ -15,34 +15,6 @@ const PdfMobileViewer = dynamic(
   () => import("@/components/files/pdf-mobile-viewer").then((m) => m.PdfMobileViewer),
   { ssr: false },
 );
-
-// Map a few well-known extensions back to canonical MIME types. Used when the
-// server returns application/octet-stream (or empty) for an attachment whose
-// actual type is obvious from the filename. The blob.type drives how browsers
-// render blob: URLs, so guessing wrong here means the inline preview silently
-// downgrades to a download.
-const EXT_TO_MIME: Record<string, string> = {
-  pdf: "application/pdf",
-  png: "image/png",
-  jpg: "image/jpeg",
-  jpeg: "image/jpeg",
-  gif: "image/gif",
-  webp: "image/webp",
-  avif: "image/avif",
-  bmp: "image/bmp",
-  mp3: "audio/mpeg",
-  wav: "audio/wav",
-  ogg: "audio/ogg",
-  m4a: "audio/mp4",
-  mp4: "video/mp4",
-  webm: "video/webm",
-  ogv: "video/ogg",
-};
-
-function inferMimeFromName(name: string): string | undefined {
-  const ext = name.toLowerCase().split(".").pop();
-  return ext ? EXT_TO_MIME[ext] : undefined;
-}
 
 interface FilePreviewModalProps {
   name: string;
@@ -237,30 +209,26 @@ export function FilePreviewModal({ name, onClose, onDownload, getFileContent }: 
           const parsed = await new PostalMime().parse(await blob.arrayBuffer());
           if (!cancelled) setEmlContent(parsed as ParsedEml);
         } else {
-          // Stalwart's download endpoint can return generic
-          // application/octet-stream for attachments even when the email's
-          // MIME structure declared application/pdf (etc.). The blob inherits
-          // that, so a blob: URL plugged into <iframe> looks like a binary
-          // stream and Chrome/Edge silently download it (with the blob UUID
-          // as filename) instead of rendering inline. Re-wrap with the most
-          // specific MIME we can resolve - prefer explicit attachment type,
-          // then filename-derived MIME, then whatever the blob came with.
-          const inferredFromName = inferMimeFromName(name);
-          const isUseless = (ty?: string) =>
-            !ty || ty === "application/octet-stream" || ty === "binary/octet-stream";
-          const effectiveType =
-            (contentType && !isUseless(contentType) ? contentType : undefined)
-            ?? inferredFromName
-            ?? blob.type;
+          // Re-type the blob to one its viewer can show; a blob: URL with a
+          // type the browser cannot display is silently downloaded instead.
+          const effectiveType = previewBlobType(name, contentType, blob.type);
           const typedBlob = blob.type !== effectiveType
             ? new Blob([blob], { type: effectiveType })
             : blob;
-          revokeUrl = URL.createObjectURL(typedBlob);
-          if (!cancelled) {
-            setObjectUrl(revokeUrl);
-            setCanOpenInNewTab(isMimeTypeSafeForInlinePreview(effectiveType));
-            if (previewType === "pdf") setPdfBlob(typedBlob);
+          // "Open image in new tab" loads the <img> URL as a document of its
+          // own, so an image gets one that stays inert there: a sender's SVG
+          // must not run script as the webmail origin (GHSA-xvjh-v9c6-qcvc).
+          const url = previewType === "image"
+            ? await imageBlobUrl(typedBlob)
+            : URL.createObjectURL(typedBlob);
+          if (cancelled) {
+            URL.revokeObjectURL(url);
+            return;
           }
+          revokeUrl = url;
+          setObjectUrl(url);
+          setCanOpenInNewTab(isMimeTypeSafeForInlinePreview(effectiveType));
+          if (previewType === "pdf") setPdfBlob(typedBlob);
         }
       } catch {
         if (!cancelled) setError(true);
@@ -292,7 +260,13 @@ export function FilePreviewModal({ name, onClose, onDownload, getFileContent }: 
 
   return (
     <div role="dialog" aria-label={name} className="fixed inset-0 z-50 flex flex-col bg-black/80" onClick={onClose}>
-      <div className="flex items-center justify-between px-4 py-3 bg-background/90 backdrop-blur border-b border-border" onClick={(e) => e.stopPropagation()}>
+      {/* The dialog is `fixed inset-0` under `viewport-fit=cover`, so in an
+          installed iOS PWA (no browser chrome above it) the header would sit
+          underneath the status bar and its buttons - including the close
+          button - became unreachable (#936). Pad the bar itself so its
+          background still bleeds behind the status bar / notch. The insets are
+          physical, so pl/pr (not ps/pe) is correct in RTL too. */}
+      <div className="flex items-center justify-between gap-2 pl-[calc(1rem+env(safe-area-inset-left))] pr-[calc(1rem+env(safe-area-inset-right))] pt-[calc(0.75rem+env(safe-area-inset-top))] pb-3 bg-background/90 backdrop-blur border-b border-border" onClick={(e) => e.stopPropagation()}>
         <h3 className="text-sm font-medium truncate">{name}</h3>
         <div className="flex items-center gap-2">
           {objectUrl && canOpenInNewTab && (
@@ -316,7 +290,7 @@ export function FilePreviewModal({ name, onClose, onDownload, getFileContent }: 
         </div>
       </div>
 
-      <div className="flex-1 flex items-center justify-center overflow-auto p-4">
+      <div className="flex-1 flex items-center justify-center overflow-auto p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] pl-[calc(1rem+env(safe-area-inset-left))] pr-[calc(1rem+env(safe-area-inset-right))]">
         {loading && (
           <div className="flex flex-col items-center gap-2 text-muted-foreground">
             <Loader2 className="w-8 h-8 animate-spin" />

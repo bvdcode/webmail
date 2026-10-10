@@ -6,6 +6,7 @@ import { debug } from "./debug";
 import { getEffectiveLocale } from '@/i18n/detect-locale';
 import { useSettingsStore } from "@/stores/settings-store";
 import type { DateLocale } from "@/stores/settings-store";
+import { getEffectiveTimeZone, getWallClock } from "./timezone";
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -87,9 +88,18 @@ function resolveDateLocale<T extends string | undefined>(
  *
  * The locale (from the language picker), the region override and the 12h/24h
  * preference are all read via `getState()` so this stays SSR-safe.
+ *
+ * All output is rendered in the user's effective time zone (the `timeZone`
+ * setting when set, else the browser's), including the today / this-week
+ * bucketing - a browser pinned to UTC for anti-fingerprinting must not
+ * roll a 00:30 local mail into "yesterday" (#755).
  */
 export function formatDate(date: Date | string): string {
   const d = typeof date === "string" ? new Date(date) : date;
+  // An unparsable receivedAt (e.g. a 5-digit year) makes Intl throw
+  // "RangeError: Invalid time value" and takes the whole list down with it.
+  // Leave the row's date slot blank; the viewer header shows the raw value. (#1099)
+  if (!d || Number.isNaN(d.getTime())) return "";
   const now = new Date();
 
   const locale = getEffectiveLocale();
@@ -102,6 +112,7 @@ export function formatDate(date: Date | string): string {
   // (defaults to `auto` = the UI language, preserving prior behaviour). (#456)
   const numericLocale = resolveDateLocale(dateLocale, uiLocale);
   const hour12 = timeFormat === "12h";
+  const timeZone = getEffectiveTimeZone();
 
   if (dateFormat === "relative") {
     const diff = now.getTime() - d.getTime();
@@ -116,14 +127,16 @@ export function formatDate(date: Date | string): string {
     if (hours < 24) return rtf.format(-hours, "hour");
     if (days < 7) return rtf.format(-days, "day");
     return d.toLocaleDateString(uiLocale, {
+      timeZone,
       month: "short",
       day: "numeric",
-      year: d.getFullYear() !== now.getFullYear() ? "numeric" : undefined,
+      year: getWallClock(d, timeZone).year !== getWallClock(now, timeZone).year ? "numeric" : undefined,
     });
   }
 
   if (dateFormat === "full") {
     return d.toLocaleString(numericLocale, {
+      timeZone,
       year: "numeric",
       month: "2-digit",
       day: "2-digit",
@@ -135,15 +148,19 @@ export function formatDate(date: Date | string): string {
 
   // 'smart' (default)
   const timeStr = d.toLocaleTimeString(uiLocale, {
+    timeZone,
     hour: "2-digit",
     minute: "2-digit",
     hour12,
   });
 
+  // Calendar-day comparison in the display zone, not the browser zone.
+  const dWall = getWallClock(d, timeZone);
+  const nowWall = getWallClock(now, timeZone);
   const isSameDay =
-    d.getFullYear() === now.getFullYear() &&
-    d.getMonth() === now.getMonth() &&
-    d.getDate() === now.getDate();
+    dWall.year === nowWall.year &&
+    dWall.month === nowWall.month &&
+    dWall.day === nowWall.day;
   if (isSameDay) return timeStr;
 
   const daysAgo = Math.floor((now.getTime() - d.getTime()) / 86400000);
@@ -151,12 +168,13 @@ export function formatDate(date: Date | string): string {
     // German Intl outputs "Fr." with a trailing dot for `weekday: 'short'`;
     // strip it so the result reads cleanly next to the time.
     const weekday = d
-      .toLocaleDateString(uiLocale, { weekday: "short" })
+      .toLocaleDateString(uiLocale, { timeZone, weekday: "short" })
       .replace(/\.$/, "");
     return `${weekday} ${timeStr}`;
   }
 
   return d.toLocaleDateString(numericLocale, {
+    timeZone,
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
@@ -165,6 +183,7 @@ export function formatDate(date: Date | string): string {
 
 /**
  * Format a date/time string respecting the user's 12h/24h time format preference.
+ * Rendered in the effective time zone (user override, else browser) - #755.
  */
 export function formatDateTime(
   date: Date | string,
@@ -187,7 +206,7 @@ export function formatDateTime(
   const { dateLocale } = useSettingsStore.getState();
   const effectiveLocale = resolveDateLocale(dateLocale, undefined);
 
-  const localeOptions: Intl.DateTimeFormatOptions = {};
+  const localeOptions: Intl.DateTimeFormatOptions = { timeZone: getEffectiveTimeZone() };
   if (options?.weekday) localeOptions.weekday = options.weekday;
   if (options?.year) localeOptions.year = options.year;
   if (options?.month) localeOptions.month = options.month;
@@ -217,6 +236,60 @@ export function stripInvisibleLeading(text: string): string {
   const stripped = text.replace(LEADING_INVISIBLE_RE, '');
   if (ONLY_PUNCTUATION_RE.test(stripped)) return '';
   return stripped;
+}
+
+// A style sheet at the start of the text: an at-rule, or a selector opening a
+// rule. Plain prose does not start like this - "@" or "#" followed by a word
+// and then, before any sentence ends, a "{".
+const DECLARATIONS_RE = /^\s*(?:[-\w]+\s*:|[.#@a-z*][^{}]*\{)/i;
+// At-rule names are matched case-sensitively: style sheets write them in lower
+// case, while "@Page …" at the start of a preview is a mention. A selector's
+// colon is a pseudo-class ("a:hover"), never followed by a space as in
+// "Reminder: your appointment {date: …}".
+const AT_RULE_RE = /^@(?:media|font-face|import|supports|keyframes|charset|page)\b/;
+const SELECTOR_RE = /^[.#]?[a-z*](?:[\w\-.#,>~+*\s[\]="']|:(?!\s))*\{/i;
+
+/**
+ * Drops a style sheet from the start of a text preview.
+ *
+ * Some servers build the preview from an HTML body without skipping its
+ * <style> element, so a marketing mail's preview can begin with
+ * "@media screen and (min-width:600px){.hide{display:none!important;…" and
+ * never reach the text. Whole leading rules are removed; a preview that ends
+ * inside one was nothing but CSS and becomes empty, so callers fall back to
+ * their "no preview" text.
+ */
+export function stripLeadingCss(text: string): string {
+  let rest = text.trimStart();
+  for (let guard = 0; guard < 100 && (AT_RULE_RE.test(rest) || SELECTOR_RE.test(rest)); guard++) {
+    const brace = rest.indexOf('{');
+    const semicolon = rest.indexOf(';');
+    // `@import url(...);` and `@charset "x";` end without a block.
+    if (semicolon >= 0 && (brace < 0 || semicolon < brace) && /^@(?:import|charset)\b/.test(rest)) {
+      rest = rest.slice(semicolon + 1).trimStart();
+      continue;
+    }
+    // An at-rule word with no block after it ("@media team, …", "@page 3 …")
+    // starts prose, not a style sheet.
+    if (brace < 0) return rest;
+    let depth = 0;
+    let end = -1;
+    for (let i = brace; i < rest.length; i++) {
+      if (rest[i] === '{') depth++;
+      else if (rest[i] === '}' && --depth === 0) { end = i; break; }
+    }
+    if (end < 0) return rest.startsWith('@') || DECLARATIONS_RE.test(rest.slice(brace + 1)) ? '' : rest;
+    // A rule's block holds declarations ("color: red") or further rules; a
+    // brace in prose ("at {time} tomorrow") holds neither and ends the strip.
+    if (!rest.startsWith('@') && !DECLARATIONS_RE.test(rest.slice(brace + 1, end))) return rest;
+    rest = rest.slice(end + 1).trimStart();
+  }
+  return rest;
+}
+
+/** A message preview ready to show: no leading padding, no leading style sheet. */
+export function cleanPreview(text: string | null | undefined): string {
+  return stripInvisibleLeading(stripLeadingCss(stripInvisibleLeading(text ?? '')));
 }
 
 export function truncateText(text: string, maxLength: number): string {

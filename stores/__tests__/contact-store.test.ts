@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { useContactStore, getContactPhotoUri, normalizeContactPhotoUri, TRUSTED_SENDERS_BOOK_NAME } from '../contact-store';
 import type { ContactCard } from '@/lib/jmap/types';
+import type { IJMAPClient } from '@/lib/jmap/client-interface';
 
 vi.stubGlobal('crypto', { randomUUID: () => '00000000-0000-0000-0000-000000000000' });
 
@@ -158,6 +159,78 @@ describe('contact-store', () => {
       expect(state.error).toBeNull();
       expect(state.selectedContactIds.size).toBe(0);
       expect(state.activeTab).toBe('all');
+    });
+  });
+
+  describe('setDefaultAddressBook', () => {
+    const makeClient = () => ({
+      setDefaultAddressBook: vi.fn().mockResolvedValue(undefined),
+    });
+
+    it('should move the default flag to the chosen book', async () => {
+      const books = [
+        { id: 'ab-1', name: 'Personal', isDefault: true },
+        { id: 'ab-2', name: 'Work', isDefault: false },
+      ];
+      useContactStore.setState({ addressBooks: books });
+      const client = makeClient();
+
+      await useContactStore.getState().setDefaultAddressBook(
+        client as unknown as IJMAPClient,
+        books[1],
+      );
+
+      expect(client.setDefaultAddressBook).toHaveBeenCalledWith('ab-2', undefined);
+      expect(useContactStore.getState().addressBooks.map((b) => b.isDefault)).toEqual([false, true]);
+    });
+
+    it('should send the un-namespaced id and leave other accounts alone', async () => {
+      const book = {
+        id: 'local-2::ab-9',
+        originalId: 'ab-9',
+        localAccountId: 'local-2',
+        name: 'Work',
+      };
+      useContactStore.setState({
+        addressBooks: [
+          { id: 'local-1::ab-1', originalId: 'ab-1', localAccountId: 'local-1', name: 'Personal', isDefault: true },
+          book,
+        ],
+      });
+      const client = makeClient();
+
+      await useContactStore.getState().setDefaultAddressBook(client as unknown as IJMAPClient, book);
+
+      expect(client.setDefaultAddressBook).toHaveBeenCalledWith('ab-9', undefined);
+      // The other account keeps its own default.
+      expect(useContactStore.getState().addressBooks.map((b) => b.isDefault)).toEqual([true, true]);
+    });
+
+    it('should target the owning account for a shared book', async () => {
+      const book = { id: 'ab-3', name: 'Team', isShared: true, accountId: 'account-2' };
+      useContactStore.setState({ addressBooks: [book] });
+      const client = makeClient();
+
+      await useContactStore.getState().setDefaultAddressBook(client as unknown as IJMAPClient, book);
+
+      expect(client.setDefaultAddressBook).toHaveBeenCalledWith('ab-3', 'account-2');
+    });
+
+    it('should surface the error and keep the previous default on failure', async () => {
+      const books = [
+        { id: 'ab-1', name: 'Personal', isDefault: true },
+        { id: 'ab-2', name: 'Work', isDefault: false },
+      ];
+      useContactStore.setState({ addressBooks: books });
+      const client = {
+        setDefaultAddressBook: vi.fn().mockRejectedValue(new Error('Not allowed')),
+      };
+
+      await expect(
+        useContactStore.getState().setDefaultAddressBook(client as unknown as IJMAPClient, books[1]),
+      ).rejects.toThrow('Not allowed');
+      expect(useContactStore.getState().error).toBe('Not allowed');
+      expect(useContactStore.getState().addressBooks.map((b) => b.isDefault)).toEqual([true, false]);
     });
   });
 
@@ -730,6 +803,156 @@ describe('contact-store', () => {
 
       expect(client.deleteAddressBook).not.toHaveBeenCalled();
       expect(useContactStore.getState().trustedSendersBookId).toBe('book-a');
+    });
+  });
+
+  describe('address-book id namespacing on mutations (#133, #1043)', () => {
+    const makeClient = () => ({
+      getContactsAccountId: vi.fn(() => 'acct-primary'),
+      createContact: vi.fn(async (c: Partial<ContactCard>) => ({ ...makeContact(), ...c, id: 'created-id' })),
+      updateContact: vi.fn().mockResolvedValue(undefined),
+      deleteContact: vi.fn().mockResolvedValue(undefined),
+    });
+
+    it('strips the local-account prefix from a personal book on update', async () => {
+      // Multi-account Pro mode namespaces EVERY book, including the active
+      // account's own default one, as `local::bookId`. Updating such a contact
+      // used to send the namespaced id and Stalwart rejected the card with
+      // "Contact has to belong to at least one address book".
+      useContactStore.setState({
+        addressBooks: [
+          { id: 'me@host::ab-1', originalId: 'ab-1', localAccountId: 'me@host', name: 'Personal', isDefault: true },
+        ],
+        contacts: [makeContact({
+          id: 'me@host::c-1',
+          originalId: 'c-1',
+          localAccountId: 'me@host',
+          addressBookIds: { 'me@host::ab-1': true },
+        })],
+      });
+      const client = makeClient();
+
+      await useContactStore.getState().updateContact(
+        client as unknown as IJMAPClient,
+        'me@host::c-1',
+        { name: { components: [{ kind: 'given', value: 'Jane' }], isOrdered: true }, addressBookIds: { 'me@host::ab-1': true } },
+      );
+
+      expect(client.updateContact).toHaveBeenCalledWith(
+        'c-1',
+        expect.objectContaining({ addressBookIds: { 'ab-1': true } }),
+        undefined,
+      );
+      // Local state keeps the namespaced form the sidebar filters by.
+      expect(useContactStore.getState().contacts[0].addressBookIds).toEqual({ 'me@host::ab-1': true });
+    });
+
+    it('strips both local-account and shared-account prefixes on update', async () => {
+      useContactStore.setState({
+        addressBooks: [
+          { id: 'me@host::group-1:ab-7', originalId: 'ab-7', localAccountId: 'me@host', name: 'Team', isShared: true, accountId: 'group-1' },
+        ],
+        contacts: [makeContact({
+          id: 'me@host::group-1:c-9',
+          originalId: 'c-9',
+          localAccountId: 'me@host',
+          isShared: true,
+          accountId: 'group-1',
+          addressBookIds: { 'me@host::group-1:ab-7': true },
+        })],
+      });
+      const client = makeClient();
+
+      await useContactStore.getState().updateContact(
+        client as unknown as IJMAPClient,
+        'me@host::group-1:c-9',
+        { addressBookIds: { 'me@host::group-1:ab-7': true } },
+      );
+
+      expect(client.updateContact).toHaveBeenCalledWith('c-9', { addressBookIds: { 'ab-7': true } }, 'group-1');
+    });
+
+    it('falls back to prefix stripping when the book is not in state', async () => {
+      useContactStore.setState({
+        addressBooks: [],
+        contacts: [makeContact({
+          id: 'me@host::group-1:c-9',
+          originalId: 'c-9',
+          localAccountId: 'me@host',
+          isShared: true,
+          accountId: 'group-1',
+        })],
+      });
+      const client = makeClient();
+
+      await useContactStore.getState().updateContact(
+        client as unknown as IJMAPClient,
+        'me@host::group-1:c-9',
+        { addressBookIds: { 'me@host::group-1:ab-7': true } },
+      );
+
+      expect(client.updateContact).toHaveBeenCalledWith('c-9', { addressBookIds: { 'ab-7': true } }, 'group-1');
+    });
+
+    it('leaves raw ids untouched in single-account mode', async () => {
+      useContactStore.setState({
+        addressBooks: [{ id: 'ab-1', name: 'Personal', isDefault: true }],
+        contacts: [makeContact({ id: 'c-1' })],
+      });
+      const client = makeClient();
+
+      await useContactStore.getState().updateContact(
+        client as unknown as IJMAPClient,
+        'c-1',
+        { addressBookIds: { 'ab-1': true } },
+      );
+
+      expect(client.updateContact).toHaveBeenCalledWith('c-1', { addressBookIds: { 'ab-1': true } }, undefined);
+    });
+
+    it('strips the local-account prefix on create too', async () => {
+      useContactStore.setState({
+        addressBooks: [
+          { id: 'me@host::ab-1', originalId: 'ab-1', localAccountId: 'me@host', name: 'Personal', isDefault: true },
+        ],
+      });
+      const client = makeClient();
+
+      await useContactStore.getState().createContact(
+        client as unknown as IJMAPClient,
+        { addressBookIds: { 'me@host::ab-1': true } },
+      );
+
+      expect(client.createContact).toHaveBeenCalledWith(
+        expect.objectContaining({ addressBookIds: { 'ab-1': true } }),
+        undefined,
+      );
+    });
+
+    it('moves to a namespaced personal book with the raw id and keeps the display id locally', async () => {
+      const target = { id: 'me@host::ab-2', originalId: 'ab-2', localAccountId: 'me@host', name: 'Work' };
+      useContactStore.setState({
+        addressBooks: [
+          { id: 'me@host::ab-1', originalId: 'ab-1', localAccountId: 'me@host', name: 'Personal', isDefault: true },
+          target,
+        ],
+        contacts: [makeContact({
+          id: 'me@host::c-1',
+          originalId: 'c-1',
+          localAccountId: 'me@host',
+          addressBookIds: { 'me@host::ab-1': true },
+        })],
+      });
+      const client = makeClient();
+
+      await useContactStore.getState().moveContactToAddressBook(
+        client as unknown as IJMAPClient,
+        ['me@host::c-1'],
+        target,
+      );
+
+      expect(client.updateContact).toHaveBeenCalledWith('c-1', { addressBookIds: { 'ab-2': true } }, undefined);
+      expect(useContactStore.getState().contacts[0].addressBookIds).toEqual({ 'me@host::ab-2': true });
     });
   });
 

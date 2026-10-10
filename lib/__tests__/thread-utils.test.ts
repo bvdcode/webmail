@@ -8,6 +8,8 @@ import {
   getEmailTagIds,
   getThreadTagId,
   getThreadTagIds,
+  threadKeyFor,
+  threadIdFromKey,
 } from '../thread-utils';
 import type { Email, ThreadGroup } from '../jmap/types';
 
@@ -120,6 +122,7 @@ describe('groupEmailsByThread', () => {
 describe('sortThreadGroups', () => {
   const makeGroup = (threadId: string, receivedAt: string, hasPinned = false): ThreadGroup => ({
     threadId,
+    threadKey: threadId,
     emails: [makeEmail({ receivedAt })],
     latestEmail: makeEmail({ receivedAt }),
     participantNames: ['A'],
@@ -150,6 +153,50 @@ describe('sortThreadGroups', () => {
     ];
     const sorted = sortThreadGroups(groups);
     expect(sorted.map(g => g.threadId)).toEqual(['old-pinned', 'newest', 'mid']);
+  });
+
+  it('mirrors a configured list order instead of re-sorting by date (#718)', () => {
+    // makeEmail defaults to $seen, so the unread group needs bare keywords.
+    const unreadOld = { ...makeGroup('unread-old', '2024-01-01T00:00:00Z'), hasUnread: true };
+    unreadOld.emails = [makeEmail({ id: 'u', receivedAt: '2024-01-01T00:00:00Z', keywords: {} })];
+    const readNew = makeGroup('read-new', '2024-06-01T00:00:00Z');
+    const sorted = sortThreadGroups([readNew, unreadOld], [{ criterion: 'unread', direction: 'desc' }]);
+    expect(sorted.map(g => g.threadId)).toEqual(['unread-old', 'read-new']);
+  });
+
+  it('places a thread where its best-ranked email sorts, not its latest', () => {
+    // An old unread reply keeps the thread in the unread block even though
+    // the newest email in it has been read.
+    const mixed = makeGroup('mixed', '2024-06-01T00:00:00Z');
+    mixed.emails = [
+      makeEmail({ id: 'newest-read', receivedAt: '2024-06-01T00:00:00Z', keywords: { $seen: true } }),
+      makeEmail({ id: 'old-unread', receivedAt: '2024-02-01T00:00:00Z', keywords: {} }),
+    ];
+    const readNewer = makeGroup('read-newer', '2024-07-01T00:00:00Z');
+    const sorted = sortThreadGroups([readNewer, mixed], [{ criterion: 'unread', direction: 'desc' }]);
+    expect(sorted.map(g => g.threadId)).toEqual(['mixed', 'read-newer']);
+  });
+
+  it('keeps a thread read since it was opened where it was', () => {
+    const opened = makeGroup('opened', '2024-02-01T00:00:00Z');
+    opened.emails = [makeEmail({ id: 'o', receivedAt: '2024-02-01T00:00:00Z', keywords: { $seen: true } })];
+    const unread = makeGroup('unread', '2024-01-01T00:00:00Z');
+    unread.emails = [makeEmail({ id: 'u', receivedAt: '2024-01-01T00:00:00Z', keywords: {} })];
+    const readNewer = makeGroup('read-newer', '2024-06-01T00:00:00Z');
+    const order = [{ criterion: 'unread' as const, direction: 'desc' as const }];
+
+    expect(sortThreadGroups([readNewer, unread, opened], order).map(g => g.threadId))
+      .toEqual(['unread', 'read-newer', 'opened']);
+    expect(sortThreadGroups([readNewer, unread, opened], order, new Map([['o', {}]])).map(g => g.threadId))
+      .toEqual(['opened', 'unread', 'read-newer']);
+  });
+
+  it('keeps pinned threads on top of a configured order', () => {
+    const pinnedRead = makeGroup('pinned-read', '2024-01-01T00:00:00Z', true);
+    const unread = makeGroup('unread', '2024-06-01T00:00:00Z');
+    unread.emails = [makeEmail({ id: 'u', receivedAt: '2024-06-01T00:00:00Z', keywords: {} })];
+    const sorted = sortThreadGroups([unread, pinnedRead], [{ criterion: 'unread', direction: 'desc' }]);
+    expect(sorted.map(g => g.threadId)).toEqual(['pinned-read', 'unread']);
   });
 
   it('detects hasPinned from the $pinned keyword', () => {
@@ -192,6 +239,7 @@ describe('mergeThreadEmails', () => {
   it('merges new emails without duplicating existing ones', () => {
     const existing: ThreadGroup = {
       threadId: 'thread-1',
+      threadKey: 'thread-1',
       emails: [
         makeEmail({ id: 'e1', receivedAt: '2024-01-10T00:00:00Z' }),
         makeEmail({ id: 'e2', receivedAt: '2024-01-09T00:00:00Z' }),
@@ -218,6 +266,7 @@ describe('mergeThreadEmails', () => {
   it('updates thread metadata after merge', () => {
     const existing: ThreadGroup = {
       threadId: 'thread-1',
+      threadKey: 'thread-1',
       emails: [makeEmail({ id: 'e1', keywords: { $seen: true }, hasAttachment: false })],
       latestEmail: makeEmail({ id: 'e1' }),
       participantNames: ['Alice'],
@@ -371,5 +420,59 @@ describe('getThreadTagIds', () => {
   it('is empty for an untagged or empty thread', () => {
     expect(getThreadTagIds([makeEmail({ id: 'e1', keywords: { $seen: true } })])).toEqual([]);
     expect(getThreadTagIds([])).toEqual([]);
+  });
+});
+
+describe('cross-account thread identity (#1012)', () => {
+  // JMAP thread ids are per-account: Stalwart hands out counters like "b", so
+  // two accounts routinely have a thread "b" that has nothing in common.
+  const inAccount = (login: string, overrides: Partial<Email> = {}): Email =>
+    makeEmail({ sourceClientAccountId: `login-${login}`, sourceAccountId: `acct-${login}`, ...overrides });
+
+  it('keeps the bare thread id as key for unstamped emails', () => {
+    expect(threadKeyFor(makeEmail({ threadId: 'b' }))).toBe('b');
+  });
+
+  it('scopes the key by the source stamps', () => {
+    expect(threadKeyFor(inAccount('a', { threadId: 'b' }))).toBe('login-a/acct-a:b');
+  });
+
+  it('recovers the JMAP id from a key', () => {
+    expect(threadIdFromKey('login-a/acct-a:b')).toBe('b');
+    expect(threadIdFromKey('b')).toBe('b');
+  });
+
+  it('does not merge same-id threads that belong to different accounts', () => {
+    const groups = groupEmailsByThread([
+      inAccount('a', { id: 'a1', threadId: 'b' }),
+      inAccount('b', { id: 'b1', threadId: 'b' }),
+    ]);
+    expect(groups).toHaveLength(2);
+    // The raw id is preserved for Thread/get on each account …
+    expect(groups.map((g) => g.threadId)).toEqual(['b', 'b']);
+    // … while the client-side identity tells them apart.
+    expect(new Set(groups.map((g) => g.threadKey)).size).toBe(2);
+    expect(groups.map((g) => g.emails.map((e) => e.id))).toEqual([['a1'], ['b1']]);
+  });
+
+  it('still merges the same thread within one account', () => {
+    const groups = groupEmailsByThread([
+      inAccount('a', { id: 'a1', threadId: 'b' }),
+      inAccount('a', { id: 'a2', threadId: 'b' }),
+    ]);
+    expect(groups).toHaveLength(1);
+    expect(groups[0].emailCount).toBe(2);
+  });
+
+  it('looks thread counts up by key', () => {
+    const counts = new Map([['login-a/acct-a:b', 7]]);
+    const [group] = groupEmailsByThread([inAccount('a', { threadId: 'b' })], false, counts);
+    expect(group.emailCount).toBe(7);
+  });
+
+  it('uses the message id as both id and key when threading is disabled', () => {
+    const [group] = groupEmailsByThread([inAccount('a', { id: 'm1', threadId: 'b' })], true);
+    expect(group.threadKey).toBe('m1');
+    expect(group.threadId).toBe('m1');
   });
 });

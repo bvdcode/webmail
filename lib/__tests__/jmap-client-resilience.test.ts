@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { JMAPClient, RequestTimeoutError } from '../jmap/client';
+import { JMAPClient, RequestTimeoutError, isReplaySafeRequest } from '../jmap/client';
 
 /**
  * A connection that accepts the request and then goes silent: the promise never
@@ -46,18 +46,40 @@ function mockFetchResponseWithHeaders(status: number, headers: Record<string, st
   });
 }
 
+/**
+ * A call no test queued a response for. It must never fall through to the
+ * real `fetch`: a request to mail.example.com fails on the network's own
+ * schedule, and the client's 1s retry timer then lands on whichever fake clock
+ * is installed by the time the failure comes back - i.e. inside a later test,
+ * where the replayed request shows up as an extra `fetch` call.
+ */
+function unmockedFetch(url: RequestInfo | URL): Promise<Response> {
+  return Promise.reject(new Error(`Unmocked fetch: ${String(url)}`));
+}
+
 describe('JMAPClient resilience', () => {
   let fetchSpy: ReturnType<typeof vi.spyOn>;
+  // Every client a test connected. Their keep-alive intervals and rate-limit
+  // timers are stopped in afterEach so nothing from one test can fire inside
+  // the next one's fake clock.
+  const liveClients: JMAPClient[] = [];
 
   beforeEach(() => {
-    fetchSpy = vi.spyOn(globalThis, 'fetch');
+    fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(unmockedFetch);
     vi.useFakeTimers({ shouldAdvanceTime: true });
   });
 
   afterEach(() => {
+    for (const client of liveClients.splice(0)) client.disconnect();
     fetchSpy.mockRestore();
     vi.useRealTimers();
   });
+
+  /** Drop queued one-shot responses and call history; keep the unmocked-fetch guard. */
+  function resetFetch() {
+    fetchSpy.mockReset();
+    fetchSpy.mockImplementation(unmockedFetch);
+  }
 
   /**
    * Helper: create a connected basic-auth client by mocking the connect() flow
@@ -70,7 +92,8 @@ describe('JMAPClient resilience', () => {
       fetchSpy.mockResolvedValueOnce(mockFetchResponse(200, session));
       const client = new JMAPClient('https://mail.example.com', 'user@test.com', 'pass123');
       await client.connect();
-      fetchSpy.mockReset();
+      liveClients.push(client);
+      resetFetch();
       return client;
     }
 
@@ -78,7 +101,8 @@ describe('JMAPClient resilience', () => {
     fetchSpy.mockResolvedValueOnce(mockFetchResponse(200, session));
     const client = JMAPClient.withBearer('https://mail.example.com', 'token123', 'user@test.com');
     await client.connect();
-    fetchSpy.mockReset();
+    liveClients.push(client);
+    resetFetch();
     return client;
   }
 
@@ -106,6 +130,87 @@ describe('JMAPClient resilience', () => {
 
       await expect(client.ping()).rejects.toThrow('Failed to fetch');
       expect(fetchSpy).toHaveBeenCalledTimes(2);
+    });
+
+    it('does not replay a request that changes something', async () => {
+      // The connection may have failed after the server acted on the batch:
+      // replaying an Email/set or an EmailSubmission/set does it twice.
+      const client = await createConnectedClient();
+      fetchSpy.mockRejectedValueOnce(new TypeError('Failed to fetch'));
+
+      await expect(client.deleteEmail('email-1')).rejects.toThrow('Failed to fetch');
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('reading lists when the server fails', () => {
+    // An empty answer read as an empty folder: a failed refresh emptied the
+    // list, and a failed delta read treated every updated row as gone.
+    it('getEmails rejects instead of returning an empty page', async () => {
+      const client = await createConnectedClient();
+      fetchSpy.mockResolvedValueOnce(mockFetchResponse(200, {
+        methodResponses: [['error', { type: 'serverFail', description: 'backend down' }, '0']],
+      }));
+      await expect(client.getEmails('inbox')).rejects.toThrow('backend down');
+    });
+
+    it('getSomeEmails rejects instead of returning nothing', async () => {
+      const client = await createConnectedClient();
+      fetchSpy.mockResolvedValueOnce(mockFetchResponse(200, {
+        methodResponses: [['error', { type: 'serverFail' }, '0']],
+      }));
+      await expect(client.getSomeEmails(['e1'])).rejects.toThrow('serverFail');
+    });
+  });
+
+  describe('writes the server refuses', () => {
+    // HTTP 200 says nothing about the objects: a refused /set used to be
+    // shown as done.
+    it('markAsRead rejects on notUpdated', async () => {
+      const client = await createConnectedClient();
+      fetchSpy.mockResolvedValueOnce(mockFetchResponse(200, {
+        methodResponses: [['Email/set', { notUpdated: { e1: { type: 'forbidden', description: 'read-only folder' } } }, '0']],
+      }));
+      await expect(client.markAsRead('e1', true)).rejects.toThrow('read-only folder');
+    });
+
+    it('toggleStar rejects on a method-level error', async () => {
+      const client = await createConnectedClient();
+      fetchSpy.mockResolvedValueOnce(mockFetchResponse(200, {
+        methodResponses: [['error', { type: 'accountReadOnly' }, '0']],
+      }));
+      await expect(client.toggleStar('e1', true)).rejects.toThrow('accountReadOnly');
+    });
+
+    it('cancelEmailSubmission rejects on a method-level error, so the send is not shown as cancelled', async () => {
+      const client = await createConnectedClient();
+      fetchSpy.mockResolvedValueOnce(mockFetchResponse(200, {
+        methodResponses: [['error', { type: 'invalidArguments' }, '0']],
+      }));
+      await expect(client.cancelEmailSubmission('s1', 'acc')).rejects.toThrow('invalidArguments');
+    });
+  });
+
+  describe('isReplaySafeRequest', () => {
+    const batch = (...methods: string[]) => ({
+      method: 'POST',
+      body: JSON.stringify({ using: [], methodCalls: methods.map((m, i) => [m, {}, String(i)]) }),
+    });
+
+    it('allows GETs, uploads and read-only batches', () => {
+      expect(isReplaySafeRequest(undefined)).toBe(true);
+      expect(isReplaySafeRequest({ method: 'GET' })).toBe(true);
+      expect(isReplaySafeRequest({ method: 'POST', body: new Blob(['x']) })).toBe(true);
+      expect(isReplaySafeRequest(batch('Email/query', 'Email/get', 'Mailbox/changes', 'Core/echo'))).toBe(true);
+    });
+
+    it('refuses anything that writes, and bodies it cannot read', () => {
+      expect(isReplaySafeRequest(batch('Email/get', 'Email/set'))).toBe(false);
+      expect(isReplaySafeRequest(batch('Email/set', 'EmailSubmission/set'))).toBe(false);
+      expect(isReplaySafeRequest(batch('Email/copy'))).toBe(false);
+      expect(isReplaySafeRequest(batch('Email/import'))).toBe(false);
+      expect(isReplaySafeRequest({ method: 'POST', body: 'not json' })).toBe(false);
+      expect(isReplaySafeRequest({ method: 'POST', body: JSON.stringify({ methodCalls: [] }) })).toBe(false);
     });
   });
 
@@ -236,7 +341,8 @@ describe('JMAPClient resilience', () => {
       fetchSpy.mockResolvedValueOnce(mockFetchResponse(200, session));
       const client = JMAPClient.withBearer('https://mail.example.com', 'old-token', 'user@test.com', tokenRefresh);
       await client.connect();
-      fetchSpy.mockReset();
+      liveClients.push(client);
+      resetFetch();
 
       const echoResponse = { methodResponses: [['Core/echo', { ping: 'pong' }, '0']] };
 
@@ -276,11 +382,13 @@ describe('JMAPClient resilience', () => {
       await expect(client.ping()).rejects.toThrow('Rate limited by server');
       expect(fetchSpy).not.toHaveBeenCalled();
 
+      // The keep-alive ping goes out again the instant the window closes, which
+      // is inside this advance - serve it as well, or it would be an unmocked
+      // call (see unmockedFetch).
+      const echoResponse = { methodResponses: [['Core/echo', { ping: 'pong' }, '0']] };
+      fetchSpy.mockImplementation(() => Promise.resolve(mockFetchResponse(200, echoResponse)));
       await vi.advanceTimersByTimeAsync(120_000);
       fetchSpy.mockClear();
-
-      const echoResponse = { methodResponses: [['Core/echo', { ping: 'pong' }, '0']] };
-      fetchSpy.mockResolvedValueOnce(mockFetchResponse(200, echoResponse));
 
       await expect(client.ping()).resolves.toBeUndefined();
       expect(fetchSpy).toHaveBeenCalledTimes(1);
@@ -292,7 +400,8 @@ describe('JMAPClient resilience', () => {
       fetchSpy.mockResolvedValueOnce(mockFetchResponse(200, makeSession(session)));
       const client = new JMAPClient(serverUrl, 'user@test.com', 'pass123');
       await client.connect();
-      fetchSpy.mockReset();
+      liveClients.push(client);
+      resetFetch();
       return client;
     }
 
@@ -327,7 +436,38 @@ describe('JMAPClient resilience', () => {
         downloadUrl: `${host}/download/{accountId}/{blobId}/{name}?accept={type}`,
       });
       expect(client.getBlobDownloadUrl('blob1', 'file.txt', 'text/plain', 'acct-1')).toBe(
-        'https://mail.example.com/download/acct-1/blob1/file.txt?accept=text%2Fplain',
+        `${host}/download/acct-1/blob1/file.txt?accept=text%2Fplain`,
+      );
+    });
+
+    it('moves URLs on the origin the server names for itself onto the server origin', async () => {
+      // Behind a reverse proxy the server reports its internal base URL.
+      const client = await connectWith({
+        apiUrl: 'http://stalwart.internal:8080/jmap/api',
+        downloadUrl: 'http://stalwart.internal:8080/download/{accountId}/{blobId}/{name}',
+        eventSourceUrl: 'http://stalwart.internal:8080/jmap/eventsource',
+      });
+      expect(client.getBlobDownloadUrl('blob1', 'file.txt', undefined, 'acct-1')).toBe(
+        'https://mail.example.com/download/acct-1/blob1/file.txt',
+      );
+      expect(client.getEventSourceUrl()).toBe('https://mail.example.com/jmap/eventsource');
+    });
+
+    it('keeps a download host the server runs elsewhere, but only over HTTPS', async () => {
+      // Fastmail serves downloads from its own domain, apart from the API.
+      const kept = await connectWith({
+        apiUrl: 'https://api.fastmail.com/jmap/api/',
+        downloadUrl: 'https://www.fastmailusercontent.com/jmap/download/{accountId}/{blobId}/{name}',
+      }, 'https://api.fastmail.com');
+      expect(kept.getBlobDownloadUrl('blob1', 'a.txt', undefined, 'acct-1')).toBe(
+        'https://www.fastmailusercontent.com/jmap/download/acct-1/blob1/a.txt',
+      );
+
+      const plain = await connectWith({
+        downloadUrl: 'http://other.example.com/download/{accountId}/{blobId}/{name}',
+      });
+      expect(plain.getBlobDownloadUrl('blob1', 'a.txt', undefined, 'acct-1')).toBe(
+        'https://mail.example.com/download/acct-1/blob1/a.txt',
       );
     });
 
@@ -357,7 +497,7 @@ describe('JMAPClient resilience', () => {
       await client.ping();
 
       // After refresh, subsequent requests should go to the new apiUrl
-      fetchSpy.mockReset();
+      resetFetch();
       fetchSpy.mockResolvedValueOnce(mockFetchResponse(200, echoResponse));
       await client.ping();
 
@@ -573,6 +713,130 @@ describe('JMAPClient resilience', () => {
     });
   });
 
+  // #702: one logged-in account = one JMAPClient = one SSE stream held open as
+  // a long-lived fetch, i.e. one pinned HTTP/1.1 socket. Browsers allow 6 per
+  // host, so from the sixth login on no socket is left for ordinary JMAP
+  // POSTs - sends grey out and never finish, loads and moves take minutes.
+  // The client must cap concurrent streams per tab and slow-poll the rest.
+  describe('SSE stream budget across logins (#702)', () => {
+    const isSSE = (init?: RequestInit) =>
+      (init?.headers as Record<string, string> | undefined)?.['Accept'] === 'text/event-stream';
+
+    function trackingFetch(sse: AbortSignal[]) {
+      return (_url: RequestInfo | URL, init?: RequestInit) => {
+        if (isSSE(init)) {
+          if (init?.signal) sse.push(init.signal);
+          return new Promise<Response>((_resolve, reject) => {
+            const abort = () => reject(new DOMException('The operation was aborted.', 'AbortError'));
+            if (init?.signal?.aborted) return abort();
+            init?.signal?.addEventListener('abort', abort);
+          });
+        }
+        return Promise.resolve(mockFetchResponse(200, {
+          methodResponses: [
+            ['Mailbox/get', { state: 'm1', list: [] }, 'mbx:acct-1'],
+            ['Email/get', { state: 'e1', list: [] }, 'eml:acct-1'],
+          ],
+        }));
+      };
+    }
+
+    const statePollCount = () =>
+      fetchSpy.mock.calls.filter((call: unknown[]) => {
+        const body = (call[1] as RequestInit | undefined)?.body;
+        return typeof body === 'string' && body.includes('Mailbox/get');
+      }).length;
+
+    async function createClients(n: number): Promise<JMAPClient[]> {
+      const clients: JMAPClient[] = [];
+      for (let i = 0; i < n; i++) clients.push(await createConnectedClient());
+      return clients;
+    }
+
+    it('never holds more than MAX_SSE_STREAMS streams open, however many logins there are', async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: false });
+      const clients = await createClients(7);
+      const sse: AbortSignal[] = [];
+      fetchSpy.mockImplementation(trackingFetch(sse));
+
+      for (const c of clients) c.setupPushNotifications();
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(sse.filter((s) => !s.aborted)).toHaveLength(JMAPClient.MAX_SSE_STREAMS);
+      expect(JMAPClient.activeSSEStreamCount()).toBe(JMAPClient.MAX_SSE_STREAMS);
+      // Setup order decides who gets a slot - the caller puts the active login first.
+      expect(clients[0].hasSSEStream()).toBe(true);
+      expect(clients[1].hasSSEStream()).toBe(true);
+      expect(clients[6].hasSSEStream()).toBe(false);
+
+      for (const c of clients) c.closePushNotifications();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(JMAPClient.activeSSEStreamCount()).toBe(0);
+    });
+
+    it('slow-polls the logins that did not get a stream so their counters still refresh', async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: false });
+      const clients = await createClients(3);
+      const sse: AbortSignal[] = [];
+      fetchSpy.mockImplementation(trackingFetch(sse));
+
+      for (const c of clients) c.setupPushNotifications();
+      await vi.advanceTimersByTimeAsync(0);
+      // The budget-denied client primes its baseline immediately...
+      expect(statePollCount()).toBe(1);
+
+      fetchSpy.mockClear();
+      await vi.advanceTimersByTimeAsync(20_000);
+      // ...and polls on the slow 20s cadence, not the 3s outage fallback.
+      expect(statePollCount()).toBe(1);
+
+      for (const c of clients) c.closePushNotifications();
+    });
+
+    it('promotes a waiting login into the slot a closed stream releases', async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: false });
+      const clients = await createClients(3);
+      const sse: AbortSignal[] = [];
+      fetchSpy.mockImplementation(trackingFetch(sse));
+
+      for (const c of clients) c.setupPushNotifications();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(clients[2].hasSSEStream()).toBe(false);
+
+      clients[0].closePushNotifications();
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(clients[0].hasSSEStream()).toBe(false);
+      expect(clients[2].hasSSEStream()).toBe(true);
+      expect(sse.filter((s) => !s.aborted)).toHaveLength(JMAPClient.MAX_SSE_STREAMS);
+
+      for (const c of clients) c.closePushNotifications();
+    });
+
+    it('does not promote a waiter that was closed in the same teardown (account-switch churn)', async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: false });
+      const clients = await createClients(3);
+      const sse: AbortSignal[] = [];
+      fetchSpy.mockImplementation(trackingFetch(sse));
+
+      for (const c of clients) c.setupPushNotifications();
+      await vi.advanceTimersByTimeAsync(0);
+
+      // The push effect closes every client and re-runs setup synchronously.
+      for (const c of clients) c.closePushNotifications();
+      for (const c of [clients[2], clients[1], clients[0]]) c.setupPushNotifications();
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(JMAPClient.activeSSEStreamCount()).toBe(JMAPClient.MAX_SSE_STREAMS);
+      expect(clients[2].hasSSEStream()).toBe(true);
+      expect(clients[1].hasSSEStream()).toBe(true);
+      expect(clients[0].hasSSEStream()).toBe(false);
+      expect(sse.filter((s) => !s.aborted)).toHaveLength(JMAPClient.MAX_SSE_STREAMS);
+
+      for (const c of clients) c.closePushNotifications();
+    });
+  });
+
   describe('fetchBlobAsObjectUrl', () => {
     it('fetches blob with authentication and returns an object URL', async () => {
       const client = await createConnectedClient();
@@ -594,6 +858,24 @@ describe('JMAPClient resilience', () => {
       URL.revokeObjectURL(objectUrl);
     });
 
+    it('never hands back an object URL typed as a script-bearing document', async () => {
+      const client = await createConnectedClient();
+      fetchSpy.mockResolvedValueOnce(new Response('<svg xmlns="http://www.w3.org/2000/svg"><script>1</script></svg>', {
+        status: 200,
+        headers: { 'Content-Type': 'image/svg+xml' },
+      }));
+      const created: Blob[] = [];
+      const spy = vi.spyOn(URL, 'createObjectURL').mockImplementation((blob) => {
+        created.push(blob as Blob);
+        return 'blob:test';
+      });
+
+      await client.fetchBlobAsObjectUrl('blob-svg', 'logo.svg', 'image/svg+xml');
+
+      expect(created[0].type).toBe('application/octet-stream');
+      spy.mockRestore();
+    });
+
     it('throws when download URL is not available', async () => {
       fetchSpy.mockResolvedValueOnce(mockFetchResponse(200, makeSession({ downloadUrl: '' })));
       const client = new JMAPClient('https://mail.example.com', 'user@test.com', 'pass123');
@@ -603,7 +885,8 @@ describe('JMAPClient resilience', () => {
         (async () => {
           // Connect first with valid session, then clear downloadUrl via re-connect with empty
           await client.connect();
-          fetchSpy.mockReset();
+          liveClients.push(client);
+          resetFetch();
           // Now reconnect with empty downloadUrl to simulate the issue
           fetchSpy.mockResolvedValueOnce(mockFetchResponse(200, makeSession({ downloadUrl: '' })));
           // Force session refresh to pick up empty downloadUrl

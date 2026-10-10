@@ -1,8 +1,31 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { isPublicHttpUrl } from '@/lib/security/url-guard';
+import { rejectCrossOriginRequest } from '@/lib/security/same-origin';
+import { getStalwartCredentials } from '@/lib/stalwart/credentials';
+import { DisallowedUrlError, fetchPublicUrl, type PublicFetchResponse } from '@/lib/security/url-guard';
 
-const MAX_RESPONSE_SIZE = 10 * 1024 * 1024; // 10MB
-const FETCH_TIMEOUT_MS = 15000;
+const DEFAULT_MAX_BYTES = 25 * 1024 * 1024; // 25MB
+// Base budget for a default-sized feed; scaled up with the configured cap so a
+// larger allowed body is not cut off by the timer that fit the smaller one.
+const BASE_TIMEOUT_MS = 15000;
+
+/** Response cap from ICAL_MAX_BYTES (bytes), read per request so a deploy can raise it. (#692) */
+function getMaxResponseSize(): number {
+  const raw = process.env.ICAL_MAX_BYTES;
+  const parsed = raw ? parseInt(raw, 10) : NaN;
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_MAX_BYTES;
+}
+
+function getFetchTimeoutMs(maxBytes: number): number {
+  return Math.max(BASE_TIMEOUT_MS, Math.ceil(BASE_TIMEOUT_MS * (maxBytes / DEFAULT_MAX_BYTES)));
+}
+
+function tooLarge(maxBytes: number) {
+  const limitMb = Math.round((maxBytes / (1024 * 1024)) * 10) / 10;
+  return NextResponse.json(
+    { error: `Calendar feed is larger than the ${limitMb} MB limit (ICAL_MAX_BYTES)` },
+    { status: 413 },
+  );
+}
 
 function extractBasicAuth(rawUrl: string): { cleanUrl: string; authHeader: string | null } | null {
   let parsed: URL;
@@ -24,7 +47,26 @@ function extractBasicAuth(rawUrl: string): { cleanUrl: string; authHeader: strin
   return { cleanUrl: parsed.toString(), authHeader };
 }
 
+/**
+ * POST /api/fetch-ical
+ *
+ * Server-side proxy for iCalendar subscription URLs (the browser cannot fetch
+ * them directly because of CORS). Only logged-in users may use it, and every
+ * hop - including redirect targets - goes through `fetchPublicUrl`, which
+ * validates the resolved address inside the socket lookup so a rebinding DNS
+ * server cannot steer the connection at an internal host
+ * (GHSA-24w9-8r42-8jwm).
+ */
 export async function POST(request: NextRequest) {
+  // CSRF gate (GHSA-9mvj-98f5-9q6g): this handler acts with the caller's
+  // session cookie, which SameSite=Lax still sends from a same-site page.
+  const crossOrigin = rejectCrossOriginRequest(request);
+  if (crossOrigin) return crossOrigin;
+  const creds = await getStalwartCredentials(request);
+  if (!creds) {
+    return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+  }
+
   let body: { url?: string };
   try {
     body = await request.json();
@@ -45,25 +87,17 @@ export async function POST(request: NextRequest) {
 
   const { cleanUrl, authHeader } = extracted;
 
-  if (!(await isPublicHttpUrl(cleanUrl))) {
-    return NextResponse.json({ error: 'Invalid or disallowed URL' }, { status: 400 });
-  }
+  const maxResponseSize = getMaxResponseSize();
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), getFetchTimeoutMs(maxResponseSize));
 
   try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
-
     const MAX_REDIRECTS = 5;
     let currentUrl = cleanUrl;
     const originalOrigin = new URL(cleanUrl).origin;
-    let response: Response | undefined;
+    let response: PublicFetchResponse | undefined;
 
     for (let i = 0; i <= MAX_REDIRECTS; i++) {
-      if (!(await isPublicHttpUrl(currentUrl))) {
-        clearTimeout(timeout);
-        return NextResponse.json({ error: 'Redirect to disallowed URL' }, { status: 400 });
-      }
-
       const headers: Record<string, string> = {
         'Accept': 'text/calendar, application/ics, text/plain, */*',
         'User-Agent': 'JMAP-Webmail/1.0 Calendar-Fetcher',
@@ -72,16 +106,24 @@ export async function POST(request: NextRequest) {
         headers['Authorization'] = authHeader;
       }
 
-      response = await fetch(currentUrl, {
-        signal: controller.signal,
-        headers,
-        redirect: 'manual',
-      });
+      try {
+        response = await fetchPublicUrl(currentUrl, {
+          signal: controller.signal,
+          headers,
+        });
+      } catch (error) {
+        if (error instanceof DisallowedUrlError) {
+          return NextResponse.json(
+            { error: i === 0 ? 'Invalid or disallowed URL' : 'Redirect to disallowed URL' },
+            { status: 400 },
+          );
+        }
+        throw error;
+      }
 
       if (response.status >= 300 && response.status < 400) {
         const location = response.headers.get('location');
         if (!location) {
-          clearTimeout(timeout);
           return NextResponse.json({ error: 'Redirect without Location header' }, { status: 502 });
         }
         currentUrl = new URL(location, currentUrl).toString();
@@ -89,8 +131,6 @@ export async function POST(request: NextRequest) {
       }
       break;
     }
-
-    clearTimeout(timeout);
 
     if (!response || !response.ok) {
       return NextResponse.json(
@@ -100,13 +140,13 @@ export async function POST(request: NextRequest) {
     }
 
     const contentLength = response.headers.get('content-length');
-    if (contentLength && parseInt(contentLength) > MAX_RESPONSE_SIZE) {
-      return NextResponse.json({ error: 'File too large' }, { status: 413 });
+    if (contentLength && parseInt(contentLength) > maxResponseSize) {
+      return tooLarge(maxResponseSize);
     }
 
     const buffer = await response.arrayBuffer();
-    if (buffer.byteLength > MAX_RESPONSE_SIZE) {
-      return NextResponse.json({ error: 'File too large' }, { status: 413 });
+    if (buffer.byteLength > maxResponseSize) {
+      return tooLarge(maxResponseSize);
     }
 
     return new NextResponse(buffer, {
@@ -121,5 +161,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Request timed out' }, { status: 504 });
     }
     return NextResponse.json({ error: 'Failed to fetch calendar' }, { status: 502 });
+  } finally {
+    clearTimeout(timeout);
   }
 }

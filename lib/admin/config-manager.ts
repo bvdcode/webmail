@@ -4,6 +4,7 @@ import { readFileEnv } from '@/lib/read-file-env';
 import { CONFIG_ENV_MAP, DEFAULT_FEATURE_GATES, DEFAULT_POLICY, DEFAULT_THEME_POLICY, type SettingsPolicy } from './types';
 import { ensureConfigDir, getConfigPath, assertWritable } from './paths';
 import { isValidRelayUrl, normalizeRelayUrl } from '@/lib/push-relays';
+import { sanitizeDefaultSidebarApps } from '@/lib/sidebar-apps';
 
 function parseEnvValue(value: string, type: string): unknown {
   switch (type) {
@@ -57,12 +58,17 @@ class ConfigManager {
    */
   get<T>(key: string, defaultValue?: T): T {
     // Admin override (highest priority)
+    const mapping = CONFIG_ENV_MAP[key];
     if (key in this.adminConfig) {
       return this.adminConfig[key] as T;
+    } else if (mapping && mapping.fileKey && mapping.fileKey in this.adminConfig) {
+      const fileVal = readFileEnv(<string | undefined>this.adminConfig[mapping.fileKey]);
+      if (fileVal !== null) {
+        return parseEnvValue(fileVal, mapping.type) as T;
+      }
     }
 
     // Environment variable
-    const mapping = CONFIG_ENV_MAP[key];
     if (mapping) {
       const envVal = process.env[mapping.envVar];
       if (envVal !== undefined) {
@@ -100,6 +106,14 @@ class ConfigManager {
     for (const [key, mapping] of Object.entries(CONFIG_ENV_MAP)) {
       if (key in this.adminConfig) {
         result[key] = { value: this.adminConfig[key], source: 'admin' };
+      } else if (mapping.fileKey && mapping.fileKey in this.adminConfig) {
+        const fileVal = readFileEnv(<string | undefined>this.adminConfig[mapping.fileKey]);
+        if (fileVal !== null) {
+          result[key] = { value: parseEnvValue(fileVal, mapping.type), source: 'admin' };
+          continue;
+        }
+
+        result[key] = { value: mapping.defaultValue, source: 'default' };
       } else {
         const envVal = process.env[mapping.envVar];
         if (envVal !== undefined) {
@@ -196,6 +210,9 @@ class ConfigManager {
       .filter(relay => isValidRelayUrl(relay.url));
     const defaultRelay = normalizeRelayUrl(policy.pushRelayUrl);
     policy.pushRelayUrl = isValidRelayUrl(defaultRelay) ? defaultRelay : '';
+    // Operator-pinned sidebar apps reach every user's rail, and policy.json can
+    // be hand-edited, so the list is validated here rather than at render time.
+    policy.defaultSidebarApps = sanitizeDefaultSidebarApps(policy.defaultSidebarApps);
     return policy;
   }
 

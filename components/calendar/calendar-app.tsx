@@ -3,11 +3,10 @@
 import { useState, useEffect, useCallback, useRef, useMemo, type TouchEvent as ReactTouchEvent } from "react";
 import { useRouter } from "@/i18n/navigation";
 import { useTranslations } from "next-intl";
-import { Plus } from "lucide-react";
+import { Plus } from "@/components/icons";
 import {
-  startOfMonth, endOfMonth, startOfWeek, endOfWeek,
   addMonths, subMonths, addWeeks, subWeeks, addDays, subDays,
-  startOfDay, format, parseISO,
+  format, parseISO,
 } from "date-fns";
 import { useCalendarStore } from "@/stores/calendar-store";
 import { isCalendarViewMode } from "@/stores/calendar-store";
@@ -16,10 +15,10 @@ import { useEmailStore } from "@/stores/email-store";
 import { useSettingsStore } from "@/stores/settings-store";
 import { useIdentityStore } from "@/stores/identity-store";
 import { useAccountStore } from "@/stores/account-store";
-import { useAccountSecurityStore } from "@/stores/account-security-store";
 import { usePolicyStore } from "@/stores/policy-store";
 import { toast } from "@/stores/toast-store";
 import { useIsDesktop, useIsMobile } from "@/hooks/use-media-query";
+import { useAccountPrincipalEmails } from "@/hooks/use-account-principal-emails";
 import { Button } from "@/components/ui/button";
 import { CalendarToolbar } from "@/components/calendar/calendar-toolbar";
 import { CalendarMonthView } from "@/components/calendar/calendar-month-view";
@@ -48,19 +47,31 @@ import { SidebarAppsModal } from "@/components/layout/sidebar-apps-modal";
 import { InlineAppView } from "@/components/layout/inline-app-view";
 import { useSidebarApps } from "@/hooks/use-sidebar-apps";
 import { useIsEmbedded } from "@/hooks/use-is-embedded";
-import { useIsFocusedProTab } from "@/hooks/use-pane-context";
+import { useIsFocusedProTab, useIsPaneScoped } from "@/hooks/use-pane-context";
 import { useProMultiAccountCalendars } from "@/hooks/use-pro-multi-account-calendars";
 import { ResizeHandle } from "@/components/layout/resize-handle";
-import { sanitizeOutgoingCalendarEventData } from "@/lib/calendar-event-normalization";
-import { buildRecurrenceOverridePatch } from "@/lib/recurrence-overrides";
+import { buildDuplicateEventData } from "@/lib/calendar-duplicate";
+import { filterTasksByCalendars } from "@/lib/calendar-tasks";
+import {
+  baseEventStoreId,
+  buildFallbackExcludePatch,
+  buildFallbackOverridePatch,
+  isBrowserExpandedOccurrence,
+  isServerRecurrenceInstance,
+  overrideContextOf,
+  withNewOverrideDetails,
+} from "@/lib/recurrence-instances";
+import { getClientByLocalAccountId } from "@/stores/client-registry";
 import { getEventStartDate } from "@/lib/calendar-utils";
+import { displayNow } from "@/lib/timezone";
 import { useTaskStore } from "@/stores/task-store";
 import { useContactStore } from "@/stores/contact-store";
 import { cn } from "@/lib/utils";
-import type { Calendar, CalendarEvent, CalendarParticipant, CalendarRights } from "@/lib/jmap/types";
+import type { Calendar, CalendarEvent, CalendarParticipant, CalendarRights, CalendarTask } from "@/lib/jmap/types";
 import { ShareCollectionDialog } from "@/components/settings/share-collection-dialog";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { useConfirmDialog } from "@/hooks/use-confirm-dialog";
+import { SchedulingDeniedError } from "@/lib/jmap/scheduling-error";
 import { CreateCalendarModal } from "@/components/calendar/create-calendar-modal";
 import { getUserParticipantId, collectUserCalendarAddresses } from "@/lib/calendar-participants";
 import { generateBirthdayEvents, createBirthdayCalendar, BIRTHDAY_CALENDAR_ID } from "@/lib/birthday-calendar";
@@ -69,13 +80,23 @@ import { debug } from "@/lib/debug";
 import { consumePendingWebcal, hasPendingWebcal, subscribeToPendingWebcal } from "@/lib/protocol-handlers/session";
 import type { ParsedWebcal } from "@/lib/protocol-handlers/webcal";
 import { appPath, buildCalendarPath, parseCalendarPath, type CalendarDeepLink } from "@/lib/deep-links";
-import { consumePendingDeepLink, subscribePendingDeepLink } from "@/lib/deep-link-handoff";
+import { consumePendingDeepLinkEntry, subscribePendingDeepLink } from "@/lib/deep-link-handoff";
 import { useDeepLinkUrl } from "@/hooks/use-deep-link-url";
 import { useProInterfaceActive } from "@/components/pro/pro-interface-redirect";
+import { useCalendarLocale } from "@/hooks/use-calendar-locale";
+import {
+  computeScrollWindow, fixedScrollWindowState, freshScrollWindowState, growScrollWindow, normalizeScrollWindowState,
+  scrollWindowContains, type CalendarFocus, type ScrollViewMode, type ScrollWindowOptions,
+  type ScrollWindowState, type ScrollWindowViewProps,
+} from "@/lib/calendar-scroll-window";
+import { useLiteLinkSegments } from "@/hooks/use-lite-link-segments";
+import { findMeetingLink } from "@/lib/event-links";
+import { useDocumentTitle } from "@/hooks/use-document-title";
 
 type PendingScopeAction =
   | { type: "edit"; event: CalendarEvent; updates: Partial<CalendarEvent>; sendScheduling?: boolean }
-  | { type: "delete"; event: CalendarEvent; sendScheduling?: boolean };
+  | { type: "delete"; event: CalendarEvent; sendScheduling?: boolean }
+  | { type: "rsvp"; event: CalendarEvent; participantId: string; status: CalendarParticipant["participationStatus"] };
 
 function isRecurringEvent(event: CalendarEvent): boolean {
   return (event.recurrenceRules?.length ?? 0) > 0 || event.recurrenceId != null;
@@ -86,9 +107,13 @@ export interface CalendarAppProps {
   linkSegments?: string[];
 }
 
-export function CalendarApp({ linkSegments }: CalendarAppProps = {}) {
+export function CalendarApp({ linkSegments: routeSegments }: CalendarAppProps = {}) {
+  // Static Lite build: the route params are empty, read the link from the URL.
+  const linkSegments = useLiteLinkSegments('calendar', routeSegments);
   const router = useRouter();
   const t = useTranslations("calendar");
+  const tSidebar = useTranslations("sidebar");
+  useDocumentTitle(tSidebar("calendar"));
   const tWebcalAction = useTranslations("calendar.webcal_action");
   const tDeepLink = useTranslations("deep_link");
   const isMobile = useIsMobile();
@@ -118,25 +143,27 @@ export function CalendarApp({ linkSegments }: CalendarAppProps = {}) {
   const removeSharedCalendarColor = useSettingsStore((s) => s.removeSharedCalendarColor);
   const taskStore = useTaskStore();
   const fetchTasksFn = useTaskStore(state => state.fetchTasks);
+  const toggleTaskCompleteFn = useTaskStore(state => state.toggleTaskComplete);
   const { identities } = useIdentityStore();
   const contacts = useContactStore((s) => s.contacts);
   const normalizedViewMode = isCalendarViewMode(viewMode) ? viewMode : "month";
 
-  // Aliases live on the principal, not on identities; fetch them so an
-  // alias-organized event is recognised as the user's own (see isOrganizer).
-  const accountEmails = useAccountSecurityStore((s) => s.emails);
-  const fetchPrincipal = useAccountSecurityStore((s) => s.fetchPrincipal);
-  const principalFetchedRef = useRef(false);
-  useEffect(() => {
-    if (principalFetchedRef.current) return;
-    principalFetchedRef.current = true;
-    if (accountEmails.length > 0) return; // already loaded elsewhere
-    void fetchPrincipal();
-  }, [accountEmails, fetchPrincipal]);
+  // Aliases live on the principal, not on identities; the calendar needs them
+  // so an alias-organized event is recognised as the user's own (see isOrganizer).
+  const accountEmails = useAccountPrincipalEmails(client);
 
+  // The default ParticipantIdentity (draft-ietf-jmap-calendars §6) is the
+  // address new invitations are organised from, so it goes first: the event
+  // modal takes currentUserEmails[0] as organizer.
+  const participantIdentities = useCalendarStore((s) => s.participantIdentities);
   const currentUserEmails = useMemo(
-    () => collectUserCalendarAddresses(identities.map(id => id.email), accountEmails),
-    [identities, accountEmails]
+    () => collectUserCalendarAddresses(
+      participantIdentities.filter(i => i.isDefault).map(i => i.calendarAddress.replace(/^mailto:/i, '')),
+      participantIdentities.map(i => i.calendarAddress.replace(/^mailto:/i, '')),
+      identities.map(id => id.email),
+      accountEmails,
+    ),
+    [participantIdentities, identities, accountEmails]
   );
 
   const [showEventModal, setShowEventModal] = useState(false);
@@ -156,7 +183,7 @@ export function CalendarApp({ linkSegments }: CalendarAppProps = {}) {
   const [defaultModalDate, setDefaultModalDate] = useState<Date | undefined>();
   const [defaultModalEndDate, setDefaultModalEndDate] = useState<Date | undefined>();
   const [defaultModalAllDay, setDefaultModalAllDay] = useState(false);
-  const [miniMonth, setMiniMonth] = useState(new Date());
+  const [miniMonth, setMiniMonth] = useState(() => displayNow());
   const [pendingScopeAction, setPendingScopeAction] = useState<PendingScopeAction | null>(null);
   const [detailEvent, setDetailEvent] = useState<CalendarEvent | null>(null);
   const [detailAnchorRect, setDetailAnchorRect] = useState<DOMRect | null>(null);
@@ -332,42 +359,98 @@ export function CalendarApp({ linkSegments }: CalendarAppProps = {}) {
     }
   }, [showBirthdayCalendar]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Free scrolling (#759): every view keeps one window of days around the
+  // day the user navigated to (the "focus"). Reaching an edge of the view
+  // widens that side and the whole window is refetched. Grid clicks only
+  // change the selection; navigation moves the focus and, when that leaves
+  // the loaded window, starts a fresh window there.
+  const { weekStartsOn, getMonthGridDays } = useCalendarLocale();
+  const monthGridDaysRef = useRef(getMonthGridDays);
+  useEffect(() => {
+    monthGridDaysRef.current = getMonthGridDays;
+  }, [getMonthGridDays]);
+  const scrollWindowOptions = useMemo<ScrollWindowOptions>(
+    () => ({ weekStartsOn, monthGridDays: (date) => monthGridDaysRef.current(date) }),
+    [weekStartsOn],
+  );
+  const scrollMode: ScrollViewMode | null = normalizedViewMode === "tasks" ? null : normalizedViewMode;
+  const [focus, setFocus] = useState<CalendarFocus>(() => ({ date: selectedDate, nonce: 0 }));
+  const [visibleDate, setVisibleDate] = useState<Date | null>(null);
+  const [scrollWindowState, setScrollWindowState] = useState<ScrollWindowState>(
+    () => freshScrollWindowState(scrollMode ?? "month", selectedDate),
+  );
+  // With free scrolling off, every view shows exactly one period around the
+  // focus and the edges never widen it.
+  const calendarFreeScroll = useSettingsStore((s) => s.calendarFreeScroll);
+  const focusKey = format(focus.date, "yyyy-MM-dd");
+  const fixedWindowState = useMemo(
+    () => (scrollMode ? fixedScrollWindowState(scrollMode, parseISO(focusKey)) : null),
+    [scrollMode, focusKey],
+  );
+  const windowState = !scrollMode
+    ? null
+    : calendarFreeScroll
+      ? normalizeScrollWindowState(scrollWindowState, scrollMode, focus.date)
+      : fixedWindowState;
+  useEffect(() => {
+    if (windowState && windowState !== scrollWindowState) setScrollWindowState(windowState);
+  }, [windowState, scrollWindowState]);
+  const scrollWindow = useMemo(
+    () => windowState ? computeScrollWindow(windowState, scrollWindowOptions) : null,
+    [windowState, scrollWindowOptions],
+  );
+  const windowKey = windowState ? `${windowState.mode}:${windowState.anchorKey}` : "";
+
+  const jumpTo = useCallback((date: Date) => {
+    setSelectedDate(date);
+    setMiniMonth(date);
+    setVisibleDate(null);
+    setFocus((prev) => ({ date, nonce: prev.nonce + 1 }));
+    if (!scrollMode) return;
+    setScrollWindowState((prev) => {
+      const current = normalizeScrollWindowState(prev, scrollMode, date);
+      const loaded = computeScrollWindow(current, scrollWindowOptions);
+      return scrollWindowContains(loaded, scrollMode, date, scrollWindowOptions)
+        ? current
+        : freshScrollWindowState(scrollMode, date);
+    });
+  }, [setSelectedDate, scrollMode, scrollWindowOptions]);
+
+  const extendScrollWindow = useCallback((side: "before" | "after") => {
+    if (!scrollMode) return;
+    setScrollWindowState((prev) => growScrollWindow(normalizeScrollWindowState(prev, scrollMode, focus.date), side));
+  }, [scrollMode, focus.date]);
+  const extendWindowStart = useCallback(() => extendScrollWindow("before"), [extendScrollWindow]);
+  const extendWindowEnd = useCallback(() => extendScrollWindow("after"), [extendScrollWindow]);
+
+  // The views report the day they show as the user scrolls; the title and
+  // the mini calendar follow it, the selection does not.
+  const handleVisibleDateChange = useCallback((date: Date) => {
+    setVisibleDate(date);
+    setMiniMonth(date);
+  }, []);
+  useEffect(() => {
+    setVisibleDate(null);
+  }, [normalizedViewMode]);
+
+  const scrollViewProps: ScrollWindowViewProps = {
+    focus,
+    rangeStart: scrollWindow?.start ?? focus.date,
+    rangeEnd: scrollWindow?.end ?? focus.date,
+    windowKey,
+    onExtendStart: calendarFreeScroll && scrollWindow?.canExtendStart ? extendWindowStart : undefined,
+    onExtendEnd: calendarFreeScroll && scrollWindow?.canExtendEnd ? extendWindowEnd : undefined,
+    isLoading: isLoadingEvents,
+    onVisibleDateChange: handleVisibleDateChange,
+  };
+
   const dateRange = useMemo(() => {
-    const d = selectedDate;
-    switch (normalizedViewMode) {
-      case "month": {
-        const ms = startOfMonth(d);
-        const me = endOfMonth(d);
-        return {
-          start: format(startOfWeek(ms, { weekStartsOn: firstDayOfWeek }), "yyyy-MM-dd'T'00:00:00"),
-          end: format(endOfWeek(me, { weekStartsOn: firstDayOfWeek }), "yyyy-MM-dd'T'23:59:59"),
-        };
-      }
-      case "week": {
-        const ws = startOfWeek(d, { weekStartsOn: firstDayOfWeek });
-        return {
-          start: format(ws, "yyyy-MM-dd'T'00:00:00"),
-          end: format(addDays(ws, 6), "yyyy-MM-dd'T'23:59:59"),
-        };
-      }
-      case "day":
-        return {
-          start: format(d, "yyyy-MM-dd'T'00:00:00"),
-          end: format(d, "yyyy-MM-dd'T'23:59:59"),
-        };
-      case "agenda": {
-        // Agenda always starts from today at the earliest
-        const today = startOfDay(new Date());
-        const agendaStart = d >= today ? d : today;
-        return {
-          start: format(agendaStart, "yyyy-MM-dd'T'00:00:00"),
-          end: format(addDays(agendaStart, 30), "yyyy-MM-dd'T'23:59:59"),
-        };
-      }
-      case "tasks":
-        return null;
-    }
-  }, [selectedDate, normalizedViewMode, firstDayOfWeek]);
+    if (!scrollWindow) return null;
+    return {
+      start: format(scrollWindow.start, "yyyy-MM-dd'T'00:00:00"),
+      end: format(scrollWindow.end, "yyyy-MM-dd'T'23:59:59"),
+    };
+  }, [scrollWindow]);
 
   // Fetch tasks when tasks view is active or when tasks are shown on calendar grid
   useEffect(() => {
@@ -393,36 +476,37 @@ export function CalendarApp({ linkSegments }: CalendarAppProps = {}) {
   const fetchAllAccountsCalendarsFn = useCalendarStore((s) => s.fetchAllAccountsCalendars);
   const fetchAllAccountsEventsFn = useCalendarStore((s) => s.fetchAllAccountsEvents);
 
+  // The arrows step from what is on screen, which may have been scrolled
+  // away from the selected day.
   const navigatePrev = useCallback(() => {
+    const base = visibleDate ?? selectedDate;
     let next: Date;
     switch (normalizedViewMode) {
-      case "month": next = subMonths(selectedDate, 1); break;
-      case "week": next = subWeeks(selectedDate, 1); break;
-      case "day": next = subDays(selectedDate, 1); break;
-      case "agenda": next = subMonths(selectedDate, 1); break;
+      case "month": next = subMonths(base, 1); break;
+      case "week": next = subWeeks(base, 1); break;
+      case "day": next = subDays(base, 1); break;
+      case "agenda": next = subMonths(base, 1); break;
       case "tasks": return;
     }
-    setSelectedDate(next);
-    setMiniMonth(next);
-  }, [normalizedViewMode, selectedDate, setSelectedDate]);
+    jumpTo(next);
+  }, [normalizedViewMode, selectedDate, visibleDate, jumpTo]);
 
   const navigateNext = useCallback(() => {
+    const base = visibleDate ?? selectedDate;
     let next: Date;
     switch (normalizedViewMode) {
-      case "month": next = addMonths(selectedDate, 1); break;
-      case "week": next = addWeeks(selectedDate, 1); break;
-      case "day": next = addDays(selectedDate, 1); break;
-      case "agenda": next = addMonths(selectedDate, 1); break;
+      case "month": next = addMonths(base, 1); break;
+      case "week": next = addWeeks(base, 1); break;
+      case "day": next = addDays(base, 1); break;
+      case "agenda": next = addMonths(base, 1); break;
       case "tasks": return;
     }
-    setSelectedDate(next);
-    setMiniMonth(next);
-  }, [normalizedViewMode, selectedDate, setSelectedDate]);
+    jumpTo(next);
+  }, [normalizedViewMode, selectedDate, visibleDate, jumpTo]);
 
   const goToToday = useCallback(() => {
-    setSelectedDate(new Date());
-    setMiniMonth(new Date());
-  }, [setSelectedDate]);
+    jumpTo(displayNow());
+  }, [jumpTo]);
 
   // Swipe navigation handlers for mobile
   const handleTouchStart = useCallback((e: ReactTouchEvent) => {
@@ -432,8 +516,8 @@ export function CalendarApp({ linkSegments }: CalendarAppProps = {}) {
 
   const handleTouchEnd = useCallback((e: ReactTouchEvent) => {
     if (!touchStartRef.current || !isMobile) return;
-    // Week view has its own horizontal scroll, skip swipe navigation
-    if (normalizedViewMode === 'week') { touchStartRef.current = null; return; }
+    // Week and day views scroll sideways themselves, skip swipe navigation
+    if (normalizedViewMode === 'week' || normalizedViewMode === 'day') { touchStartRef.current = null; return; }
     const touch = e.changedTouches[0];
     const dx = touch.clientX - touchStartRef.current.x;
     const dy = touch.clientY - touchStartRef.current.y;
@@ -456,16 +540,31 @@ export function CalendarApp({ linkSegments }: CalendarAppProps = {}) {
   }, [isMobile, normalizedViewMode, navigatePrev, navigateNext]);
 
   const handleSelectDate = useCallback((date: Date) => {
-    setSelectedDate(date);
-    setMiniMonth(date);
-    // On mobile month view, tapping a date switches to day view
+    // On mobile month view, tapping a date switches to day view on that day.
+    if (isMobile && normalizedViewMode === "month") {
+      jumpTo(date);
+      setMobileReturnToMonth(true);
+      setViewMode("day");
+    } else {
+      // A click in the grid selects the day without moving the view.
+      setSelectedDate(date);
+      setMiniMonth(date);
+    }
+    // Close the narrow-pane sidebar overlay after the user picks a date.
+    setNarrowSidebarOpen(false);
+  }, [setSelectedDate, jumpTo, isMobile, normalizedViewMode, setViewMode]);
+
+  // The mini calendar is a navigation control: unlike a click in the week or
+  // month grid, which marks a day that is already on screen, picking a day
+  // here has to bring that day into view.
+  const handleMiniCalendarSelect = useCallback((date: Date) => {
+    jumpTo(date);
     if (isMobile && normalizedViewMode === "month") {
       setMobileReturnToMonth(true);
       setViewMode("day");
     }
-    // Close the narrow-pane sidebar overlay after the user picks a date.
     setNarrowSidebarOpen(false);
-  }, [setSelectedDate, isMobile, normalizedViewMode, setViewMode]);
+  }, [jumpTo, isMobile, normalizedViewMode, setViewMode]);
 
   const navigateBackToMonth = useCallback(() => {
     setMobileReturnToMonth(false);
@@ -473,9 +572,8 @@ export function CalendarApp({ linkSegments }: CalendarAppProps = {}) {
   }, [setViewMode]);
 
   const handleMiniMonthChange = useCallback((date: Date) => {
-    setMiniMonth(date);
-    setSelectedDate(date);
-  }, [setSelectedDate]);
+    jumpTo(date);
+  }, [jumpTo]);
 
   const openCreateModal = useCallback((date?: Date, endDate?: Date, allDay?: boolean) => {
     setEditEvent(null);
@@ -484,24 +582,45 @@ export function CalendarApp({ linkSegments }: CalendarAppProps = {}) {
     setDefaultModalEndDate(endDate);
     setDefaultModalAllDay(allDay ?? false);
     setSelectedDate(d);
+    setShowTaskModal(false);
+    setEditTask(null);
     setShowEventModal(true);
   }, [selectedDate, setSelectedDate]);
 
   const openEditModal = useCallback((event: CalendarEvent) => {
     setEditEvent(event);
     setDefaultModalDate(undefined);
+    setShowTaskModal(false);
+    setEditTask(null);
     setShowEventModal(true);
   }, []);
 
-  const openCreateTaskModal = useCallback(() => {
-    setEditTask(null);
-    setShowTaskModal(true);
+  // The event and task panels share the space beside the grid; now that
+  // tasks open from the month, week and day views (#1107), opening one
+  // closes the other.
+  const closeEventPanelForTask = useCallback(() => {
+    setShowEventModal(false);
+    setEditEvent(null);
+    setPendingPreview(null);
+    setDefaultCalendarIdForCreate(undefined);
+    setDefaultModalAllDay(false);
   }, []);
 
-  const openEditTaskModal = useCallback((task: import("@/lib/jmap/types").CalendarTask) => {
+  const openCreateTaskModal = useCallback(() => {
+    closeEventPanelForTask();
+    setEditTask(null);
+    setShowTaskModal(true);
+  }, [closeEventPanelForTask]);
+
+  const openEditTaskModal = useCallback((task: CalendarTask) => {
+    closeEventPanelForTask();
     setEditTask(task);
     setShowTaskModal(true);
-  }, []);
+  }, [closeEventPanelForTask]);
+
+  const handleToggleTaskComplete = useCallback((task: CalendarTask) => {
+    if (client) toggleTaskCompleteFn(client, task);
+  }, [client, toggleTaskCompleteFn]);
 
   const handleSaveTask = useCallback(async (data: Partial<import("@/lib/jmap/types").CalendarTask>) => {
     if (!client) return;
@@ -597,20 +716,23 @@ export function CalendarApp({ linkSegments }: CalendarAppProps = {}) {
   const applyCalendarDeepLink = (link: CalendarDeepLink) => {
     if (link.kind === 'view') {
       setViewMode(link.view);
-      if (link.date) setSelectedDate(link.date);
+      if (link.date) jumpTo(link.date);
       return;
     }
 
-    if (!client) return;
+    // A hit from another login (global search) is fetched through that
+    // login's client - the active one can't see it (#847).
+    const reachingClient = (link.login ? getClientByLocalAccountId(link.login) : null) ?? client;
+    if (!reachingClient) return;
     void (async () => {
       try {
-        const event = await client.getCalendarEvent(link.id, link.accountId);
+        const event = await reachingClient.getCalendarEvent(link.id, link.accountId);
         if (!event) {
           toast.error(tDeepLink('event_not_found'));
           return;
         }
         const start = getEventStartDate(event);
-        if (start) setSelectedDate(start);
+        if (start) jumpTo(start);
         openEditModal(event);
       } catch (err) {
         debug.error('Failed to open calendar deep link:', err);
@@ -626,8 +748,9 @@ export function CalendarApp({ linkSegments }: CalendarAppProps = {}) {
     if (deepLinkHandledRef.current) return;
     if (!isAuthenticated || !client) return;
 
-    const segments = linkSegments ?? consumePendingDeepLink('calendar') ?? [];
-    const link = parseCalendarPath(segments, new URLSearchParams(window.location.search));
+    const entry = linkSegments ? { segments: linkSegments } : consumePendingDeepLinkEntry('calendar');
+    const segments = entry?.segments ?? [];
+    const link = parseCalendarPath(segments, new URLSearchParams(entry?.search ?? window.location.search));
     deepLinkHandledRef.current = true;
     if (!link) return;
     applyCalendarDeepLinkRef.current(link);
@@ -639,8 +762,8 @@ export function CalendarApp({ linkSegments }: CalendarAppProps = {}) {
   // briefly and must not steal the link parked for the Pro one.
   useEffect(() => {
     if (!isEmbedded) return;
-    return subscribePendingDeepLink('calendar', (segments) => {
-      const link = parseCalendarPath(segments, new URLSearchParams(window.location.search));
+    return subscribePendingDeepLink('calendar', (segments, search) => {
+      const link = parseCalendarPath(segments, new URLSearchParams(search ?? window.location.search));
       if (link) applyCalendarDeepLinkRef.current(link);
     });
   }, [isEmbedded]);
@@ -650,6 +773,7 @@ export function CalendarApp({ linkSegments }: CalendarAppProps = {}) {
   // that renders while Pro takes over a route stays silent.
   const proInterfaceActive = useProInterfaceActive();
   const isFocusedProTab = useIsFocusedProTab();
+  const isPaneScoped = useIsPaneScoped();
   const eventLinkId = showEventModal && editEvent ? editEvent.id : null;
   const calendarLinkPath = appPath(buildCalendarPath({
     view: normalizedViewMode,
@@ -674,6 +798,27 @@ export function CalendarApp({ linkSegments }: CalendarAppProps = {}) {
   const findMasterEvent = useCallback(async (occurrence: CalendarEvent): Promise<CalendarEvent | null> => {
     if ((occurrence.recurrenceRules?.length ?? 0) > 0 && !occurrence.recurrenceId) {
       return occurrence;
+    }
+    // An occurrence expanded by the server names its base event outright.
+    // Fetch it through the occurrence's own account and hand it back under
+    // the store id the base would have, so the store routes mutations on it
+    // through the same account (see resolveMutationTarget).
+    if (isServerRecurrenceInstance(occurrence) && occurrence.baseEventId) {
+      const accountClient = (occurrence.localAccountId && getClientByLocalAccountId(occurrence.localAccountId)) || client;
+      if (!accountClient) return null;
+      const master = await accountClient.getCalendarEvent(occurrence.baseEventId, occurrence.accountId);
+      if (!master) return null;
+      return {
+        ...master,
+        id: baseEventStoreId(occurrence) ?? master.id,
+        originalId: master.id,
+        originalCalendarIds: master.calendarIds,
+        calendarIds: occurrence.calendarIds,
+        accountId: occurrence.accountId,
+        accountName: occurrence.accountName,
+        localAccountId: occurrence.localAccountId,
+        isShared: occurrence.isShared,
+      };
     }
     const master = events.find(e =>
       e.uid === occurrence.uid && !e.recurrenceId && (e.recurrenceRules?.length ?? 0) > 0
@@ -731,49 +876,62 @@ export function CalendarApp({ linkSegments }: CalendarAppProps = {}) {
       return;
     }
 
-    setSelectedDate(eventDate);
-    setMiniMonth(eventDate);
-  }, [setSelectedDate]);
+    jumpTo(eventDate);
+  }, [jumpTo]);
 
-  const handleSaveEvent = useCallback(async (data: Partial<CalendarEvent>, sendSchedulingMessages?: boolean) => {
+  const handleSaveEvent = useCallback(async (data: Partial<CalendarEvent>, requestedScheduling?: boolean) => {
     if (!client) { toast.error(t("notifications.event_error")); return; }
-    try {
-      if (editEvent) {
-        if (isRecurringEvent(editEvent)) {
-          setPendingScopeAction({
-            type: "edit",
-            event: editEvent,
-            updates: data,
-            sendScheduling: sendSchedulingMessages,
-          });
-          setShowEventModal(false);
-          setEditEvent(null);
-          return;
-        }
-        await updateEvent(client, editEvent.id, data, sendSchedulingMessages);
-        if (data.start) {
-          focusCalendarOnEvent({ start: data.start });
-        }
-        toast.success(t("notifications.event_updated"));
-      } else {
-        const created = await createEvent(client, data, sendSchedulingMessages);
-        if (!created) {
-          toast.error(t("notifications.event_error"));
-          return;
-        }
-        focusCalendarOnEvent(created);
-        if (sendSchedulingMessages) {
-          toast.success(t("notifications.invitation_sent"));
+    const save = async (sendSchedulingMessages: boolean | undefined): Promise<void> => {
+      try {
+        if (editEvent) {
+          if (isRecurringEvent(editEvent)) {
+            setPendingScopeAction({
+              type: "edit",
+              event: editEvent,
+              updates: data,
+              sendScheduling: sendSchedulingMessages,
+            });
+            setShowEventModal(false);
+            setEditEvent(null);
+            return;
+          }
+          await updateEvent(client, editEvent.id, data, sendSchedulingMessages);
+          if (data.start) {
+            focusCalendarOnEvent({ start: data.start });
+          }
+          toast.success(t("notifications.event_updated"));
         } else {
-          toast.success(t("notifications.event_created"));
+          const created = await createEvent(client, data, sendSchedulingMessages);
+          if (!created) {
+            toast.error(t("notifications.event_error"));
+            return;
+          }
+          focusCalendarOnEvent(created);
+          if (sendSchedulingMessages) {
+            toast.success(t("notifications.invitation_sent"));
+          } else {
+            toast.success(t("notifications.event_created"));
+          }
         }
+        setShowEventModal(false);
+        setEditEvent(null);
+      } catch (error) {
+        // The server refuses to send the invitations (Stalwart 0.16.21+ fails
+        // the whole save then). Offer to keep the event without them.
+        if (error instanceof SchedulingDeniedError && sendSchedulingMessages) {
+          const ok = await confirmAction({
+            title: t("notifications.invitations_denied_title"),
+            message: t("notifications.invitations_denied", { reason: error.reason }),
+            confirmText: t("notifications.save_without_invitations"),
+          });
+          if (ok) await save(false);
+          return;
+        }
+        toast.error(t("notifications.event_error"));
       }
-      setShowEventModal(false);
-      setEditEvent(null);
-    } catch {
-      toast.error(t("notifications.event_error"));
-    }
-  }, [client, editEvent, createEvent, updateEvent, focusCalendarOnEvent, t]);
+    };
+    await save(requestedScheduling);
+  }, [client, editEvent, createEvent, updateEvent, focusCalendarOnEvent, confirmAction, t]);
 
   const handleDuplicateEvent = useCallback(async (data: Partial<CalendarEvent>) => {
     if (!client) { toast.error(t("notifications.event_error")); return; }
@@ -837,8 +995,29 @@ export function CalendarApp({ linkSegments }: CalendarAppProps = {}) {
     return { master, originalRules };
   }, [client, findMasterEvent, updateEvent]);
 
+  const submitRsvp = useCallback(async (
+    eventId: string,
+    participantId: string,
+    status: CalendarParticipant['participationStatus'],
+    scope: 'occurrence' | 'series' = 'series',
+  ) => {
+    if (!client) return;
+    try {
+      await rsvpEvent(client, eventId, participantId, status, undefined, scope);
+      toast.success(t("notifications.rsvp_updated"));
+    } catch {
+      toast.error(t("notifications.rsvp_error"));
+    }
+  }, [client, rsvpEvent, t]);
+
   const handleScopeSelect = useCallback(async (scope: RecurrenceEditScope) => {
     if (!client || !pendingScopeAction) { toast.error(t("notifications.event_error")); return; }
+    if (pendingScopeAction.type === "rsvp") {
+      const { event, participantId, status } = pendingScopeAction;
+      setPendingScopeAction(null);
+      await submitRsvp(event.id, participantId, status, scope === "this" ? "occurrence" : "series");
+      return;
+    }
     const { type, event, sendScheduling } = pendingScopeAction;
     const updates = type === "edit" ? pendingScopeAction.updates : undefined;
     setPendingScopeAction(null);
@@ -847,12 +1026,20 @@ export function CalendarApp({ linkSegments }: CalendarAppProps = {}) {
       if (type === "edit" && updates) {
         switch (scope) {
           case "this": {
-            // Synthetic IDs (from expandRecurrences) can't be updated directly.
-            // Patch the master event's recurrenceOverrides instead.
+            if (isServerRecurrenceInstance(event) || isBrowserExpandedOccurrence(event)) {
+              // The store writes one occurrence through its own (synthetic)
+              // id, or as a recurrence override on the base event it was
+              // expanded from.
+              await updateEvent(client, event.id, updates, sendScheduling);
+              break;
+            }
+            // An override outside an expanded series: override it on the master.
             const master = await findMasterEvent(event);
-            if (master && event.recurrenceId) {
-              const patchUpdates = buildRecurrenceOverridePatch(updates, event.recurrenceId);
-              await updateEvent(client, master.id, patchUpdates, sendScheduling);
+            const occurrence = master && overrideContextOf(event, master);
+            const overridePatch = occurrence
+              && buildFallbackOverridePatch(occurrence, withNewOverrideDetails(occurrence, updates));
+            if (master && overridePatch) {
+              await updateEvent(client, master.id, overridePatch, sendScheduling);
             } else {
               await updateEvent(client, event.id, updates, sendScheduling);
             }
@@ -916,14 +1103,17 @@ export function CalendarApp({ linkSegments }: CalendarAppProps = {}) {
       } else {
         switch (scope) {
           case "this": {
-            // Synthetic IDs (from expandRecurrences) can't be destroyed directly.
-            // Exclude the instance via recurrenceOverrides on the master event.
+            if (isServerRecurrenceInstance(event) || isBrowserExpandedOccurrence(event)) {
+              // The store destroys a server occurrence, or excludes a
+              // browser-expanded one on its base event.
+              await deleteEvent(client, event.id, sendScheduling);
+              break;
+            }
+            // An override outside an expanded series: exclude it on the master.
             const delMaster = await findMasterEvent(event);
-            if (delMaster && event.recurrenceId) {
-              await updateEvent(
-                client, delMaster.id,
-                { [`recurrenceOverrides/${event.recurrenceId}`]: { excluded: true } } as Partial<CalendarEvent>,
-              );
+            const excludePatch = delMaster && buildFallbackExcludePatch(overrideContextOf(event, delMaster));
+            if (delMaster && excludePatch) {
+              await updateEvent(client, delMaster.id, excludePatch, sendScheduling);
             } else {
               await deleteEvent(client, event.id, sendScheduling);
             }
@@ -961,17 +1151,19 @@ export function CalendarApp({ linkSegments }: CalendarAppProps = {}) {
     } catch {
       toast.error(t("notifications.event_error"));
     }
-  }, [client, pendingScopeAction, updateEvent, deleteEvent, createEvent, findMasterEvent, truncateRecurrenceAtEvent, refetchCurrentRange, t]);
+  }, [client, pendingScopeAction, updateEvent, deleteEvent, createEvent, findMasterEvent, truncateRecurrenceAtEvent, refetchCurrentRange, submitRsvp, t]);
 
   const handleRsvp = useCallback(async (eventId: string, participantId: string, status: CalendarParticipant['participationStatus']) => {
     if (!client) return;
-    try {
-      await rsvpEvent(client, eventId, participantId, status);
-      toast.success(t("notifications.rsvp_updated"));
-    } catch {
-      toast.error(t("notifications.rsvp_error"));
+    // An answer on one occurrence of a series asks whether it covers just
+    // that occurrence or the whole series (#1086).
+    const occurrence = events.find(e => e.id === eventId && e.recurrenceId != null);
+    if (occurrence) {
+      setPendingScopeAction({ type: "rsvp", event: occurrence, participantId, status });
+      return;
     }
-  }, [client, rsvpEvent, t]);
+    await submitRsvp(eventId, participantId, status);
+  }, [client, events, submitRsvp]);
 
   const handleDeleteFromDetail = useCallback(() => {
     if (!detailEvent) return;
@@ -982,24 +1174,7 @@ export function CalendarApp({ linkSegments }: CalendarAppProps = {}) {
 
   const handleDuplicateFromDetail = useCallback(async () => {
     if (!detailEvent || !client) return;
-    const start = parseISO(detailEvent.start);
-    const newStart = addDays(start, 1);
-    const data = sanitizeOutgoingCalendarEventData<Partial<CalendarEvent>>({
-      title: detailEvent.title,
-      description: detailEvent.description,
-      start: format(newStart, "yyyy-MM-dd'T'HH:mm:ss"),
-      duration: detailEvent.duration,
-      timeZone: detailEvent.timeZone,
-      showWithoutTime: detailEvent.showWithoutTime,
-      calendarIds: { ...detailEvent.calendarIds },
-      status: "confirmed",
-      freeBusyStatus: detailEvent.freeBusyStatus,
-      privacy: detailEvent.privacy,
-    });
-    if (detailEvent.locations) data.locations = structuredClone(detailEvent.locations);
-    if (detailEvent.recurrenceRules) data.recurrenceRules = structuredClone(detailEvent.recurrenceRules);
-    if (detailEvent.alerts) data.alerts = structuredClone(detailEvent.alerts);
-    if (detailEvent.participants) data.participants = structuredClone(detailEvent.participants);
+    const data = buildDuplicateEventData(detailEvent);
     closeDetail();
     try {
       const created = await createEvent(client, data);
@@ -1014,7 +1189,7 @@ export function CalendarApp({ linkSegments }: CalendarAppProps = {}) {
 
   const handleSaveNoteFromDetail = useCallback(async (note: string) => {
     if (!detailEvent || !client) return;
-    const timestamp = format(new Date(), "yyyy-MM-dd HH:mm");
+    const timestamp = format(displayNow(), "yyyy-MM-dd HH:mm");
     const separator = `\n\n--- ${timestamp} ---\n`;
     const newDescription = detailEvent.description
       ? `${detailEvent.description}${separator}${note}`
@@ -1030,24 +1205,7 @@ export function CalendarApp({ linkSegments }: CalendarAppProps = {}) {
 
   const handleDuplicateContextMenu = useCallback(async (event: CalendarEvent) => {
     if (!client) { toast.error(t("notifications.event_error")); return; }
-    const start = parseISO(event.start);
-    const newStart = addDays(start, 1);
-    const data = sanitizeOutgoingCalendarEventData<Partial<CalendarEvent>>({
-      title: event.title,
-      description: event.description,
-      start: format(newStart, "yyyy-MM-dd'T'HH:mm:ss"),
-      duration: event.duration,
-      timeZone: event.timeZone,
-      showWithoutTime: event.showWithoutTime,
-      calendarIds: { ...event.calendarIds },
-      status: "confirmed",
-      freeBusyStatus: event.freeBusyStatus,
-      privacy: event.privacy,
-    });
-    if (event.locations) data.locations = structuredClone(event.locations);
-    if (event.recurrenceRules) data.recurrenceRules = structuredClone(event.recurrenceRules);
-    if (event.alerts) data.alerts = structuredClone(event.alerts);
-    if (event.participants) data.participants = structuredClone(event.participants);
+    const data = buildDuplicateEventData(event);
     try {
       const created = await createEvent(client, data);
       if (created) {
@@ -1078,9 +1236,7 @@ export function CalendarApp({ linkSegments }: CalendarAppProps = {}) {
   }, [t]);
 
   const handleCopyMeetingLink = useCallback(async (event: CalendarEvent) => {
-    const uri = event.virtualLocations
-      ? Object.values(event.virtualLocations).find((v) => v.uri)?.uri
-      : undefined;
+    const uri = findMeetingLink(event)?.uri;
     if (!uri) return;
     try {
       await navigator.clipboard.writeText(uri);
@@ -1189,6 +1345,13 @@ export function CalendarApp({ linkSegments }: CalendarAppProps = {}) {
     return filtered;
   }, [events, selectedCalendarIds, showBirthdayCalendar, birthdayEvents]);
 
+  // Tasks on the month, week and day grids follow the calendar filter like
+  // the events do (#1107).
+  const calendarTasks = useMemo(() => {
+    if (!enableCalendarTasks || !showTasksOnCalendar) return undefined;
+    return filterTasksByCalendars(taskStore.tasks, selectedCalendarIds);
+  }, [enableCalendarTasks, showTasksOnCalendar, taskStore.tasks, selectedCalendarIds]);
+
   useEffect(() => {
     const hiddenEvents = events.filter((event) => {
       if (!event.start || !event.calendarIds) {
@@ -1282,6 +1445,7 @@ export function CalendarApp({ linkSegments }: CalendarAppProps = {}) {
         case "month":
           return (
             <CalendarMonthView
+              {...scrollViewProps}
               selectedDate={selectedDate}
               events={visibleEvents}
               calendars={allCalendars}
@@ -1295,11 +1459,16 @@ export function CalendarApp({ linkSegments }: CalendarAppProps = {}) {
               firstDayOfWeek={firstDayOfWeek}
               isMobile={isMobile}
               pendingPreview={pendingPreview}
+              tasks={calendarTasks}
+              onToggleTaskComplete={handleToggleTaskComplete}
+              onSelectTask={openEditTaskModal}
+              currentUserEmails={currentUserEmails}
             />
           );
         case "week":
           return (
             <CalendarWeekView
+              {...scrollViewProps}
               selectedDate={selectedDate}
               events={visibleEvents}
               calendars={allCalendars}
@@ -1314,13 +1483,16 @@ export function CalendarApp({ linkSegments }: CalendarAppProps = {}) {
               timeFormat={timeFormat}
               isMobile={isMobile}
               pendingPreview={pendingPreview}
-              tasks={enableCalendarTasks && showTasksOnCalendar ? taskStore.tasks : undefined}
-              onToggleTaskComplete={(task) => { if (client) taskStore.toggleTaskComplete(client, task); }}
+              tasks={calendarTasks}
+              onToggleTaskComplete={handleToggleTaskComplete}
+              onSelectTask={openEditTaskModal}
+              currentUserEmails={currentUserEmails}
             />
           );
         case "day":
           return (
             <CalendarDayView
+              {...scrollViewProps}
               selectedDate={selectedDate}
               events={visibleEvents}
               calendars={allCalendars}
@@ -1333,14 +1505,16 @@ export function CalendarApp({ linkSegments }: CalendarAppProps = {}) {
               timeFormat={timeFormat}
               isMobile={isMobile}
               pendingPreview={pendingPreview}
-              tasks={enableCalendarTasks && showTasksOnCalendar ? taskStore.tasks : undefined}
-              onToggleTaskComplete={(task) => { if (client) taskStore.toggleTaskComplete(client, task); }}
+              tasks={calendarTasks}
+              onToggleTaskComplete={handleToggleTaskComplete}
+              onSelectTask={openEditTaskModal}
+              currentUserEmails={currentUserEmails}
             />
           );
         case "agenda":
           return (
             <CalendarAgendaView
-              selectedDate={selectedDate}
+              {...scrollViewProps}
               events={visibleEvents}
               calendars={allCalendars}
               onSelectEvent={handleSelectEvent}
@@ -1348,6 +1522,7 @@ export function CalendarApp({ linkSegments }: CalendarAppProps = {}) {
               onHoverLeave={handleHoverLeave}
               onContextMenuEvent={handleContextMenuEvent}
               timeFormat={timeFormat}
+              currentUserEmails={currentUserEmails}
             />
           );
         case "tasks":
@@ -1367,7 +1542,7 @@ export function CalendarApp({ linkSegments }: CalendarAppProps = {}) {
                 filter={taskStore.filter}
                 showCompleted={taskStore.showCompleted}
                 onSelectTask={openEditTaskModal}
-                onToggleComplete={(task) => { if (client) taskStore.toggleTaskComplete(client, task); }}
+                onToggleComplete={handleToggleTaskComplete}
                 selectedTaskId={taskStore.selectedTaskId}
                 onQuickCreate={(title) => {
                   if (client) {
@@ -1446,7 +1621,7 @@ export function CalendarApp({ linkSegments }: CalendarAppProps = {}) {
             <MiniCalendar
               selectedDate={selectedDate}
               displayMonth={miniMonth}
-              onSelectDate={handleSelectDate}
+              onSelectDate={handleMiniCalendarSelect}
               onChangeMonth={handleMiniMonthChange}
               events={events}
               firstDayOfWeek={firstDayOfWeek}
@@ -1492,8 +1667,9 @@ export function CalendarApp({ linkSegments }: CalendarAppProps = {}) {
                 try {
                   const count = await clearCalendarEvents(client, cal.id);
                   toast.success(tMgmt("events_cleared", { count }));
-                } catch {
-                  toast.error(tMgmt("error_clear"));
+                } catch (err) {
+                  // The store rethrows the server's reason (#434).
+                  toast.error(err instanceof Error && err.message ? err.message : tMgmt("error_clear"));
                 }
               } : undefined}
               onDeleteCalendar={client ? async (cal: Calendar) => {
@@ -1536,6 +1712,7 @@ export function CalendarApp({ linkSegments }: CalendarAppProps = {}) {
       <div className="flex flex-col flex-1 min-w-0 min-h-0">
         <CalendarToolbar
           selectedDate={selectedDate}
+          visibleDate={visibleDate}
           viewMode={normalizedViewMode}
           onPrev={navigatePrev}
           onNext={navigateNext}
@@ -1553,8 +1730,10 @@ export function CalendarApp({ linkSegments }: CalendarAppProps = {}) {
           onMenuClick={isNarrow ? () => setNarrowSidebarOpen(true) : undefined}
         />
 
+        {/* isolate keeps the views' sticky headers (z-50) below the toolbar's
+            import dropdown, which overlaps this area (#1049). */}
         <div
-          className="flex flex-1 overflow-hidden relative"
+          className="flex flex-1 overflow-hidden relative isolate"
           data-tour="calendar-view"
           onTouchStart={handleTouchStart}
           onTouchEnd={handleTouchEnd}
@@ -1670,7 +1849,7 @@ export function CalendarApp({ linkSegments }: CalendarAppProps = {}) {
                 end.setHours(hour + 1, 0, 0, 0);
                 openCreateModal(d, end);
               } else {
-                const now = new Date();
+                const now = displayNow();
                 d.setHours(now.getHours() + 1, 0, 0, 0);
                 openCreateModal(d);
               }
@@ -1680,10 +1859,7 @@ export function CalendarApp({ linkSegments }: CalendarAppProps = {}) {
               d.setHours(0, 0, 0, 0);
               openCreateModal(d, undefined, true);
             }}
-            onNewTask={enableCalendarTasks ? () => {
-              setEditTask(null);
-              setShowTaskModal(true);
-            } : undefined}
+            onNewTask={enableCalendarTasks ? openCreateTaskModal : undefined}
             onGoToToday={goToToday}
           />
         );
@@ -1727,6 +1903,26 @@ export function CalendarApp({ linkSegments }: CalendarAppProps = {}) {
           isSubscriptionCalendar={isSubscriptionCalendar}
           isMobile={true}
         />
+      )}
+
+      {/* Mobile task editor: full screen, like the event editor. */}
+      {showTaskModal && isMobile && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label={editTask ? t("tasks.edit") : t("tasks.create")}
+          className={isPaneScoped ? "absolute inset-0 z-40 flex flex-col bg-background" : "fixed inset-0 z-50 flex flex-col bg-background"}
+        >
+          <TaskModal
+            key={editTask?.id ?? 'new-task'}
+            task={editTask}
+            calendars={displayCalendars}
+            onSave={handleSaveTask}
+            onDelete={handleDeleteTask}
+            onClose={() => { setShowTaskModal(false); setEditTask(null); }}
+            isMobile={true}
+          />
+        </div>
       )}
 
       {showImportModal && client && (

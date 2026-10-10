@@ -5,6 +5,7 @@ import { useCalendarStore } from "@/stores/calendar-store";
 import { toast } from "@/stores/toast-store";
 import { debug } from "@/lib/debug";
 import { formatIsoInTimeZone } from "@/lib/calendar-utils";
+import { fromDisplayDate, getEffectiveTimeZone } from "@/lib/timezone";
 import type { Calendar } from "@/lib/jmap/types";
 
 interface DragCreateState {
@@ -46,6 +47,13 @@ interface UseTimeGridInteractionsOptions {
     error: string;
   };
   isMobile?: boolean;
+  /**
+   * The minutes from midnight at the top and bottom of the grid, when it
+   * shows only part of the day (#1164). Pointer positions and the drawn
+   * offsets are relative to `gridStartMinutes`.
+   */
+  gridStartMinutes?: number;
+  gridEndMinutes?: number;
 }
 
 export function useTimeGridInteractions({
@@ -54,11 +62,13 @@ export function useTimeGridInteractions({
   onCreateRange,
   errorMessages,
   isMobile,
+  gridStartMinutes = 0,
+  gridEndMinutes = 1440,
 }: UseTimeGridInteractionsOptions) {
   const snapToMinutes = useCallback((clientY: number, containerTop: number): number => {
-    const raw = ((clientY - containerTop) / hourHeight) * 60;
-    return Math.max(0, Math.min(1440, Math.round(raw / 15) * 15));
-  }, [hourHeight]);
+    const raw = gridStartMinutes + ((clientY - containerTop) / hourHeight) * 60;
+    return Math.max(gridStartMinutes, Math.min(gridEndMinutes, Math.round(raw / 15) * 15));
+  }, [hourHeight, gridStartMinutes, gridEndMinutes]);
 
   const wasDragging = useRef(false);
 
@@ -160,11 +170,12 @@ export function useTimeGridInteractions({
       const newDuration = Math.max(15, ref.originalDurationMinutes + deltaMinutes);
       return { startMinutes: ref.originalStartMinutes, durationMinutes: newDuration };
     }
-    // Top edge: move start, keep end fixed. Clamp so duration stays >= 15 and start >= 0.
+    // Top edge: move start, keep end fixed. Clamp so duration stays >= 15 and
+    // start stays on the grid.
     let newStart = ref.originalStartMinutes + deltaMinutes;
-    newStart = Math.max(0, Math.min(originalEnd - 15, newStart));
+    newStart = Math.max(Math.min(gridStartMinutes, ref.originalStartMinutes), Math.min(originalEnd - 15, newStart));
     return { startMinutes: newStart, durationMinutes: originalEnd - newStart };
-  }, [hourHeight]);
+  }, [hourHeight, gridStartMinutes]);
 
   const handleResizePointerDown = useCallback((
     eventId: string,
@@ -192,12 +203,12 @@ export function useTimeGridInteractions({
     const { startMinutes, durationMinutes } = computeResize(resizeRef.current, e.clientY);
     setResizeVisual({
       eventId: resizeRef.current.eventId,
-      topPx: (startMinutes / 60) * hourHeight,
+      topPx: ((startMinutes - gridStartMinutes) / 60) * hourHeight,
       heightPx: (durationMinutes / 60) * hourHeight,
       startMinutes,
       durationMinutes,
     });
-  }, [hourHeight, computeResize]);
+  }, [hourHeight, computeResize, gridStartMinutes]);
 
   const handleResizePointerUp = useCallback(async (e: PointerEvent) => {
     const resize = resizeRef.current;
@@ -302,7 +313,7 @@ export function useTimeGridInteractions({
       const startDate = new Date(quickCreate.day);
       startDate.setHours(quickCreate.hour, 0, 0, 0);
       const startStr = format(startDate, "yyyy-MM-dd'T'HH:mm:ss");
-      const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      const timeZone = getEffectiveTimeZone();
       const defaultCal = calendars.find(c => c.isDefault) || calendars[0];
       const created = await useCalendarStore.getState().createEvent(client, {
         title,
@@ -334,9 +345,9 @@ export function useTimeGridInteractions({
   const snapDragMinutes = useCallback((e: DragEvent<HTMLDivElement>): number => {
     const rect = e.currentTarget.getBoundingClientRect();
     const y = e.clientY - rect.top;
-    const raw = (y / hourHeight) * 60;
-    return Math.max(0, Math.min(1425, Math.round(raw / 15) * 15));
-  }, [hourHeight]);
+    const raw = gridStartMinutes + (y / hourHeight) * 60;
+    return Math.max(gridStartMinutes, Math.min(gridEndMinutes - 15, Math.round(raw / 15) * 15));
+  }, [hourHeight, gridStartMinutes, gridEndMinutes]);
 
   const handleColumnDragOver = useCallback((e: DragEvent<HTMLDivElement>, dayKey: string) => {
     if (!e.dataTransfer.types.includes("application/x-calendar-event")) return;
@@ -367,8 +378,10 @@ export function useTimeGridInteractions({
       // Emit `start` as a floating wall-clock in the event's own timeZone.
       // If we used browser-local, the server would reinterpret it in event.timeZone
       // and shift the event by the offset between the two zones.
-      const eventTimeZone = event?.timeZone || Intl.DateTimeFormat().resolvedOptions().timeZone;
-      const newStartISO = formatIsoInTimeZone(newStart, eventTimeZone);
+      const eventTimeZone = event?.timeZone || getEffectiveTimeZone();
+      // `newStart` is a display date (grid space); turn it back into the real
+      // instant before expressing it in the event's zone (#755).
+      const newStartISO = formatIsoInTimeZone(fromDisplayDate(newStart), eventTimeZone);
       if (newStartISO === data.originalStart) return;
       const client = useAuthStore.getState().client;
       if (!client) {

@@ -2,15 +2,20 @@
 
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useTranslations, useLocale } from "next-intl";
+import { toast } from "@/stores/toast-store";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { X, Trash2, Check, Users, CalendarDays, Copy, Pencil, Clock, MapPin, Video, Repeat, Bell, AlignLeft, Plus } from "lucide-react";
-import { format, parseISO, addHours, addDays, isSameDay } from "date-fns";
+import { LinkifiedText } from "@/components/ui/linkified-text";
+import { X, Trash2, Check, Users, CalendarDays, Copy, Pencil, Clock, MapPin, Video, Repeat, Bell, AlignLeft, Plus } from "@/components/icons";
+import { format, parseISO, addHours, isSameDay } from "date-fns";
 import type { CalendarEvent, Calendar, CalendarParticipant, CalendarEventAlert, CalendarRecurrenceRule } from "@/lib/jmap/types";
 import { RecurrenceEditor, buildRecurrenceSummary, isSimpleRecurrenceRule } from "./recurrence-editor";
 import { parseDuration, getEventColor } from "./event-card";
 import { buildAllDayDuration, getEventDisplayEndDate, getEventEndDate, getEventStartDate, getPrimaryCalendarId } from "@/lib/calendar-utils";
+import { displayNow, getEffectiveTimeZone } from "@/lib/timezone";
+import { createRecurrenceRule } from "@/lib/recurrence-rule";
 import { ParticipantInput, type ParticipantInputHandle } from "./participant-input";
+import { ParticipantAvailability } from "./participant-availability";
 import {
   isOrganizer,
   getUserParticipantId,
@@ -19,12 +24,14 @@ import {
   getStatusCounts,
   buildParticipantMap,
 } from "@/lib/calendar-participants";
-import { getEventEditability, canCreateEventsIn } from "@/lib/calendar-editability";
+import { canUserRsvp, getEventEditability, canCreateEventsIn } from "@/lib/calendar-editability";
 import { PluginSlot } from "@/components/plugins/plugin-slot";
 import { useSettingsStore } from "@/stores/settings-store";
 import { generateUUID } from "@/lib/utils";
+import { buildDuplicateEventData } from "@/lib/calendar-duplicate";
 import { useFormatEventDate } from "@/hooks/use-format-event-date";
 import { useIsPaneScoped } from "@/hooks/use-pane-context";
+import { useContactNameResolver } from "@/hooks/use-contact-name-resolver";
 import { calendarHooks } from "@/lib/plugin-hooks";
 import type { ConflictWarning } from "@/lib/plugin-types";
 
@@ -231,6 +238,21 @@ export function EventModal({
   const canEditBody = editability === "editable";
   const rsvpMode = editability === "rsvp-only";
 
+  // A received invite lands in the user's own calendar, resolves to 'editable',
+  // and so never reaches the rsvp-only view below.
+  const canRsvp = useMemo(() => {
+    if (!event) return false;
+    return canUserRsvp(event, {
+      calendarsById: new Map(calendars.map((c) => [c.id, c])),
+      userCalendarAddresses: currentUserEmails,
+      isSubscriptionCalendar: isSubscriptionCalendar ?? (() => false),
+    });
+  }, [event, calendars, currentUserEmails, isSubscriptionCalendar]);
+
+  // Bare addresses (the organizer above all — Stalwart drops its display name)
+  // render with the contact card's name instead of the raw email.
+  const resolveContactName = useContactNameResolver();
+
   const userParticipantId = useMemo(() => {
     if (!event) return null;
     return getUserParticipantId(event, currentUserEmails);
@@ -243,8 +265,8 @@ export function EventModal({
 
   const existingParticipants = useMemo(() => {
     if (!event) return [];
-    return getParticipantList(event);
-  }, [event]);
+    return getParticipantList(event, { resolveName: resolveContactName });
+  }, [event, resolveContactName]);
 
   const organizerInfo = useMemo(() => {
     if (!event?.participants) return null;
@@ -257,11 +279,11 @@ export function EventModal({
     if (defaultDate) {
       const d = new Date(defaultDate);
       if (defaultEndDate) return d;
-      const now = new Date();
+      const now = displayNow();
       d.setHours(now.getHours() + 1, 0, 0, 0);
       return d;
     }
-    const d = new Date();
+    const d = displayNow();
     d.setHours(d.getHours() + 1, 0, 0, 0);
     return d;
   };
@@ -407,6 +429,19 @@ export function EventModal({
   const [sendInvitations, setSendInvitations] = useState(true);
   const participantInputRef = useRef<ParticipantInputHandle>(null);
 
+  // The event window the attendees' free/busy is checked against. Parsed in
+  // local time like the save path; an all-day event spans its whole days.
+  const availabilityWindow = useMemo(() => {
+    const startStr = allDay ? `${startDate}T00:00:00` : `${startDate}T${startTime || "00:00"}:00`;
+    const endStr = allDay ? `${endDate}T23:59:59` : `${endDate}T${endTime || "00:00"}:00`;
+    const start = startDate ? new Date(startStr) : null;
+    const end = endDate ? new Date(endStr) : null;
+    return {
+      start: start && !Number.isNaN(start.getTime()) ? start : null,
+      end: end && !Number.isNaN(end.getTime()) ? end : null,
+    };
+  }, [startDate, startTime, endDate, endTime, allDay]);
+
   // Plugin transform: collect conflict warnings for the current event form.
   // Re-runs (debounced) whenever fields that affect scheduling change.
   const [pluginConflictWarnings, setPluginConflictWarnings] = useState<ConflictWarning[]>([]);
@@ -460,7 +495,13 @@ export function EventModal({
   const handleSave = useCallback(async () => {
     const trimmedTitle = title.trim();
     if (!trimmedTitle || isSaving) return;
-    if (trimmedTitle.length > 500 || description.trim().length > 10000 || location.trim().length > 500) return;
+    if (trimmedTitle.length > 500 || description.trim().length > 10000 || location.trim().length > 500) {
+      // This guard returned silently, so a rejected save was indistinguishable from a dead
+      // button. The fields also enforce their limits via maxLength, so this is a backstop —
+      // but if it ever fires, say so.
+      toast.error(t("notifications.event_error"));
+      return;
+    }
 
     const pendingAttendee = participantInputRef.current?.flush() ?? null;
     const effectiveAttendees = pendingAttendee ? [...attendees, pendingAttendee] : attendees;
@@ -487,11 +528,14 @@ export function EventModal({
       duration = buildDuration(start, end);
     }
 
-    const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    // The form's wall-clock fields are in the user's effective zone (the
+    // grid and prefill are display dates), so label them with that zone.
+    const timeZone = getEffectiveTimeZone();
+
+    const trimmedDescription = description.trim();
 
     const data: Partial<CalendarEvent> = {
       title: trimmedTitle,
-      description: description.trim(),
       start: startStr,
       duration,
       timeZone: allDay ? null : timeZone,
@@ -501,6 +545,13 @@ export function EventModal({
       freeBusyStatus: "busy",
       privacy: "public",
     };
+
+    // On an existing event the empty string is how a description gets cleared, but
+    // sending it on creation writes a `DESCRIPTION:` with nothing after it — which
+    // invitation e-mails then render as a "Description" heading over blank space.
+    if (trimmedDescription || event) {
+      data.description = trimmedDescription;
+    }
 
     if (!event) {
       data.uid = generateUUID();
@@ -540,25 +591,7 @@ export function EventModal({
     if (recurrence === "custom" && customRule) {
       data.recurrenceRules = [customRule];
     } else if (recurrence !== "none" && recurrence !== "custom") {
-      data.recurrenceRules = [{
-        "@type": "RecurrenceRule",
-        frequency: recurrence,
-        interval: 1,
-        rscale: "gregorian",
-        skip: "omit",
-        firstDayOfWeek: "mo",
-        byDay: null,
-        byMonthDay: null,
-        byMonth: null,
-        byYearDay: null,
-        byWeekNo: null,
-        byHour: null,
-        byMinute: null,
-        bySecond: null,
-        bySetPosition: null,
-        count: null,
-        until: null,
-      }];
+      data.recurrenceRules = [createRecurrenceRule(recurrence)];
     } else if (event && event.recurrenceRules?.length) {
       data.recurrenceRules = null;
       if (event.recurrenceOverrides) data.recurrenceOverrides = null;
@@ -588,7 +621,10 @@ export function EventModal({
 
     if (effectiveAttendees.length > 0 && currentUserEmails.length > 0) {
       const organizerEmail = currentUserEmails[0];
-      const organizerName = existingParticipants.find(p => p.isOrganizer)?.name || "";
+      // On create there are no existing participants, so a fresh event would
+      // store an empty organizer name — fall back to the contact card.
+      const organizerName =
+        existingParticipants.find(p => p.isOrganizer)?.name || resolveContactName(organizerEmail) || "";
       data.participants = buildParticipantMap(
         { name: organizerName, email: organizerEmail },
         effectiveAttendees
@@ -612,7 +648,7 @@ export function EventModal({
     } finally {
       setIsSaving(false);
     }
-  }, [title, description, location, virtualLocation, startDate, startTime, endDate, endTime, allDay, calendarId, recurrence, customRule, alertRows, attendees, sendInvitations, currentUserEmails, existingParticipants, event, onSave, isSaving]);
+  }, [title, description, location, virtualLocation, startDate, startTime, endDate, endTime, allDay, calendarId, recurrence, customRule, alertRows, attendees, sendInvitations, currentUserEmails, existingParticipants, resolveContactName, event, onSave, isSaving, t]);
 
   const handleRsvp = useCallback((status: CalendarParticipant['participationStatus']) => {
     if (!event || !userParticipantId || !onRsvp) return;
@@ -622,28 +658,7 @@ export function EventModal({
 
   const handleDuplicate = useCallback(() => {
     if (!event || !onDuplicate) return;
-    const start = getEventStartDate(event);
-    const newStart = addDays(start, 1);
-    const newUid = generateUUID();
-    const data: Partial<CalendarEvent> = {
-      uid: newUid,
-      title: event.title,
-      description: event.description,
-      start: event.showWithoutTime ? format(newStart, "yyyy-MM-dd") : format(newStart, "yyyy-MM-dd'T'HH:mm:ss"),
-      duration: event.duration,
-      timeZone: event.timeZone,
-      showWithoutTime: event.showWithoutTime,
-      calendarIds: { ...event.calendarIds },
-      status: "confirmed",
-      freeBusyStatus: event.freeBusyStatus,
-      privacy: event.privacy,
-    };
-    if (event.locations) data.locations = structuredClone(event.locations);
-    if (event.virtualLocations) data.virtualLocations = structuredClone(event.virtualLocations);
-    if (event.recurrenceRules) data.recurrenceRules = structuredClone(event.recurrenceRules);
-    if (event.alerts) data.alerts = structuredClone(event.alerts);
-    if (event.participants) data.participants = structuredClone(event.participants);
-    onDuplicate(data);
+    onDuplicate(buildDuplicateEventData(event));
   }, [event, onDuplicate]);
 
   const modalRef = useRef<HTMLDivElement>(null);
@@ -696,7 +711,7 @@ export function EventModal({
     const startD = getEventStartDate(event);
     const endD = getEventEndDate(event);
     const locationName = event.locations ? Object.values(event.locations)[0]?.name : null;
-    const participants = getParticipantList(event);
+    const participants = getParticipantList(event, { resolveName: resolveContactName });
 
     return (
       <div ref={modalRef} role="dialog" aria-modal={isMobile || undefined} aria-label={event.title || t("events.no_title")} className={isMobile ? mobileRootClass : "flex flex-col h-full bg-background"}>
@@ -759,7 +774,9 @@ export function EventModal({
             })()}
 
             {event.description && (
-              <p className="text-sm text-muted-foreground">{event.description}</p>
+              <p className="text-sm text-muted-foreground whitespace-pre-line break-words">
+                <LinkifiedText text={event.description} />
+              </p>
             )}
 
             {locationName && (
@@ -775,8 +792,13 @@ export function EventModal({
                 <div className="space-y-1 ps-5">
                   {participants.map(p => (
                     <div key={p.id} className="flex items-center justify-between text-sm">
-                      <span className="truncate">{p.name || p.email}</span>
-                      <StatusBadge status={p.status} isOrganizer={p.isOrganizer} t={t} />
+                      <span className="truncate">
+                        {p.name || p.email}
+                        {p.isOrganizer && (
+                          <span className="text-muted-foreground ms-1">({t("participants.organizer").toLowerCase()})</span>
+                        )}
+                      </span>
+                      <StatusBadge status={p.status} t={t} />
                     </div>
                   ))}
                 </div>
@@ -786,44 +808,7 @@ export function EventModal({
         </div>
 
         <div className="px-6 py-4 border-t border-border flex-shrink-0">
-          <div className="flex items-center justify-between">
-            <span className="text-sm font-medium">{t("participants.rsvp_label")}</span>
-            <div className="flex gap-2">
-              <Button
-                size="sm"
-                variant={userCurrentStatus === "accepted" ? "default" : "outline"}
-                onClick={() => handleRsvp("accepted")}
-                className={userCurrentStatus === "accepted"
-                  ? "bg-success hover:bg-success/80 text-success-foreground"
-                  : "text-success border-success/30 hover:bg-success/10"}
-              >
-                {userCurrentStatus === "accepted" && <Check className="w-4 h-4 me-1" />}
-                {t("participants.accepted")}
-              </Button>
-              <Button
-                size="sm"
-                variant={userCurrentStatus === "tentative" ? "default" : "outline"}
-                onClick={() => handleRsvp("tentative")}
-                className={userCurrentStatus === "tentative"
-                  ? "bg-warning hover:bg-warning/80 text-warning-foreground"
-                  : "border border-warning/30 text-warning hover:bg-warning/10"}
-              >
-                {userCurrentStatus === "tentative" && <Check className="w-4 h-4 me-1" />}
-                {t("participants.tentative")}
-              </Button>
-              <Button
-                size="sm"
-                variant={userCurrentStatus === "declined" ? "default" : "ghost"}
-                onClick={() => handleRsvp("declined")}
-                className={userCurrentStatus === "declined"
-                  ? "bg-destructive hover:bg-destructive/80 text-destructive-foreground"
-                  : "text-destructive hover:bg-destructive/10"}
-              >
-                {userCurrentStatus === "declined" && <Check className="w-4 h-4 me-1" />}
-                {t("participants.declined")}
-              </Button>
-            </div>
-          </div>
+          <RsvpBar status={userCurrentStatus} onRespond={handleRsvp} t={t} />
         </div>
       </div>
     );
@@ -836,7 +821,7 @@ export function EventModal({
     const endD = getEventEndDate(event);
     const locationName = event.locations ? Object.values(event.locations)[0]?.name || null : null;
     const virtualLoc = event.virtualLocations ? Object.values(event.virtualLocations)[0]?.uri || null : null;
-    const viewParticipants = getParticipantList(event);
+    const viewParticipants = getParticipantList(event, { resolveName: resolveContactName });
     const recurrenceLabel = getRecurrenceLabel(event, t, locale);
     const alertLabel = getAlertLabel(event, t);
     const eventCalendar = calendars.find(c => event.calendarIds[c.id]);
@@ -963,7 +948,7 @@ export function EventModal({
                             <span className="text-muted-foreground ms-1">({t("participants.organizer").toLowerCase()})</span>
                           )}
                         </span>
-                        <StatusBadge status={p.status} isOrganizer={p.isOrganizer} t={t} />
+                        <StatusBadge status={p.status} t={t} />
                       </div>
                     ))}
                   </div>
@@ -991,11 +976,23 @@ export function EventModal({
             {event.description && (
               <div className="flex items-start gap-2.5">
                 <AlignLeft className="w-4 h-4 text-muted-foreground mt-0.5 flex-shrink-0" />
-                <p className="text-sm text-muted-foreground whitespace-pre-line">{event.description}</p>
+                <p className="text-sm text-muted-foreground whitespace-pre-line break-words">
+                  <LinkifiedText text={event.description} />
+                </p>
               </div>
             )}
           </div>
         </div>
+
+        {/* RSVP:
+          The viewer owes a reply but may also edit their own copy,
+          so the rsvp-only branch above does not apply to this event.
+        */}
+        {canRsvp && onRsvp && userParticipantId && (
+          <div className="px-6 py-3 border-t border-border flex-shrink-0">
+          <RsvpBar status={userCurrentStatus} onRespond={handleRsvp} t={t} />
+          </div>
+        )}
 
         {/* Action Bar */}
         <div className="px-6 py-3 border-t border-border flex-shrink-0 flex items-center justify-between">
@@ -1127,6 +1124,11 @@ export function EventModal({
               participants={attendees}
               onAdd={handleAddAttendee}
               onRemove={handleRemoveAttendee}
+            />
+            <ParticipantAvailability
+              attendees={attendees}
+              start={availabilityWindow.start}
+              end={availabilityWindow.end}
             />
             {isEdit && statusCounts && (existingParticipants.length > 0) && (
               <p className="text-xs text-muted-foreground mt-1.5">
@@ -1270,7 +1272,7 @@ export function EventModal({
                 rule={customRule}
                 eventStart={(() => {
                   const d = new Date(`${startDate}T${allDay ? "00:00" : (startTime || "00:00")}:00`);
-                  return isNaN(d.getTime()) ? new Date() : d;
+                  return isNaN(d.getTime()) ? displayNow() : d;
                 })()}
                 onSave={handleRecurrenceEditorSave}
                 onCancel={handleRecurrenceEditorCancel}
@@ -1357,11 +1359,11 @@ export function EventModal({
         </div>
       </div>
 
-      <div className="flex items-center justify-between px-6 py-4 border-t border-border flex-shrink-0">
-        <div className="flex items-center gap-1">
+      <div className="flex items-center justify-between px-6 py-4 border-t border-border flex-shrink-0 flex-wrap gap-y-2">
+        <div className="flex items-center gap-1 w-full">
           {isEdit && onDelete && (
             showDeleteConfirm ? (
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <div>
                   <span className="text-sm text-red-600 dark:text-red-400">
                     {t("form.delete_confirm")}
@@ -1376,11 +1378,16 @@ export function EventModal({
                   variant="outline"
                   size="sm"
                   onClick={() => { onDelete(event!.id, hasParticipants || undefined); onClose(); }}
-                  className="text-red-600 dark:text-red-400 border-red-300 dark:border-red-700"
+                  className="text-red-600 dark:text-red-400 border-red-300 dark:border-red-700 w-full"
                 >
                   {t("events.delete")}
                 </Button>
-                <Button variant="ghost" size="sm" onClick={() => setShowDeleteConfirm(false)}>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowDeleteConfirm(false)}
+                  className="w-full"
+                >
                   {t("form.cancel")}
                 </Button>
               </div>
@@ -1389,7 +1396,7 @@ export function EventModal({
                 variant="ghost"
                 size="sm"
                 onClick={() => setShowDeleteConfirm(true)}
-                className="text-red-600 dark:text-red-400"
+                className="text-red-600 dark:text-red-400 w-full"
               >
                 <Trash2 className="w-4 h-4 me-1" />
                 {t("events.delete")}
@@ -1402,6 +1409,7 @@ export function EventModal({
               size="sm"
               onClick={handleDuplicate}
               aria-label={t("events.duplicate")}
+              className="w-full"
             >
               <Copy className="w-4 h-4 me-1" />
               {t("events.duplicate")}
@@ -1409,27 +1417,90 @@ export function EventModal({
           )}
         </div>
 
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={isEdit ? () => setMode("view") : onClose}>
+        {!showDeleteConfirm && (
+        <div className="flex gap-2 w-full">
+          <Button
+            variant="outline"
+            onClick={isEdit ? () => setMode("view") : onClose}
+            className="w-full"
+          >
             {t("form.cancel")}
           </Button>
-          <Button onClick={handleSave} disabled={!title.trim() || isSaving}>
-            {t("form.save")}
+          <Button
+            onClick={handleSave}
+            disabled={!title.trim() || isSaving}
+            className="w-full"
+          >
+            {/* While a save is in flight the button was disabled with no visible change, so a
+                slow request (mobile, VPN) looked like a dead button for the whole timeout. */}
+            {isSaving ? t("subscription.saving") : t("form.save")}
           </Button>
         </div>
+        )}
       </div>
     </div>
   );
 }
 
-function StatusBadge({ status, isOrganizer, t }: {
-  status: CalendarParticipant['participationStatus'];
-  isOrganizer: boolean;
+/**
+ * The accept / tentative / decline row. Shared by the rsvp-only view and by the
+ * read-only view that an *editable* received invite lands in - the latter is the
+ * case that had no way to answer an invite at all (#937).
+ */
+function RsvpBar({ status, onRespond, t }: {
+  status: CalendarParticipant['participationStatus'] | null;
+  onRespond: (status: CalendarParticipant['participationStatus']) => void;
   t: ReturnType<typeof useTranslations>;
 }) {
-  if (isOrganizer) {
-    return <span className="text-xs text-primary">{t("participants.organizer")}</span>;
-  }
+  return (
+    <div className="flex items-center justify-between">
+      <span className="text-sm font-medium">{t("participants.rsvp_label")}</span>
+      <div className="flex gap-2">
+        <Button
+          size="sm"
+          variant={status === "accepted" ? "default" : "outline"}
+          onClick={() => onRespond("accepted")}
+          className={status === "accepted"
+            ? "bg-success hover:bg-success/80 text-success-foreground"
+            : "text-success border-success/30 hover:bg-success/10"}
+        >
+          {status === "accepted" && <Check className="w-4 h-4 me-1" />}
+          {t("participants.accepted")}
+        </Button>
+        <Button
+          size="sm"
+          variant={status === "tentative" ? "default" : "outline"}
+          onClick={() => onRespond("tentative")}
+          className={status === "tentative"
+            ? "bg-warning hover:bg-warning/80 text-warning-foreground"
+            : "border border-warning/30 text-warning hover:bg-warning/10"}
+        >
+          {status === "tentative" && <Check className="w-4 h-4 me-1" />}
+          {t("participants.tentative")}
+        </Button>
+        <Button
+          size="sm"
+          variant={status === "declined" ? "default" : "ghost"}
+          onClick={() => onRespond("declined")}
+          className={status === "declined"
+            ? "bg-destructive hover:bg-destructive/80 text-destructive-foreground"
+            : "text-destructive hover:bg-destructive/10"}
+        >
+          {status === "declined" && <Check className="w-4 h-4 me-1" />}
+          {t("participants.declined")}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function StatusBadge({ status, t }: {
+  status: CalendarParticipant['participationStatus'];
+  t: ReturnType<typeof useTranslations>;
+}) {
+  // The organizer is marked by the "(组织者)" suffix on the name; the badge
+  // shows their participation status (organizers default to accepted) rather
+  // than repeating the organizer label.
   const colors: Record<string, string> = {
     accepted: "text-success",
     declined: "text-destructive",

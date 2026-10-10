@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo } from "react";
 import { useTranslations } from "next-intl";
 import { Email, Mailbox } from "@/lib/jmap/types";
 import {
@@ -32,21 +33,32 @@ import {
   EditIcon,
   CalendarClock,
   Paperclip,
-  Filter,
   Link as LinkIcon,
   MessagesSquare,
-} from "lucide-react";
+  Copy,
+} from "@/components/icons";
 import { buildMailPath } from "@/lib/deep-links";
 import { useCopyLink } from "@/hooks/use-copy-link";
 import { buildMailboxTree, MailboxNode } from "@/lib/utils";
+import { buildMoveTargets, resolveMoveOwnerAccountId } from "@/lib/move-targets";
 import { localizeMailboxName } from "@/lib/mailbox-label";
 import { getEmailTagIds } from "@/lib/thread-utils";
-import { useUIStore } from "@/stores/ui-store";
 import { TagPicker } from "./tag-picker";
+import { RulesContextSubMenu } from "./rules-menu";
+import { useUIStore } from "@/stores/ui-store";
 
 interface Position {
   x: number;
   y: number;
+}
+
+/** Another connected account the "Copy to" entry can copy into. */
+export interface CopyTargetAccount {
+  /** The login (AccountEntry.id). */
+  accountId: string;
+  label: string;
+  /** That account's own folders, as its client returns them. */
+  mailboxes: Mailbox[];
 }
 
 interface EmailContextMenuProps {
@@ -60,6 +72,12 @@ interface EmailContextMenuProps {
   currentMailboxRole?: string;
   isMultiSelect?: boolean;
   selectedCount?: number;
+  /**
+   * The messages whose senders the Rules entry makes rules for: the whole
+   * selection, or for a single row the message to take the sender from.
+   * Without it, the menu's own message.
+   */
+  ruleEmails?: Email[];
   // Single email actions
   onReply?: () => void;
   onReplyAll?: () => void;
@@ -71,7 +89,6 @@ interface EmailContextMenuProps {
   onDelete?: () => void;
   onArchive?: () => void;
   onSetTag?: (tagId: string | null) => void;
-  onCreateFilter?: () => void;
   onMoveToMailbox?: (mailboxId: string) => void;
   onMarkAsSpam?: () => void;
   onUndoSpam?: () => void;
@@ -80,11 +97,22 @@ interface EmailContextMenuProps {
   onRescheduleScheduled?: () => void;
   // Batch actions
   onBatchMarkAsRead?: (read: boolean) => void;
+  /** Tags every selected message carries, and those only some of them do. */
+  batchTagIds?: string[];
+  batchPartialTagIds?: string[];
+  /** Takes the tag off when the whole selection has it, else puts it on all. */
+  onBatchToggleTag?: (tagId: string) => void;
   onBatchDelete?: () => void;
   onBatchArchive?: () => void;
   onBatchMoveToMailbox?: (mailboxId: string) => void;
   onBatchMarkAsSpam?: () => void;
   onBatchUndoSpam?: () => void;
+  /**
+   * Other connected accounts to offer under "Copy to". Copies the selection
+   * (or the single message) and keeps the originals. Hidden when empty.
+   */
+  copyTargets?: CopyTargetAccount[];
+  onCopyToAccount?: (accountId: string, mailboxId: string) => void;
 }
 
 // Get mailbox icon based on role
@@ -116,6 +144,7 @@ export function EmailContextMenu({
   currentMailboxRole,
   isMultiSelect = false,
   selectedCount = 1,
+  ruleEmails,
   onReply,
   onReplyAll,
   onForward,
@@ -126,11 +155,13 @@ export function EmailContextMenu({
   onDelete,
   onArchive,
   onSetTag,
-  onCreateFilter,
   onMoveToMailbox,
   onMarkAsSpam,
   onUndoSpam,
   onBatchMarkAsRead,
+  batchTagIds,
+  batchPartialTagIds,
+  onBatchToggleTag,
   onBatchDelete,
   onBatchArchive,
   onBatchMoveToMailbox,
@@ -139,21 +170,22 @@ export function EmailContextMenu({
   onEditDraft,
   onCancelScheduledForEdit,
   onRescheduleScheduled,
+  copyTargets,
+  onCopyToAccount,
 }: EmailContextMenuProps) {
   const t = useTranslations("context_menu");
   const tSidebar = useTranslations("sidebar");
   const tEmailViewer = useTranslations("email_viewer");
   const tDeepLink = useTranslations("deep_link");
   const copyLink = useCopyLink();
-  const isMobile = useUIStore((state) => state.isMobile);
-  const isTablet = useUIStore((state) => state.isTablet);
   const isUnread = !email.keywords?.$seen;
   const isStarred = email.keywords?.$flagged;
   const isPinned = email.keywords?.['$pinned'] === true;
   const isDraft = email.keywords?.['$draft'] === true;
   const currentTagIds = getEmailTagIds(email.keywords);
   const showBatchActions = isMultiSelect && selectedCount > 1;
-  const showFullSingleMessageActions = !showBatchActions && (isMobile || isTablet);
+  const isDesktop = useUIStore((state) => state.isDesktop);
+  const showFullSingleMessageActions = !isDesktop;
   const showBulkOrFullActions = showBatchActions || showFullSingleMessageActions;
   const isInJunkFolder = currentMailboxRole === 'junk';
   // Marking your own outgoing mail as spam makes no sense - hide the action
@@ -162,36 +194,75 @@ export function EmailContextMenu({
   const isScheduled = email.isScheduled === true;
   const canCancelScheduled = isScheduled && email.scheduledUndoStatus === 'pending';
 
-  // Build mailbox tree for move-to submenu with proper hierarchy
-  const moveTargetIds = new Set(
-    mailboxes
-      .filter(
-        (m) =>
-          m.id !== selectedMailbox &&
-          m.role !== "drafts" &&
-          !m.id.startsWith("shared-") &&
-          m.myRights?.mayAddItems
-      )
-      .map((m) => m.id)
-  );
-  const mailboxTree = buildMailboxTree(mailboxes);
+  // Move-to submenu: the message's own account first (#1149)
+  const { tree: moveTree, targetIds: moveTargetIds } = buildMoveTargets(mailboxes, {
+    currentMailboxId: selectedMailbox,
+    ownerAccountId: resolveMoveOwnerAccountId(email, mailboxes, selectedMailbox),
+  });
 
-  // Filter tree to only include branches that contain valid move targets
-  const filterTree = (nodes: MailboxNode[]): MailboxNode[] => {
+  // Filter tree to only include branches that contain valid targets
+  const filterTree = (nodes: MailboxNode[], targetIds: Set<string>): MailboxNode[] => {
     return nodes.reduce<MailboxNode[]>((acc, node) => {
-      const filteredChildren = filterTree(node.children);
-      if (moveTargetIds.has(node.id) || filteredChildren.length > 0) {
+      const filteredChildren = filterTree(node.children, targetIds);
+      if (targetIds.has(node.id) || filteredChildren.length > 0) {
         acc.push({ ...node, children: filteredChildren });
       }
       return acc;
     }, []);
   };
-  const moveTree = filterTree(mailboxTree);
+
+  // Folders of the other connected accounts a copy can land in.
+  const copyTrees = (copyTargets ?? [])
+    .map((target) => {
+      const targetIds = new Set(
+        target.mailboxes
+          .filter((m) => !m.isShared && m.role !== "drafts" && m.myRights?.mayAddItems)
+          .map((m) => m.id)
+      );
+      return { ...target, targetIds, tree: filterTree(buildMailboxTree(target.mailboxes), targetIds) };
+    })
+    .filter((target) => target.tree.length > 0);
+
+  const renderMailboxNodes = (
+    nodes: MailboxNode[],
+    targetIds: Set<string>,
+    testIdPrefix: string,
+    onPick: (mailboxId: string) => void,
+  ): React.ReactNode =>
+    nodes.map((node) => {
+      const Icon = getMailboxIcon(node.role);
+      const nodeLabel = localizeMailboxName(node.role, node.name, (k) => tSidebar(`mailboxes.${k}`));
+      return (
+        <div key={node.id}>
+          {targetIds.has(node.id) ? (
+            <ContextMenuItem
+              icon={Icon}
+              label={nodeLabel}
+              testId={`${testIdPrefix}${node.id}`}
+              onClick={() => handleAction(() => onPick(node.id))}
+            />
+          ) : (
+            <div className="px-3 py-1.5 text-sm flex items-center gap-2 text-muted-foreground">
+              <Icon className="w-4 h-4 flex-shrink-0" />
+              <span>{nodeLabel}</span>
+            </div>
+          )}
+          {node.children.length > 0 && (
+            <div className="ps-4">
+              {renderMailboxNodes(node.children, targetIds, testIdPrefix, onPick)}
+            </div>
+          )}
+        </div>
+      );
+    });
 
   const handleAction = (action: () => void) => {
     action();
     onClose();
   };
+
+  // Stable, so the Rules entry does not re-resolve its account every render.
+  const ruleSenderEmails = useMemo(() => ruleEmails ?? [email], [ruleEmails, email]);
 
   return (
     <ContextMenu
@@ -276,7 +347,7 @@ export function EmailContextMenu({
 
       {/* Permalinks (#733). The conversation entry only appears when the
           message actually belongs to a thread worth linking to. */}
-      {showFullSingleMessageActions && (
+      {!showBatchActions && showFullSingleMessageActions && (
         <>
           <ContextMenuItem
             icon={LinkIcon}
@@ -327,49 +398,33 @@ export function EmailContextMenu({
       {/* Move to submenu */}
       {moveTree.length > 0 && (
         <ContextMenuSubMenu icon={FolderInput} label={t("move_to")} testId="ctx-move-to">
-          {(() => {
-            const renderNodes = (nodes: MailboxNode[]) => {
-              return nodes.map((node) => {
-                const Icon = getMailboxIcon(node.role);
-                const isTarget = moveTargetIds.has(node.id);
-                const nodeLabel = localizeMailboxName(node.role, node.name, (k) => tSidebar(`mailboxes.${k}`));
-                return (
-                  <div key={node.id}>
-                    {isTarget ? (
-                      <ContextMenuItem
-                        icon={Icon}
-                        label={nodeLabel}
-                        testId={`move-to:${node.id}`}
-                        onClick={() =>
-                          handleAction(() =>
-                            showBatchActions
-                              ? onBatchMoveToMailbox?.(node.id)
-                              : onMoveToMailbox?.(node.id)
-                          )
-                        }
-                      />
-                    ) : (
-                      <div className="px-3 py-1.5 text-sm flex items-center gap-2 text-muted-foreground">
-                        <Icon className="w-4 h-4 flex-shrink-0" />
-                        <span>{nodeLabel}</span>
-                      </div>
-                    )}
-                    {node.children.length > 0 && (
-                      <div className="ps-4">
-                        {renderNodes(node.children)}
-                      </div>
-                    )}
-                  </div>
-                );
-              });
-            };
-            return renderNodes(moveTree);
-          })()}
+          {renderMailboxNodes(moveTree, moveTargetIds, "move-to:", (mailboxId) =>
+            showBatchActions
+              ? onBatchMoveToMailbox?.(mailboxId)
+              : onMoveToMailbox?.(mailboxId)
+          )}
         </ContextMenuSubMenu>
       )}
 
+      {/* Copy to another connected account, keeping the originals */}
+      {onCopyToAccount && copyTrees.length > 0 && (
+        <ContextMenuSubMenu icon={Copy} label={t("copy_to_account")} testId="ctx-copy-to">
+          {copyTrees.map((target) => (
+            <div key={target.accountId}>
+              <ContextMenuHeader>{target.label}</ContextMenuHeader>
+              {renderMailboxNodes(target.tree, target.targetIds, `copy-to:${target.accountId}:`, (mailboxId) =>
+                onCopyToAccount(target.accountId, mailboxId)
+              )}
+            </div>
+          ))}
+        </ContextMenuSubMenu>
+      )}
+
+      {/* Rules: filter rules made from the sender(s), saved as Sieve */}
+      <RulesContextSubMenu anchor={email} senderEmails={ruleSenderEmails} onClose={onClose} />
+
       {/* Star/Unstar - only for single email */}
-      {showFullSingleMessageActions && (
+      {!showBatchActions && showFullSingleMessageActions && (
         <ContextMenuItem
           icon={Star}
           label={isStarred ? t("unstar") : t("star")}
@@ -380,7 +435,7 @@ export function EmailContextMenu({
       )}
 
       {/* Pin/Unpin - only for single email; pinned mails float to the top of the list */}
-      {showFullSingleMessageActions && onTogglePinned && (
+      {!showBatchActions && showFullSingleMessageActions && onTogglePinned && (
         <ContextMenuItem
           icon={isPinned ? PinOff : Pin}
           label={isPinned ? t("unpin") : t("pin")}
@@ -388,26 +443,24 @@ export function EmailContextMenu({
         />
       )}
 
-      {/* Set tag submenu - only for single email */}
-      {showFullSingleMessageActions && (
-        <ContextMenuSubMenu icon={Tag} label={t("tag")}>
+      {/* Set tag submenu - the row's own tags, or the whole selection's (#1077) */}
+      {(showFullSingleMessageActions || (showBatchActions && onBatchToggleTag)) && (
+        <ContextMenuSubMenu icon={Tag} label={t("tag")} testId="ctx-tag">
           <div className="w-56 max-w-[18rem]">
-            <TagPicker
-              selectedIds={currentTagIds}
-              onToggle={(tagId) => onSetTag?.(tagId)}
-            />
+            {showBatchActions ? (
+              <TagPicker
+                selectedIds={batchTagIds ?? []}
+                partialIds={batchPartialTagIds}
+                onToggle={(tagId) => onBatchToggleTag?.(tagId)}
+              />
+            ) : (
+              <TagPicker
+                selectedIds={currentTagIds}
+                onToggle={(tagId) => onSetTag?.(tagId)}
+              />
+            )}
           </div>
         </ContextMenuSubMenu>
-      )}
-
-      {/* Create filter - prefilled from this message; single selection only */}
-      {!showBatchActions && onCreateFilter && (
-        <ContextMenuItem
-          icon={Filter}
-          label={t("create_filter")}
-          testId="ctx-create-filter"
-          onClick={() => handleAction(onCreateFilter)}
-        />
       )}
 
       {/* Spam - contextual based on folder; pointless on own outgoing mail */}

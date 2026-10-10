@@ -5,6 +5,10 @@ import type { Email, Mailbox } from '@/lib/jmap/types';
 import { useUIStore } from '@/stores/ui-store';
 import { EmailContextMenu } from '../email-context-menu';
 
+vi.mock('../rules-menu', () => ({
+  RulesContextSubMenu: () => <div data-testid="ctx-rules" />,
+}));
+
 const RIGHTS: Mailbox['myRights'] = {
   mayReadItems: true,
   mayAddItems: true,
@@ -67,7 +71,6 @@ const ACTIONS = {
   onDelete: vi.fn(),
   onArchive: vi.fn(),
   onSetTag: vi.fn(),
-  onCreateFilter: vi.fn(),
   onMoveToMailbox: vi.fn(),
   onMarkAsSpam: vi.fn(),
   onBatchMarkAsRead: vi.fn(),
@@ -107,7 +110,7 @@ describe('EmailContextMenu', () => {
     expect(screen.getByText('reply_all')).toBeInTheDocument();
     expect(screen.getByText('forward')).toBeInTheDocument();
     expect(screen.getByText('move_to')).toBeInTheDocument();
-    expect(screen.getByText('create_filter')).toBeInTheDocument();
+    expect(screen.getByTestId('ctx-rules')).toBeInTheDocument();
     expect(screen.getByText('mark_as_spam')).toBeInTheDocument();
 
     expect(screen.queryByText('forward_as_attachment')).not.toBeInTheDocument();
@@ -146,6 +149,6 @@ describe('EmailContextMenu', () => {
     expect(screen.getByText('mark_as_spam')).toBeInTheDocument();
     expect(screen.getByText('mark_read')).toBeInTheDocument();
     expect(screen.queryByText('reply')).not.toBeInTheDocument();
-    expect(screen.queryByText('create_filter')).not.toBeInTheDocument();
+    expect(screen.getByTestId('ctx-rules')).toBeInTheDocument();
   });
 });

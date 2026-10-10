@@ -1,7 +1,7 @@
 "use client";
 
-import { BookUser, Calendar, HardDrive, Keyboard, Settings } from 'lucide-react';
 import { useTranslations } from 'next-intl';
+import { BookUser, Calendar, HardDrive, Keyboard, Settings } from '@/components/icons';
 
 export type AccountNavigationDestination = '/calendar' | '/contacts' | '/files' | '/settings';
 

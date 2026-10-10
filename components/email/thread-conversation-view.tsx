@@ -3,14 +3,18 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import DOMPurify from "dompurify";
 import { Email, ThreadGroup } from "@/lib/jmap/types";
-import { EMAIL_SANITIZE_CONFIG, collapseBlockedImageContainers, plainTextToSafeHtml, restrictDataUriResourcesOnNode, sanitizePlainTextRenderedHtml } from "@/lib/email-sanitization";
-import { hasMeaningfulHtmlBody } from "@/lib/signature-utils";
+import { EMAIL_SANITIZE_CONFIG, blockExternalResourcesOnNode, collapseBlockedImageContainers, emailIframeCsp, plainTextToSafeHtml, restrictDataUriResourcesOnNode, sanitizePlainTextRenderedHtml } from "@/lib/email-sanitization";
+import { getRenderableHtmlBody } from "@/lib/email-body-selection";
+import { findVerificationCode, verificationCodeBodyText } from "@/lib/verification-code";
+import { VerificationCodeChip } from "./verification-code-chip";
+import { collectReferencedCids, isEmbeddedInBody } from "@/lib/attachment-visibility";
 import { collapsePlainTextQuotes, setupQuoteCollapse } from "@/lib/quote-collapse";
+import { fitEmailBodyWidth } from "@/lib/email-fit-width";
 import { transformInlineStyles, transformColorForDarkMode, transformBgColorForDarkMode } from "@/lib/color-transform";
 import { useThemeStore } from "@/stores/theme-store";
 import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { formatDate, formatFileSize, cn } from "@/lib/utils";
+import { formatDate, formatFileSize, cn, cleanPreview } from "@/lib/utils";
 import {
   ArrowLeft,
   ChevronDown,
@@ -29,12 +33,14 @@ import {
   FileArchive,
   File,
   Eye,
-} from "lucide-react";
+} from "@/components/icons";
 import { useTranslations } from "next-intl";
 import { useSettingsStore } from "@/stores/settings-store";
 import { useContactStore } from "@/stores/contact-store";
 import { useAuthStore } from "@/stores/auth-store";
-import { isFilePreviewable } from "@/lib/file-preview";
+import { isFilePreviewable, toInertBlob } from "@/lib/file-preview";
+import { useWopiStatus, canWopiOpen } from "@/hooks/use-wopi-status";
+import { useOwnDomainAddress } from "@/hooks/use-own-domain-address";
 
 interface ThreadConversationViewProps {
   thread: ThreadGroup;
@@ -238,10 +244,19 @@ function EmailCard({
   const resolvedTheme = useThemeStore((state) => state.resolvedTheme);
   const density = useSettingsStore((state) => state.density);
   const mailAttachmentAction = useSettingsStore((state) => state.mailAttachmentAction);
+  const wopiStatus = useWopiStatus(true);
   const hideInlineImageAttachments = useSettingsStore((state) => state.hideInlineImageAttachments);
   const emailAlwaysLightMode = useSettingsStore((state) => state.emailAlwaysLightMode);
   const plainTextFont = useSettingsStore((state) => state.plainTextFont);
+  const showVerificationCodes = useSettingsStore((state) => state.showVerificationCodes);
+  const verificationCode = useMemo(
+    () => (showVerificationCodes && isExpanded ? findVerificationCode(email.subject, verificationCodeBodyText(email)) : null),
+    // A keyword change replaces the email object; only another body needs another look.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [showVerificationCodes, isExpanded, email.id, email.subject, email.bodyValues],
+  );
   const sender = email.from?.[0];
+  const formatAddress = useOwnDomainAddress();
   const isUnread = !email.keywords?.$seen;
   const isStarred = email.keywords?.$flagged;
   const [hasBlockedContent, setHasBlockedContent] = useState(false);
@@ -297,7 +312,9 @@ function EmailCard({
       await Promise.all(cidAttachments.map(async (att) => {
         const cidValue = att.cid!.replace(/^<|>$/g, '');
         try {
-          const objectUrl = await client!.fetchBlobAsObjectUrl(att.blobId, att.name || 'inline', att.type);
+          // Re-type sender-declared script-bearing parts before they become a
+          // blob: URL in our origin (GHSA-xvjh-v9c6-qcvc).
+          const objectUrl = URL.createObjectURL(toInertBlob(await client!.fetchBlob(att.blobId, att.name || 'inline', att.type)));
           if (!cancelled) {
             urls[cidValue] = objectUrl;
             objectUrls.push(objectUrl);
@@ -326,26 +343,9 @@ function EmailCard({
     if (!email) return { html: "", isHtml: false };
 
     if (email.bodyValues) {
-      let useHtmlVersion = false;
-      let htmlContent = '';
+      let htmlContent = getRenderableHtmlBody(email);
 
-      if (email.htmlBody?.[0]?.partId && email.bodyValues[email.htmlBody[0].partId]) {
-        htmlContent = email.bodyValues[email.htmlBody[0].partId].value;
-        // Prefer textBody when HTML is auto-generated minimal wrapper (no rich formatting).
-        // Server-generated HTML from text/plain emails often lacks <br> tags, collapsing newlines.
-        // Per RFC 8621, an HTML-only email exposes the same partId in both htmlBody and textBody -
-        // in that case there is no real plain-text alternative, so always render the HTML.
-        const textPartId = email.textBody?.[0]?.partId;
-        const htmlPartId = email.htmlBody[0].partId;
-        const hasDistinctTextBody = !!textPartId && textPartId !== htmlPartId && !!email.bodyValues[textPartId];
-        if (hasDistinctTextBody && htmlContent) {
-          useHtmlVersion = hasMeaningfulHtmlBody(htmlContent);
-        } else {
-          useHtmlVersion = !!htmlContent;
-        }
-      }
-
-      if (useHtmlVersion && htmlContent) {
+      if (htmlContent) {
         // Replace cid: references with authenticated blob URLs (fetched via useEffect)
         // This prevents browser auth dialogs that occur when loading raw JMAP download URLs
         if (email.attachments) {
@@ -368,27 +368,13 @@ function EmailCard({
           // Re-apply the data:-URI allowlist DOMPurify skips on media tags.
           restrictDataUriResourcesOnNode(node);
 
-          if (!allowExternal) {
-            if (node.tagName === 'IMG') {
-              const src = node.getAttribute('src');
-              if (src && (src.startsWith('http://') || src.startsWith('https://') || src.startsWith('//'))) {
-                node.setAttribute('data-blocked-src', src);
-                node.removeAttribute('src');
-                node.setAttribute('alt', '[Image blocked]');
-                blockedExternalContent = true;
-              }
-            }
-            if (node.hasAttribute('style')) {
-              const style = node.getAttribute('style');
-              if (style && /url\s*\(/i.test(style)) {
-                const cleanStyle = style.replace(/url\s*\([^)]*\)/gi, 'none');
-                node.setAttribute('style', cleanStyle);
-                blockedExternalContent = true;
-              }
-            }
+          // The desktop viewer's blocker: srcset, <source>, poster,
+          // background attributes and escaped url()s as well as img src.
+          if (!allowExternal && blockExternalResourcesOnNode(node)) {
+            blockedExternalContent = true;
           }
 
-          if (node.tagName === 'A') {
+          if (node.tagName === 'A' || node.tagName === 'AREA') {
             node.setAttribute('target', '_blank');
             node.setAttribute('rel', 'noopener noreferrer');
           }
@@ -419,7 +405,7 @@ function EmailCard({
 
         let finalHtml = sanitized;
         if (blockedExternalContent) {
-          setHasBlockedContent(true);
+          if (!hasBlockedContent) setHasBlockedContent(true);
           finalHtml = collapseBlockedImageContainers(sanitized);
         }
 
@@ -450,7 +436,20 @@ function EmailCard({
     }
 
     return { html: "", isHtml: false };
+  // `hasBlockedContent` is only read to skip a redundant setState; as a
+  // dependency it would re-run the sanitizer once the banner shows.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [email, allowExternal, resolvedTheme, emailAlwaysLightMode, cidBlobUrls, t]);
+
+  // Parts the body embeds via cid: stay out of the attachment row while the
+  // user hides inline images - the desktop viewer's rule, shared through
+  // lib/attachment-visibility.ts so the two views cannot drift apart.
+  const visibleAttachments = useMemo(() => {
+    const attachments = email.attachments ?? [];
+    if (!hideInlineImageAttachments) return attachments;
+    const bodyCids = collectReferencedCids(getRenderableHtmlBody(email));
+    return attachments.filter(att => !isEmbeddedInBody(att, bodyCids));
+  }, [email, hideInlineImageAttachments]);
 
   // Render the sanitized HTML body inside a sandboxed iframe so a malicious
   // (or accidentally-bypassed) email cannot inject styles/scripts/forms into
@@ -459,21 +458,41 @@ function EmailCard({
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const emailIframeSrcDoc = useMemo(() => {
     if (!emailContent.isHtml || !emailContent.html) return '';
-    const csp = "default-src 'none'; img-src data: blob: http: https:; style-src 'unsafe-inline'; font-src data: http: https:; media-src data: blob: http: https:; base-uri 'none'; form-action 'none'; frame-src 'none'";
+    // Strict while external content is blocked: the network-level backstop
+    // for whatever the DOM walk above cannot see.
+    const csp = emailIframeCsp(!allowExternal);
     return `<!DOCTYPE html><html><head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta http-equiv="Content-Security-Policy" content="${csp}">
+<meta name="referrer" content="no-referrer">
 <style>
-  html, body { overflow: hidden; }
-  body { margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 14px; line-height: 1.6; color: #1a1a1a; background: #ffffff; word-wrap: break-word; overflow-wrap: break-word; }
-  img { max-width: 100% !important; height: auto !important; }
+  /* overflow-y hidden keeps the scrollHeight measurement below honest. overflow-x
+     is auto so intrinsically wide content can pan instead of being clipped outright;
+     on a phone fitEmailBodyWidth() shrinks it to the screen first, so the pan is
+     only left for content too wide to stay legible when scaled. */
+  html { overflow: hidden; }
+  body { overflow-x: auto; overflow-y: hidden; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 14px; line-height: 1.6; color: #1a1a1a; background: #ffffff; word-wrap: break-word; overflow-wrap: break-word; }
+  /* Only force the cap on images that set no width of their own: an
+     !important 100% also overrides a sender's inline max-width, and an
+     image sized by max-width + max-height + width:100% then grows to
+     the pane width while its max-height still clamps the height - the
+     picture renders stretched. Same reasoning as the table rule below (#790).
+     height stays !important so a fixed inline height cannot squash it. */
+  img:not([style*="max-width"]) { max-width: 100% !important; }
+  img[style*="max-width"] { max-width: 100%; }
+  img { height: auto !important; }
   a { color: #1a73e8; }
-  table { max-width: 100% !important; table-layout: auto; overflow-wrap: break-word; }
+  /* Only force the cap on tables that set no width of their own: an
+     !important 100% would also override a newsletter's inline
+     max-width:600px and stretch it across the pane. (#790) */
+  table:not([style*="max-width"]) { max-width: 100% !important; }
+  table[style*="max-width"] { max-width: 100%; }
+  table { table-layout: auto; overflow-wrap: break-word; }
   td, th { word-break: break-word; padding: 0.5rem; }
   pre { white-space: pre-wrap; word-wrap: break-word; }
-</style></head><body>${emailContent.html}</body></html>`;
-  }, [emailContent.isHtml, emailContent.html]);
+</style></head><body dir="auto">${emailContent.html}</body></html>`;
+  }, [emailContent.isHtml, emailContent.html, allowExternal]);
 
   const handleIframeLoad = useCallback(() => {
     const iframe = iframeRef.current;
@@ -488,12 +507,16 @@ function EmailCard({
         hide: t('email_viewer.hide_quoted_text'),
       });
       const resize = () => {
-        iframe.style.height = doc.documentElement.scrollHeight + 'px';
+        // Fit desktop-width mail to the screen before measuring: the transform
+        // leaves the layout height untouched, so scale the box by hand.
+        const scale = fitEmailBodyWidth(doc);
+        const height = Math.max(doc.documentElement.scrollHeight, doc.body.scrollHeight);
+        iframe.style.height = Math.ceil(height * scale) + 'px';
       };
       resize();
       const ro = new ResizeObserver(resize);
       ro.observe(doc.body);
-      doc.querySelectorAll('a').forEach((a) => {
+      doc.querySelectorAll('a, area').forEach((a) => {
         a.setAttribute('target', '_blank');
         a.setAttribute('rel', 'noopener noreferrer');
       });
@@ -531,7 +554,7 @@ function EmailCard({
               "font-medium truncate",
               isUnread ? "text-foreground" : "text-muted-foreground"
             )}>
-              {sender?.name || sender?.email || "Unknown"}
+              {sender?.name || (sender?.email && formatAddress(sender.email)) || "Unknown"}
             </span>
             {isStarred && (
               <Star className="w-4 h-4 fill-amber-400 text-amber-400 flex-shrink-0" />
@@ -545,7 +568,7 @@ function EmailCard({
           </div>
           {!isExpanded && density !== 'extra-compact' && (
             <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
-              {email.preview || t('email_viewer.no_preview_available')}
+              {cleanPreview(email.preview) || t('email_viewer.no_preview_available')}
             </p>
           )}
         </div>
@@ -594,6 +617,12 @@ function EmailCard({
             </div>
           )}
 
+          {verificationCode && (
+            <div className="flex" style={{ paddingInline: 'var(--density-card-p)', paddingTop: 'var(--density-card-p)' }}>
+              <VerificationCodeChip code={verificationCode} className="py-1 text-sm" />
+            </div>
+          )}
+
           {/* Email Body */}
           <div style={{ padding: 'var(--density-card-p)' }}>
             {emailContent.isHtml ? (
@@ -624,16 +653,13 @@ function EmailCard({
           </div>
 
           {/* Attachments */}
-          {(() => {
-            const visibleAttachments = (email.attachments ?? []).filter(
-              att => !(hideInlineImageAttachments && att.cid && att.disposition === 'inline' && (att.type || '').startsWith('image/'))
-            );
-            return visibleAttachments.length > 0 && (
+          {visibleAttachments.length > 0 && (
             <div className="px-4 pb-4">
               <div className="flex flex-wrap gap-2">
                 {visibleAttachments.map((attachment, idx) => {
                   const Icon = getFileIcon(attachment.name, attachment.type);
-                  const isPreviewable = isFilePreviewable(attachment.name, attachment.type);
+                  const isPreviewable = isFilePreviewable(attachment.name, attachment.type)
+                    || (!!attachment.blobId && canWopiOpen(wopiStatus, attachment.name));
                   const opensPreview = isPreviewable && mailAttachmentAction === 'preview';
                   return (
                     <button
@@ -660,8 +686,7 @@ function EmailCard({
                 })}
               </div>
             </div>
-            );
-          })()}
+          )}
 
           {/* Action Buttons */}
           <div className="px-4 pb-4 flex gap-2">

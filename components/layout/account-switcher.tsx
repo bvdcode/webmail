@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, useLayoutEffect, useCallback, useMemo, useId } from "react";
 import { createPortal } from "react-dom";
-import { Check, Plus, LogOut, Star, AlertCircle, GripVertical, X } from "lucide-react";
+import { Check, Plus, LogOut, Star, AlertCircle, GripVertical, X } from "@/components/icons";
 import { useTranslations } from "next-intl";
 import { useAccountStore, type AccountEntry } from "@/stores/account-store";
 import { useAuthStore } from "@/stores/auth-store";
@@ -12,13 +12,14 @@ import { cn } from "@/lib/utils";
 import { useRouter } from "@/i18n/navigation";
 import { Avatar } from "@/components/ui/avatar";
 import { useMenuNavigation } from "@/hooks/use-menu-navigation";
+import { toUnicodeDomain, toUnicodeEmail } from "@/lib/idn";
 import { KeyboardShortcutsModal } from '@/components/keyboard-shortcuts-modal';
 import { AccountNavigationItems, type AccountNavigationDestination } from './account-navigation-items';
 import { useNavigationCapabilities } from '@/hooks/use-navigation-capabilities';
 
 interface AccountSwitcherProps {
   /** "rail" = small avatar only (NavigationRail), "expanded" = avatar + name + email (Sidebar) */
-  variant?: "rail" | "expanded";
+  variant?: "rail" | "expanded" | "header";
   className?: string;
 }
 
@@ -71,7 +72,20 @@ export function AccountSwitcher({ variant = "rail", className }: AccountSwitcher
     if (!buttonRef.current) return;
     const rect = buttonRef.current.getBoundingClientRect();
     const rtl = isDocumentRTL();
-    if (variant === "rail") {
+    if (variant === "header") {
+      // Anchored at the inline-end edge of the top bar, so the menu drops
+      // down and is pinned by its own trailing edge — anchoring by the
+      // leading edge (as "expanded" does) runs it off-screen, which is
+      // exactly what happened in RTL where that edge is the left one.
+      setPopoverStyle({
+        position: "fixed",
+        top: rect.bottom + 4,
+        maxWidth: "calc(100vw - 16px)",
+        ...(rtl
+          ? { left: Math.max(8, rect.left) }
+          : { right: Math.max(8, window.innerWidth - rect.right) }),
+      });
+    } else if (variant === "rail") {
       setPopoverStyle(
         rtl
           ? {
@@ -152,7 +166,7 @@ export function AccountSwitcher({ variant = "rail", className }: AccountSwitcher
 
   const handleRemove = (e: React.MouseEvent, account: AccountEntry) => {
     e.stopPropagation();
-    const label = account.email || account.username;
+    const label = toUnicodeEmail(account.email || account.username);
     if (!window.confirm(t("remove_account_confirm", { account: label }))) return;
     removeAccount(account.id);
   };
@@ -200,8 +214,9 @@ export function AccountSwitcher({ variant = "rail", className }: AccountSwitcher
   // Show the account's own identity, not the preferred sending identity -
   // primaryIdentity can be an alias (e.g. info@korazo.net) that differs from
   // the actually logged-in account (info@linusrath.de).
-  const displayName = activeAccount?.displayName || activeAccount?.label || "";
-  const displayEmail = activeAccount?.email || activeAccount?.username || "";
+  // IDN domains arrive in their ASCII (xn--) form; show them as written (#1100).
+  const displayName = toUnicodeEmail(activeAccount?.displayName || activeAccount?.label || "");
+  const displayEmail = toUnicodeEmail(activeAccount?.email || activeAccount?.username || "");
 
   return (
     <>
@@ -212,12 +227,12 @@ export function AccountSwitcher({ variant = "rail", className }: AccountSwitcher
         data-active-account-id={activeAccountId ?? undefined}
         className={cn(
           "flex items-center gap-2 rounded-md transition-colors",
-          variant === "rail"
+          variant !== "expanded"
             ? "justify-center w-10 h-10 hover:bg-muted"
             : "w-full px-2 py-1.5 hover:bg-muted text-start min-w-0",
           className
         )}
-        title={variant === "rail" ? (displayName || displayEmail) : undefined}
+        title={variant !== "expanded" ? (displayName || displayEmail) : undefined}
         aria-label={t("switch_account")}
         aria-expanded={open}
         aria-haspopup="menu"
@@ -225,7 +240,7 @@ export function AccountSwitcher({ variant = "rail", className }: AccountSwitcher
       >
         {activeAccount ? (
           <>
-            <AccountAvatar account={activeAccount} size={variant === "rail" ? "sm" : "md"} />
+            <AccountAvatar account={activeAccount} size={variant === "expanded" ? "md" : "sm"} />
             {variant === "expanded" && (
               <>
                 <div className="min-w-0 flex-1">
@@ -238,7 +253,7 @@ export function AccountSwitcher({ variant = "rail", className }: AccountSwitcher
         ) : (
           <div className={cn(
             "rounded-full bg-muted flex items-center justify-center text-muted-foreground",
-            variant === "rail" ? "w-8 h-8 text-xs" : "w-9 h-9 text-sm"
+            variant === "expanded" ? "w-9 h-9 text-sm" : "w-8 h-8 text-xs"
           )}>
             ?
           </div>
@@ -298,14 +313,14 @@ export function AccountSwitcher({ variant = "rail", className }: AccountSwitcher
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-1">
                       <span className="text-sm font-medium truncate">
-                        {account.displayName || account.label}
+                        {toUnicodeEmail(account.displayName || account.label)}
                       </span>
                       {account.isDefault && (
                         <Star className="w-3 h-3 text-amber-500 flex-shrink-0 fill-amber-500" />
                       )}
                     </div>
                     <p className="text-xs text-muted-foreground truncate">
-                      {account.email || account.username}
+                      {toUnicodeEmail(account.email || account.username)}
                     </p>
                     <div className="flex items-center gap-1 mt-0.5">
                       {account.hasError ? (
@@ -317,7 +332,7 @@ export function AccountSwitcher({ variant = "rail", className }: AccountSwitcher
                         )} />
                       )}
                       <span className="text-[10px] text-muted-foreground truncate">
-                        {(() => { try { return new URL(account.serverUrl).hostname; } catch { return account.serverUrl; } })()}
+                        {(() => { try { return toUnicodeDomain(new URL(account.serverUrl).hostname); } catch { return account.serverUrl; } })()}
                       </span>
                     </div>
                   </div>

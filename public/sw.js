@@ -98,26 +98,47 @@ async function handlePush(event) {
     ? payload.accountLabel
     : "";
 
-  // JMAP StateChange wraps changes in { changed: { [accountId]: {...} } }.
-  // The relay forwards a single account's StateChange per push, so the first
-  // key is the one this notification is for. Without this the preview API
-  // would just fall back to the first signed-in slot and surface mail from
-  // the wrong account.
+  // Two payload shapes reach us from the relay:
+  //   - "jmap-email-push": the server evaluated our per-account delivery
+  //     filter (draft-ietf-jmap-emailpush) and this is a list of the new
+  //     message ids that passed it - spam filed into Junk never gets here.
+  //   - "jmap-state-change" (older servers): a bare EmailDelivery ping wrapped
+  //     as { changed: { [accountId]: {...} } }, fired for every ingested
+  //     message including junk. The relay forwards a single account per push,
+  //     so the first key is the one this notification is for.
   const changed = payload && payload.changed && typeof payload.changed === "object"
     ? payload.changed
     : null;
-  const accountId = changed ? Object.keys(changed)[0] || "" : "";
+  const accountId = (payload && typeof payload.accountId === "string" && payload.accountId)
+    || (changed ? Object.keys(changed)[0] || "" : "");
+  const emailIds = payload && Array.isArray(payload.emailIds)
+    ? payload.emailIds.filter((id) => typeof id === "string" && id)
+    : [];
 
-  // Best effort: ask the webmail to look up the latest unread email so we can
-  // build a useful notification. If the request fails (offline, session
-  // expired, server down) we fall back to a generic "New mail" so the user
-  // still sees something.
+  // Never notify twice for the same message. A push can be redelivered (relay
+  // retry, browser replay after coming back online) and, on the older
+  // state-change path, a junk delivery wakes us while an unread message we
+  // already announced is still sitting in the Inbox - without this we would
+  // re-buzz for that old message.
+  const notified = await readNotifiedIds(accountId);
+  const freshIds = emailIds.filter((id) => !notified.includes(id));
+  if (emailIds.length > 0 && freshIds.length === 0) {
+    return;
+  }
+
+  // Best effort: ask the webmail to look up the email so we can build a useful
+  // notification. With ids from the server we ask for exactly the newest of
+  // them; otherwise the API falls back to the newest unread Inbox message. If
+  // the request fails (offline, session expired, server down) we fall back to
+  // a generic "New mail" so the user still sees something.
   let preview = null;
   let previewOk = false;
   try {
-    const previewUrl = accountId
-      ? `${BASE_PATH}/api/push/preview?accountId=${encodeURIComponent(accountId)}`
-      : `${BASE_PATH}/api/push/preview`;
+    const query = new URLSearchParams();
+    if (accountId) query.set("accountId", accountId);
+    if (freshIds.length > 0) query.set("emailId", freshIds[freshIds.length - 1]);
+    const qs = query.toString();
+    const previewUrl = `${BASE_PATH}/api/push/preview${qs ? `?${qs}` : ""}`;
     const res = await fetch(previewUrl, {
       credentials: "include",
       cache: "no-store",
@@ -134,6 +155,9 @@ async function handlePush(event) {
   const unreadTotal = preview && typeof preview.unreadTotal === "number"
     ? preview.unreadTotal
     : 0;
+  // The login (cookie slot) that owns this account, so the click opens the
+  // message there and not in whichever account happens to be active.
+  const slot = preview && Number.isInteger(preview.slot) ? preview.slot : undefined;
 
   // Push subscription is scoped to EmailDelivery, but stragglers from the
   // older broader-types subscription, marking-as-read races and verification
@@ -142,6 +166,13 @@ async function handlePush(event) {
   // failed (network/auth/server down) we cannot tell, so fall through to the
   // generic "New mail" toast rather than miss a real delivery.
   if (previewOk && !email && unreadTotal === 0) {
+    return;
+  }
+
+  // State-change path only (no ids from the server): the newest unread Inbox
+  // message is one we already announced, so whatever woke us was not new
+  // Inbox mail - typically a delivery into Junk or a Sieve-filed folder.
+  if (emailIds.length === 0 && previewOk && email && notified.includes(email.id)) {
     return;
   }
 
@@ -154,7 +185,7 @@ async function handlePush(event) {
   const groupTag = "bulwark-mail:" + (accountId || "default");
   let title;
   let body;
-  let data = { kind: "mail-list", accountId };
+  let data = { kind: "mail-list", accountId, slot };
 
   if (email) {
     const sender = email.from && email.from[0];
@@ -168,13 +199,14 @@ async function handlePush(event) {
       body += "\n" + (more === 1 ? "+1 more message" : `+${more} more messages`);
     } else {
       // Exactly one unread: deep-link straight to that message on click.
-      data = { kind: "email", emailId: email.id, threadId: email.threadId };
+      data = { kind: "email", emailId: email.id, threadId: email.threadId, slot };
     }
   } else {
     title = accountLabel ? `New mail (${accountLabel})` : "New mail";
     body = unreadTotal > 1 ? `${unreadTotal} unread messages` : "You have new mail";
   }
 
+  const quiet = await withinQuietWindow(accountId);
   await self.registration.showNotification(title, {
     body,
     // Shared per-account tag: each new push replaces the account's single
@@ -185,8 +217,89 @@ async function handlePush(event) {
     icon: `${BASE_PATH}/api/pwa-icon/192`,
     badge: `${BASE_PATH}/api/pwa-icon/192`,
     data,
-    renotify: true,
+    // Inside the quiet window the notification still appears or updates,
+    // without a sound.
+    renotify: !quiet,
+    silent: quiet,
   });
+
+  const announced = freshIds.length > 0 ? freshIds : (email ? [email.id] : []);
+  if (announced.length > 0) {
+    await writeNotifiedIds(accountId, notified.concat(announced));
+  }
+}
+
+// One message often lands in several of the user's accounts at once - a list,
+// a forward, the same newsletter on two logins - and each account has its own
+// notification. Only the first alert of a burst makes a sound; other accounts'
+// alerts within the window show up silently. A second alert for the same
+// account still rings, as before. The window runs from the last audible alert
+// and is not extended by the silent ones, so a steady trickle still rings
+// every so often.
+const QUIET_WINDOW_MS = 30_000;
+
+function lastAlertKey() {
+  return `${self.location.origin}${BASE_PATH}/__push-state/last-alert`;
+}
+
+/** True when another account alerted audibly less than QUIET_WINDOW_MS ago; otherwise records this one. */
+async function withinQuietWindow(accountId) {
+  const now = Date.now();
+  const account = accountId || "default";
+  try {
+    const cache = await caches.open(PUSH_STATE_CACHE);
+    const res = await cache.match(lastAlertKey());
+    const lastAlert = res ? await res.json() : null;
+    const last = lastAlert ? Number(lastAlert.at) : 0;
+    if (last && lastAlert.accountId !== account && now - last >= 0 && now - last < QUIET_WINDOW_MS) return true;
+    await cache.put(
+      lastAlertKey(),
+      new Response(JSON.stringify({ at: now, accountId: account }), {
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+  } catch (_) {
+    // Without the store every notification alerts, as before.
+  }
+  return false;
+}
+
+// Per-account list of message ids we have already shown a notification for.
+// Service workers have no localStorage; the Cache API is the cheapest durable
+// store that survives the worker being killed between pushes. Failures are
+// swallowed - dedupe is a nicety, delivering the notification is not.
+const PUSH_STATE_CACHE = "bulwark-push-state-v1";
+const NOTIFIED_IDS_LIMIT = 200;
+
+function notifiedIdsKey(accountId) {
+  return `${self.location.origin}${BASE_PATH}/__push-state/notified/${encodeURIComponent(accountId || "default")}`;
+}
+
+async function readNotifiedIds(accountId) {
+  try {
+    const cache = await caches.open(PUSH_STATE_CACHE);
+    const res = await cache.match(notifiedIdsKey(accountId));
+    if (!res) return [];
+    const data = await res.json();
+    return Array.isArray(data.ids) ? data.ids.filter((id) => typeof id === "string") : [];
+  } catch (_) {
+    return [];
+  }
+}
+
+async function writeNotifiedIds(accountId, ids) {
+  try {
+    const cache = await caches.open(PUSH_STATE_CACHE);
+    const unique = Array.from(new Set(ids)).slice(-NOTIFIED_IDS_LIMIT);
+    await cache.put(
+      notifiedIdsKey(accountId),
+      new Response(JSON.stringify({ ids: unique }), {
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+  } catch (_) {
+    // Best effort only.
+  }
 }
 
 async function handleNotificationClick(event) {
@@ -218,10 +331,30 @@ async function handleNotificationClick(event) {
     // get annoyed when each notification opens a fresh window.
     if ("focus" in client) {
       try {
-        if ("navigate" in client && targetUrl) {
-          await client.navigate(targetUrl);
+        // FOCUS FIRST, NAVIGATE SECOND, and the order is the entire fix.
+        //
+        // A notification click grants the service worker a TRANSIENT USER ACTIVATION, and
+        // both focus() and openWindow() refuse to run without one. navigate() SPENDS that
+        // activation, and it also replaces the client's document, which invalidates the
+        // WindowClient handle we are about to use. Navigating first therefore breaks the
+        // click two ways over. Instrumented on Android in a real deployment:
+        //
+        //   client 1: navigate ok -> focus() threw NotFoundError      (handle stale after nav)
+        //   client 2: navigate ok -> focus() threw InvalidAccessError (activation spent)
+        //   openWindow()          -> threw InvalidAccessError         (same)
+        //
+        // Every rejection was swallowed by the catch below, so the toast closed and nothing
+        // came to the front. Focusing first uses the activation while it is still live;
+        // navigate() does not need one of its own once the client is focused.
+        const focused = await client.focus();
+        if (focused && "navigate" in focused && targetUrl) {
+          try {
+            await focused.navigate(targetUrl);
+          } catch (_) {
+            // Focused but not navigated still beats nothing opening at all.
+          }
         }
-        return client.focus();
+        return focused;
       } catch (_) {
         // navigate() can reject for cross-origin or detached clients - fall
         // through and open a new window below.
@@ -367,10 +500,16 @@ function getReusableClientScore(state) {
 
 function buildClickUrl(data) {
   if (!data) return `${BASE_PATH}/`;
+  // `?slot=` names the login the message belongs to (see the preview API).
+  const slotQuery = Number.isInteger(data.slot) ? `?slot=${data.slot}` : "";
   if (data.kind === "email" && data.emailId) {
     // Permalink (#733). Under NEXT_PUBLIC_LOCALE_PREFIX=always the proxy
     // redirects this to the localised path; the worker has no locale to add.
-    return `${BASE_PATH}/mail/message/${encodeURIComponent(data.emailId)}`;
+    return `${BASE_PATH}/mail/message/${encodeURIComponent(data.emailId)}${slotQuery}`;
+  }
+  // A group of new mail in a known login: that login's Inbox.
+  if (data.kind === "mail-list" && slotQuery) {
+    return `${BASE_PATH}/mail/folder/inbox${slotQuery}`;
   }
   // Generic "New mail" toast (preview API failed or returned no email): land
   // the user on the latest unread message in their Inbox rather than just the

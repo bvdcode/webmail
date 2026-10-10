@@ -99,4 +99,43 @@ describe('refreshCurrentMailbox merge', () => {
     expect(ids).toContain('d2');
     expect(ids).not.toContain('b');
   });
+
+  // Regression #780: a sidebar drop awaits refreshCurrentMailbox while the
+  // move's push echo fires another one. Both must share a single in-flight
+  // query (plus one follow-up) instead of racing the server's concurrency cap.
+  it('coalesces concurrent refreshes into one in-flight query and one follow-up', async () => {
+    const a = makeEmail('a');
+    let resolveFirst!: (value: { emails: Email[]; hasMore: boolean; total: number }) => void;
+    const getEmails = vi.fn()
+      .mockImplementationOnce(() => new Promise<{ emails: Email[]; hasMore: boolean; total: number }>((resolve) => { resolveFirst = resolve; }))
+      .mockResolvedValue({ emails: [a], hasMore: false, total: 1 });
+    const client = { getEmails } as unknown as IJMAPClient;
+
+    const store = useEmailStore.getState();
+    const runs = [store.refreshCurrentMailbox(client), store.refreshCurrentMailbox(client)];
+    expect(getEmails).toHaveBeenCalledTimes(1);
+
+    resolveFirst({ emails: [], hasMore: false, total: 0 });
+    await Promise.all(runs);
+
+    expect(getEmails).toHaveBeenCalledTimes(2);
+    expect(useEmailStore.getState().emails.map((e) => e.id)).toEqual(['a']);
+  });
+});
+
+describe('refreshCurrentMailbox when the server fails', () => {
+  it('keeps the list on screen instead of emptying it', async () => {
+    useSettingsStore.setState({ emailsPerPage: 3 });
+    const a = makeEmail('a');
+    useEmailStore.setState({
+      selectedMailbox: 'd', mailboxes: [draftsMailbox], accountMailboxes: {}, emails: [a], totalEmails: 1,
+    });
+    const client = { getEmails: vi.fn(async () => { throw new Error('backend down'); }) } as unknown as IJMAPClient;
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    await useEmailStore.getState().refreshCurrentMailbox(client);
+
+    expect(useEmailStore.getState().emails).toEqual([a]);
+    expect(useEmailStore.getState().totalEmails).toBe(1);
+  });
 });

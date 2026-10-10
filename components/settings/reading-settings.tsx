@@ -9,7 +9,7 @@ import { useAuthStore } from '@/stores/auth-store';
 import { useEmailStore } from '@/stores/email-store';
 import { cn } from '@/lib/utils';
 import { SettingsSection, SettingItem, Select, ToggleSwitch } from './settings-section';
-import { AlertTriangle, FolderSync, Loader2 } from 'lucide-react';
+import { AlertTriangle, FolderSync, Loader2 } from '@/components/icons';
 import { usePolicyStore } from '@/stores/policy-store';
 
 export function ReadingSettings() {
@@ -25,7 +25,9 @@ export function ReadingSettings() {
     returnToListAfterAction,
     swipeRightAction,
     swipeLeftAction,
+    clearSearchOnFolderChange,
     showPreview,
+    showVerificationCodes,
     mailLayout,
     disableThreading,
     emailsPerPage,
@@ -245,6 +247,13 @@ export function ReadingSettings() {
         />
       </SettingItem>
 
+      <SettingItem label={t('clear_search_on_folder_change.label')} description={t('clear_search_on_folder_change.description')}>
+        <ToggleSwitch
+          checked={clearSearchOnFolderChange}
+          onChange={(checked) => updateSetting('clearSearchOnFolderChange', checked)}
+        />
+      </SettingItem>
+
       {!isSettingHidden('showPreview') && (
       <SettingItem
         label={t('show_preview.label')}
@@ -254,6 +263,13 @@ export function ReadingSettings() {
         <ToggleSwitch checked={showPreview} onChange={(checked) => updateSetting('showPreview', checked)} />
       </SettingItem>
       )}
+
+      <SettingItem label={t('show_verification_codes.label')} description={t('show_verification_codes.description')}>
+        <ToggleSwitch
+          checked={showVerificationCodes}
+          onChange={(checked) => updateSetting('showVerificationCodes', checked)}
+        />
+      </SettingItem>
 
       <SettingItem label={t('disable_threading.label')} description={t('disable_threading.description')}>
         <ToggleSwitch

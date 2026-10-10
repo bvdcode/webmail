@@ -2,7 +2,7 @@
 
 import { useState, useRef, useCallback, useMemo } from 'react';
 import { useTranslations } from 'next-intl';
-import { Check, GripVertical, Plus, Star, AlertCircle, ChevronRight } from 'lucide-react';
+import { Check, GripVertical, Plus, Star, AlertCircle, ChevronRight } from '@/components/icons';
 import { useAuthStore } from '@/stores/auth-store';
 import { useEmailStore } from '@/stores/email-store';
 import { useAccountStore, type AccountEntry } from '@/stores/account-store';
@@ -14,9 +14,10 @@ import { Button } from '@/components/ui/button';
 import { useRouter } from '@/i18n/navigation';
 import { getMaxAccounts } from '@/lib/account-utils';
 import { formatFileSize, cn } from '@/lib/utils';
+import { toUnicodeDomain, toUnicodeEmail } from '@/lib/idn';
 
 function hostnameOf(serverUrl: string): string {
-  try { return new URL(serverUrl).hostname; } catch { return serverUrl; }
+  try { return toUnicodeDomain(new URL(serverUrl).hostname); } catch { return serverUrl; }
 }
 
 // First scoped settings tab to land on for a shared account, by capability.
@@ -54,7 +55,10 @@ export function AccountSettings() {
   const draggedIndexRef = useRef<number | null>(null);
 
   const quotaPercentage = quota && quota.total > 0 ? Math.min(Math.round((quota.used / quota.total) * 100), 100) : 0;
-  const displayName = primaryIdentity?.name || account?.displayName || (isDemoMode ? 'Demo User' : undefined);
+  // `account.displayName` is refreshed from the server on every login/restore
+  // (Stalwart principal "Full name" when available - #900); the identity name
+  // is only a fallback until that entry exists.
+  const displayName = account?.displayName || primaryIdentity?.name || (isDemoMode ? 'Demo User' : undefined);
   const email = primaryIdentity?.email || account?.email || username;
   const max = getMaxAccounts();
 
@@ -123,20 +127,22 @@ export function AccountSettings() {
 
         {/* Email Address */}
         <SettingItem label={t('email.label')}>
-          <span className="text-sm text-foreground">{email || tCommon('unknown')}</span>
+          <span className="text-sm text-foreground">{email ? toUnicodeEmail(email) : tCommon('unknown')}</span>
         </SettingItem>
 
         {/* Username / Login (show when it differs from email) */}
         {username && username !== email && (
           <SettingItem label={t('username_label')}>
-            <span className="text-sm text-foreground">{username}</span>
+            <span className="text-sm text-foreground">{toUnicodeEmail(username)}</span>
           </SettingItem>
         )}
 
         {/* Authentication Method */}
         <SettingItem label={t('auth_method_label')}>
           <span className="text-sm text-foreground">
-            {authMode === 'oauth' ? t('auth_method_oauth') : t('auth_method_basic')}
+            {authMode === 'oauth'
+              ? t('auth_method_oauth')
+              : authMode === 'token' ? t('auth_method_token') : t('auth_method_basic')}
           </span>
         </SettingItem>
 
@@ -364,14 +370,14 @@ function AccountRow({
       >
         <div className="flex items-center gap-1.5">
           <span className="text-sm font-medium truncate">
-            {account.displayName || account.label}
+            {toUnicodeEmail(account.displayName || account.label)}
           </span>
           {account.isDefault && (
             <Star className="w-3 h-3 text-amber-500 flex-shrink-0 fill-amber-500" aria-label={labels.default} />
           )}
         </div>
         <p className="text-xs text-muted-foreground truncate">
-          {account.email || account.username}
+          {toUnicodeEmail(account.email || account.username)}
         </p>
         <div className="flex items-center gap-1 mt-0.5">
           {account.hasError ? (

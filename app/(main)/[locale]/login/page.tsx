@@ -1,12 +1,12 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { Suspense, useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "@/i18n/navigation";
 import { useParams, useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { useAuthStore } from "@/stores/auth-store";
+import { useAuthStore, consumeSignedOut } from "@/stores/auth-store";
 import { useAccountStore } from "@/stores/account-store";
 import { useThemeStore } from "@/stores/theme-store";
 import { useShallow } from "zustand/react/shallow";
@@ -14,17 +14,40 @@ import { useConfig } from "@/hooks/use-config";
 import { useMenuNavigation } from "@/hooks/use-menu-navigation";
 import { apiFetch, getPathPrefix, toRouterPath, withBasePath } from "@/lib/browser-navigation";
 import { cn } from "@/lib/utils";
-import { AlertCircle, Loader2, X, Info, Eye, EyeOff, LogIn, Sun, Moon, Monitor, Check, Shield, Play, Copy } from "lucide-react";
+import { AlertCircle, Loader2, X, Info, Eye, EyeOff, LogIn, Sun, Moon, Monitor, Check, Shield, Play, Copy, KeyRound } from "@/components/icons";
 import { type OAuthMetadata } from "@/lib/oauth/discovery";
 import { generateCodeVerifier, generateCodeChallenge, generateState } from "@/lib/oauth/pkce";
+import { DEFAULT_OAUTH_SCOPES } from "@/lib/oauth/scopes";
 import { useUpdateStore, selectBanner } from "@/stores/update-store";
-import type { PublicJmapServerEntry } from "@/lib/admin/jmap-servers";
+import { offersOwnOAuth, type PublicJmapServerEntry } from "@/lib/admin/jmap-servers";
+import { IS_LITE, getLiteInjectedClientId } from "@/lib/lite";
+import { getLiteClientId, probeLiteTokenLogin } from "@/lib/auth/lite-tokens";
+import {
+  LITE_OAUTH_AVAILABLE,
+  getLiteOAuthRedirectUri,
+  liteDiscoverOAuth,
+  saveLiteOAuthFlow,
+  type LiteOAuthDiscovery,
+} from "@/lib/auth/lite-oauth";
+import { toAsciiDomain } from "@/lib/idn";
+
+/** The domain of a complete address (`user@example.com`), or '' while it is still being typed. */
+function completeAddressDomain(username: string): string {
+  const match = /^[^@\s]+@([^@\s]+\.[^@\s.]+)$/.exec(username.trim());
+  return match ? match[1].toLowerCase() : "";
+}
+
+/** Compare domains in ASCII form, so `bücher.de` matches a configured `xn--bcher-kva.de` and back. */
+function domainKey(domain: string): string {
+  return toAsciiDomain(domain) ?? domain.trim().toLowerCase();
+}
 
 function findServerByDomain(servers: PublicJmapServerEntry[], email: string | undefined): PublicJmapServerEntry | undefined {
   if (!email || !email.includes("@")) return undefined;
-  const domain = email.split("@")[1]?.trim().toLowerCase();
+  const domain = email.split("@")[1]?.trim();
   if (!domain) return undefined;
-  return servers.find((s) => (s.domains ?? []).some((d) => d.toLowerCase() === domain));
+  const key = domainKey(domain);
+  return servers.find((s) => (s.domains ?? []).some((d) => domainKey(d) === key));
 }
 
 const APP_VERSION = process.env.NEXT_PUBLIC_APP_VERSION || "0.0.0";
@@ -114,7 +137,7 @@ function VersionBadge() {
 // that funnels password and token material to any caller-supplied URL.
 const MOBILE_REDIRECT_SCHEME = "bulwarkmobile://";
 
-export default function LoginPage() {
+function LoginPageContent() {
   const router = useRouter();
   const t = useTranslations("login");
   const params = useParams();
@@ -132,9 +155,9 @@ export default function LoginPage() {
     : "";
   const mobileState = mobileRedirectUri ? rawMobileState : "";
   const isMobileHandoff = Boolean(mobileRedirectUri);
-  const { login, loginDemo, isLoading, error, clearError, isAuthenticated } = useAuthStore();
+  const { login, loginWithToken, loginDemo, isLoading, error, clearError, isAuthenticated } = useAuthStore();
   const { theme, setTheme, initializeTheme } = useThemeStore(useShallow((s) => ({ theme: s.theme, setTheme: s.setTheme, initializeTheme: s.initializeTheme })));
-  const { appName, jmapServerUrl: configuredServerUrl, oauthEnabled, oauthOnly, oauthClientId: globalOauthClientId, oauthIssuerUrl: globalOauthIssuerUrl, oauthScopes, rememberMeEnabled, devMode, demoMode, loginLogoLightUrl, loginLogoDarkUrl, loginCompanyName, loginImprintUrl, loginPrivacyPolicyUrl, loginWebsiteUrl, loginLogoMaxHeight, loginLogoMaxWidth, loginShowHeading, loginShowSubtitle, loginShowTotp, loginShowVersion, isLoading: configLoading, error: configError, autoSsoEnabled, embeddedMode: _embeddedMode, allowCustomJmapEndpoint, jmapServers, jmapServerAutoPickByDomain } = useConfig();
+  const { appName, jmapServerUrl: configuredServerUrl, oauthEnabled, oauthOnly, oauthClientId: globalOauthClientId, oauthIssuerUrl: globalOauthIssuerUrl, oauthScopes, rememberMeEnabled, devMode, demoMode, loginLogoLightUrl, loginLogoDarkUrl, loginCompanyName, loginImprintUrl, loginPrivacyPolicyUrl, loginWebsiteUrl, loginLogoMaxHeight, loginLogoMaxWidth, loginShowHeading, loginShowSubtitle, loginShowTotp, loginShowTokenLogin, loginShowVersion, isLoading: configLoading, error: configError, autoSsoEnabled, embeddedMode: _embeddedMode, allowCustomJmapEndpoint, jmapServers, jmapServerAutoPickByDomain } = useConfig();
   const resolvedTheme = useThemeStore((s) => s.resolvedTheme);
 
   // Login logo sizing: when a max height/width is configured, drop the fixed
@@ -160,10 +183,27 @@ export default function LoginPage() {
   // Effective values: per-server overrides win, then global config.
   const serverUrl = selectedServer?.url || configuredServerUrl;
   const effectiveOauthClientId = selectedServer?.oauth?.clientId || globalOauthClientId;
-  const effectiveOauthIssuerUrl = selectedServer?.oauth?.issuerUrl || globalOauthIssuerUrl;
+  // A selected server discovers against itself unless it has its own issuer;
+  // the global issuer only applies without a server list (#952).
+  const effectiveOauthIssuerUrl = selectedServer
+    ? selectedServer.oauth?.issuerUrl || selectedServer.url
+    : globalOauthIssuerUrl;
+  // A server entry that names its own OAuth client and button label signs in
+  // with OAuth even while OAuth is off globally: a Gmail bridge next to a
+  // password server.
+  const serverOauthEnabled = oauthEnabled || offersOwnOAuth(selectedServer);
   const [totpCode, setTotpCode] = useState("");
   const [showTotpField, setShowTotpField] = useState(false);
+  // Access-token sign-in (Bearer auth) in place of username and password.
+  // The mobile hand-off passes a password on to the app, so it has none.
+  const [tokenMode, setTokenMode] = useState(false);
+  const [accessToken, setAccessToken] = useState("");
+  const signInWithToken = tokenMode && loginShowTokenLogin && !isMobileHandoff;
   const [rememberMe, setRememberMe] = useState(false);
+  // Lite (no server session): "remember me" needs Stalwart's token login on the
+  // target server. Probe it once per URL and hide the box when it is missing;
+  // those sessions then only last as long as the tab (lib/auth/lite-tokens.ts).
+  const [liteTokenLoginSupported, setLiteTokenLoginSupported] = useState<boolean | null>(null);
   const [sessionExpired, setSessionExpired] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [shakeError, setShakeError] = useState(false);
@@ -182,6 +222,7 @@ export default function LoginPage() {
   const inputRef = useRef<HTMLInputElement>(null);
   const justSelectedSuggestion = useRef(false);
   const totpInputRef = useRef<HTMLInputElement>(null);
+  const tokenInputRef = useRef<HTMLInputElement>(null);
   const prevError = useRef<string | null>(null);
   const themeMenuRef = useRef<HTMLDivElement>(null);
   const themeButtonRef = useRef<HTMLButtonElement>(null);
@@ -198,6 +239,52 @@ export default function LoginPage() {
   useEffect(() => {
     initializeTheme();
   }, [initializeTheme]);
+
+  const probeTarget = hasServerList
+    ? selectedServer?.url ?? ""
+    : (allowCustomJmapEndpoint ? jmapEndpoint : serverUrl) || "";
+  useEffect(() => {
+    if (!IS_LITE || !probeTarget) return;
+    let cancelled = false;
+    // Debounced: the custom endpoint field fires per keystroke.
+    const timer = setTimeout(() => {
+      probeLiteTokenLogin(probeTarget).then((supported) => {
+        if (!cancelled) setLiteTokenLoginSupported(supported);
+      });
+    }, 500);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [probeTarget]);
+  const showRememberMe = rememberMeEnabled && (!IS_LITE || liteTokenLoginSupported !== false);
+
+  // Lite on Stalwart: which provider signs the typed account in
+  // (lib/auth/lite-oauth.ts). A domain Stalwart delegates to an external
+  // OpenID provider has no password to check, so the form turns into the SSO
+  // button for it. The answer depends on the domain, so it is kept while the
+  // local part is edited, and only asked for once the address is complete
+  // (the endpoint is rate limited).
+  const [liteOAuthByDomain, setLiteOAuthByDomain] = useState<{ domain: string; discovery: LiteOAuthDiscovery | null } | null>(null);
+  const [liteOAuthFailed, setLiteOAuthFailed] = useState(false);
+  const liteDomain = LITE_OAUTH_AVAILABLE && !signInWithToken ? completeAddressDomain(formData.username) : "";
+  const liteAccount = liteDomain ? formData.username.trim() : "";
+  useEffect(() => {
+    if (!liteAccount || !probeTarget) return;
+    const controller = new AbortController();
+    const timer = setTimeout(() => {
+      liteDiscoverOAuth(probeTarget, liteAccount, controller.signal).then((discovery) => {
+        if (!controller.signal.aborted) setLiteOAuthByDomain({ domain: completeAddressDomain(liteAccount), discovery });
+      });
+    }, 600);
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [probeTarget, liteAccount]);
+  const liteSsoRequired = liteDomain !== "" && liteOAuthByDomain?.domain === liteDomain && liteOAuthByDomain.discovery?.external === true;
+  // The admin gave the Application an OAuth client: offer SSO next to the form.
+  const liteSsoOffered = LITE_OAUTH_AVAILABLE && !liteSsoRequired && getLiteInjectedClientId() !== "";
 
   useEffect(() => {
     if (serverUrl) {
@@ -341,7 +428,7 @@ export default function LoginPage() {
   }, [serverUrl]);
 
   useEffect(() => {
-    if (!oauthEnabled || !serverUrl) return;
+    if (!serverOauthEnabled || !serverUrl) return;
     setOauthDiscoveryDone(false);
     setOauthMetadata(null);
     const controller = new AbortController();
@@ -364,11 +451,13 @@ export default function LoginPage() {
         setOauthDiscoveryDone(true);
       });
     return () => controller.abort();
-  }, [oauthEnabled, serverUrl, effectiveOauthIssuerUrl, selectedServer?.id]);
+  }, [serverOauthEnabled, serverUrl, effectiveOauthIssuerUrl, selectedServer?.id]);
 
   // Auto-SSO: when enabled with OAUTH_ONLY, skip the login page entirely
   const ssoError = searchParams.get("sso_error");
   const autoSsoTriggered = useRef(false);
+  // Read once per mount: a ref survives the effect re-runs, the flag does not.
+  const signedOutOnPurpose = useRef<boolean | null>(null);
 
   const startServerSideSso = useCallback(async () => {
     setOauthLoading(true);
@@ -425,6 +514,10 @@ export default function LoginPage() {
   }, [params.locale, selectedServer?.id, isMobileHandoff, mobileRedirectUri, mobileState]);
 
   useEffect(() => {
+    // After signing out, show the login page rather than signing straight
+    // back in through a provider session that outlived the sign-out (#905).
+    if (signedOutOnPurpose.current === null) signedOutOnPurpose.current = consumeSignedOut();
+    if (signedOutOnPurpose.current) return;
     if (!autoSsoEnabled || !oauthOnly || !oauthDiscoveryDone || !oauthMetadata) return;
     if (ssoError || isAddAccountMode || isAuthenticated) return;
     if (autoSsoTriggered.current) return;
@@ -566,8 +659,92 @@ export default function LoginPage() {
     }
   };
 
-  const handleOAuthLogin = async () => {
-    if (!oauthMetadata || !effectiveOauthClientId) return;
+  // Lite on Stalwart: the redirect flow without a server (lib/auth/lite-oauth.ts).
+  // Discovery needs the account, which decides the provider.
+  const startLiteOAuth = async (liteServerUrl: string) => {
+    const account = formData.username.trim();
+    if (!account) {
+      inputRef.current?.focus();
+      inputRef.current?.reportValidity();
+      return;
+    }
+    setOauthLoading(true);
+    setLiteOAuthFailed(false);
+    const discovery = await liteDiscoverOAuth(liteServerUrl, account);
+    if (!discovery) {
+      setLiteOAuthFailed(true);
+      setOauthLoading(false);
+      return;
+    }
+
+    const verifier = generateCodeVerifier();
+    const challenge = await generateCodeChallenge(verifier);
+    const state = generateState();
+    const redirectUri = getLiteOAuthRedirectUri();
+    const clientId = getLiteClientId();
+
+    sessionStorage.setItem("oauth_code_verifier", verifier);
+    sessionStorage.setItem("oauth_state", state);
+    sessionStorage.setItem("oauth_server_url", liteServerUrl);
+    sessionStorage.removeItem("oauth_server_id");
+    if (isAddAccountMode) {
+      sessionStorage.setItem("oauth_add_account_mode", "true");
+    }
+    sessionStorage.setItem("oauth_cookie_slot", useAccountStore.getState().getNextCookieSlot().toString());
+    saveLiteOAuthFlow({
+      tokenEndpoint: discovery.metadata.token_endpoint,
+      clientId,
+      redirectUri,
+      persistent: rememberMeEnabled && rememberMe,
+      revocationEndpoint: discovery.metadata.revocation_endpoint,
+    });
+
+    const authUrl = new URL(discovery.metadata.authorization_endpoint);
+    authUrl.searchParams.set("response_type", "code");
+    authUrl.searchParams.set("client_id", clientId);
+    authUrl.searchParams.set("redirect_uri", redirectUri);
+    if (discovery.scope) authUrl.searchParams.set("scope", discovery.scope);
+    authUrl.searchParams.set("state", state);
+    authUrl.searchParams.set("code_challenge", challenge);
+    authUrl.searchParams.set("code_challenge_method", "S256");
+    authUrl.searchParams.set("login_hint", account);
+    if (isAddAccountMode) {
+      authUrl.searchParams.set("prompt", "select_account");
+    }
+
+    window.location.href = authUrl.toString();
+  };
+
+  /**
+   * Starts OAuth for the selected server, or for `target`: a server in the
+   * list with its own OAuth client (a Gmail bridge, say), offered on the page
+   * whichever server is selected so that "Sign in with Google" is one tap.
+   */
+  const handleOAuthLogin = async (target?: PublicJmapServerEntry) => {
+    if (LITE_OAUTH_AVAILABLE && !target) {
+      await startLiteOAuth(probeTarget);
+      return;
+    }
+    const server = target ?? selectedServer;
+    const clientId = target ? target.oauth?.clientId : effectiveOauthClientId;
+    let metadata = target ? null : oauthMetadata;
+    if (target) {
+      setOauthLoading(true);
+      setSelectedServerId(target.id);
+      try {
+        const res = await apiFetch(`/api/auth/oauth/metadata?server_id=${encodeURIComponent(target.id)}`);
+        metadata = res.ok ? ((await res.json()) as OAuthMetadata) : null;
+      } catch {
+        metadata = null;
+      }
+      if (!metadata) {
+        // The target is now the selected server: its discovery runs again and
+        // the page shows the usual "discovery failed" notice.
+        setOauthLoading(false);
+        return;
+      }
+    }
+    if (!metadata || !clientId) return;
     // In mobile-handoff mode the client-side PKCE flow doesn't help us:
     // tokens would land in sessionStorage on the webmail origin and the
     // mobile app couldn't read them. Route through the server-side SSO
@@ -587,14 +764,14 @@ export default function LoginPage() {
 
     // Resolve the JMAP URL to send to the callback. Server-list entries win
     // over the custom-endpoint input, which wins over the global server URL.
-    const oauthServerUrl = selectedServer?.url
+    const oauthServerUrl = server?.url
       || (allowCustomJmapEndpoint ? jmapEndpoint : configuredServerUrl);
 
     sessionStorage.setItem("oauth_code_verifier", verifier);
     sessionStorage.setItem("oauth_state", state);
     sessionStorage.setItem("oauth_server_url", oauthServerUrl!);
-    if (selectedServer?.id) {
-      sessionStorage.setItem("oauth_server_id", selectedServer.id);
+    if (server?.id) {
+      sessionStorage.setItem("oauth_server_id", server.id);
     } else {
       sessionStorage.removeItem("oauth_server_id");
     }
@@ -612,14 +789,17 @@ export default function LoginPage() {
     const nextSlot = useAccountStore.getState().getNextCookieSlot();
     sessionStorage.setItem("oauth_cookie_slot", nextSlot.toString());
 
-    const authUrl = new URL(oauthMetadata.authorization_endpoint);
+    const authUrl = new URL(metadata.authorization_endpoint);
     authUrl.searchParams.set("response_type", "code");
-    authUrl.searchParams.set("client_id", effectiveOauthClientId);
+    authUrl.searchParams.set("client_id", clientId);
     authUrl.searchParams.set("redirect_uri", redirectUri);
-    authUrl.searchParams.set("scope", oauthScopes || "openid email profile");
+    authUrl.searchParams.set("scope", oauthScopes || DEFAULT_OAUTH_SCOPES);
     authUrl.searchParams.set("state", state);
     authUrl.searchParams.set("code_challenge", challenge);
     authUrl.searchParams.set("code_challenge_method", "S256");
+    if (isAddAccountMode) {
+      authUrl.searchParams.set("prompt", "select_account");
+    }
 
     window.location.href = authUrl.toString();
   };
@@ -631,6 +811,23 @@ export default function LoginPage() {
     // when the admin hasn't configured a server list.
     const effectiveServerUrl = selectedServer?.url
       || (allowCustomJmapEndpoint ? jmapEndpoint : serverUrl);
+    if (signInWithToken) {
+      if (await loginWithToken(effectiveServerUrl, accessToken, rememberMeEnabled && rememberMe)) {
+        router.push('/');
+      }
+      return;
+    }
+    // Lite on Stalwart: an account whose domain signs in at an external
+    // provider has no password Stalwart could check. Asked again here (cached)
+    // because Enter can beat the debounced lookup; a name without a domain is
+    // always Stalwart's own.
+    if (LITE_OAUTH_AVAILABLE && formData.username.includes("@")) {
+      const discovery = await liteDiscoverOAuth(effectiveServerUrl, formData.username);
+      if (discovery?.external) {
+        await startLiteOAuth(effectiveServerUrl);
+        return;
+      }
+    }
     // Capture before login() so the isAuthenticated effect can build the
     // deep-link fragment with values the user actually typed (formData may
     // be cleared by the auth store on success).
@@ -653,7 +850,9 @@ export default function LoginPage() {
     );
 
     if (success) {
-      saveUsername(formData.username);
+      // Suggested again on this browser only when the user did not decline
+      // being remembered: on a shared computer the next person sees the list.
+      if (!rememberMeEnabled || rememberMe) saveUsername(formData.username);
       if (isMobileHandoff) {
         // The isAuthenticated effect handles the redirect; nothing else to
         // do here. Don't push to / - that would race the deep link.
@@ -724,6 +923,27 @@ export default function LoginPage() {
       )}
     </div>
   ) : null;
+
+  // Other servers in the list that sign in with their own OAuth client get a
+  // button of their own, so signing in with Google does not first mean finding
+  // the bridge in the server menu. Not in mobile handoff, which signs in
+  // server-side against the selected server.
+  const otherOauthServers = isMobileHandoff
+    ? []
+    : jmapServers.filter((s) => offersOwnOAuth(s) && s.id !== selectedServer?.id);
+  const otherOauthButtons = otherOauthServers.map((s) => (
+    <Button
+      key={s.id}
+      type="button"
+      variant="outline"
+      className="w-full h-11 font-medium text-[15px] rounded-xl border-border/60 hover:bg-muted/50"
+      onClick={() => handleOAuthLogin(s)}
+      disabled={oauthLoading || isLoading}
+    >
+      <LogIn className="w-4 h-4 me-2" />
+      {s.oauth?.buttonLabel}
+    </Button>
+  ));
 
   // Demo-only mode: show only a large demo login button
   if (demoMode && !isAddAccountMode) {
@@ -1041,7 +1261,7 @@ export default function LoginPage() {
                   <Button
                     type="button"
                     className="w-full h-11 font-medium text-[15px] bg-primary hover:bg-primary/90 transition-all duration-200 rounded-xl shadow-md shadow-primary/15 hover:shadow-lg hover:shadow-primary/20"
-                    onClick={handleOAuthLogin}
+                    onClick={() => handleOAuthLogin()}
                     disabled={oauthLoading}
                   >
                     {oauthLoading ? (
@@ -1052,7 +1272,7 @@ export default function LoginPage() {
                     ) : (
                       <div className="flex items-center gap-2">
                         <LogIn className="w-4 h-4" />
-                        {t("sign_in_sso")}
+                        {selectedServer?.oauth?.buttonLabel || t("sign_in_sso")}
                       </div>
                     )}
                   </Button>
@@ -1099,8 +1319,9 @@ export default function LoginPage() {
                     </div>
                   )}
 
-                  {/* Username field */}
-                  <div className="space-y-1.5">
+                  {/* Username field. The access token names the account, so
+                      token sign-in has none. */}
+                  <div className={cn("space-y-1.5", signInWithToken && "hidden")}>
                     <label htmlFor="username" className="block text-sm font-medium text-foreground">
                       {t("username_label")}
                     </label>
@@ -1115,7 +1336,7 @@ export default function LoginPage() {
                         onKeyDown={handleKeyDown}
                         className="h-11 px-3.5 bg-muted/40 border-border/60 rounded-xl focus:bg-background focus:border-primary/50 transition-all duration-200"
                         placeholder={t("username_placeholder")}
-                        required
+                        required={!signInWithToken}
                         autoComplete="off"
                         data-form-type="other"
                         data-lpignore="true"
@@ -1153,8 +1374,10 @@ export default function LoginPage() {
                     </div>
                   </div>
 
-                  {/* Password field */}
-                  <div className="space-y-1.5">
+                  {/* Password field. Hidden for an account that signs in at an
+                      external provider (Lite on Stalwart): the submit button is
+                      the SSO button then. */}
+                  <div className={cn("space-y-1.5", (liteSsoRequired || signInWithToken) && "hidden")}>
                     <label htmlFor="password" className="block text-sm font-medium text-foreground">
                       {t("password_label")}
                     </label>
@@ -1166,7 +1389,7 @@ export default function LoginPage() {
                         onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                         className="h-11 px-3.5 pe-11 bg-muted/40 border-border/60 rounded-xl focus:bg-background focus:border-primary/50 transition-all duration-200"
                         placeholder={t("password_placeholder")}
-                        required
+                        required={!liteSsoRequired && !signInWithToken}
                         autoComplete="current-password"
                       />
                       <button
@@ -1185,11 +1408,35 @@ export default function LoginPage() {
                     </div>
                   </div>
 
+                  {signInWithToken && (
+                    <div className="space-y-1.5">
+                      <label htmlFor="access-token" className="block text-sm font-medium text-foreground">
+                        {t("token_label")}
+                      </label>
+                      <Input
+                        ref={tokenInputRef}
+                        id="access-token"
+                        type="password"
+                        value={accessToken}
+                        onChange={(e) => setAccessToken(e.target.value)}
+                        className="h-11 px-3.5 bg-muted/40 border-border/60 rounded-xl focus:bg-background focus:border-primary/50 transition-all duration-200 font-mono"
+                        placeholder={t("token_placeholder")}
+                        required
+                        autoComplete="off"
+                        spellCheck={false}
+                        data-lpignore="true"
+                      />
+                      <p className="text-[11px] text-muted-foreground leading-snug">
+                        {t("token_hint")}
+                      </p>
+                    </div>
+                  )}
+
                   {/* 2FA toggle / field. The manual toggle can be hidden via
                       LOGIN_SHOW_TOTP (loginShowTotp) for deployments whose mail
                       server has no per-account TOTP (auth delegated to an
                       external directory); server-required TOTP still shows. */}
-                  {!showTotpField ? (
+                  {liteSsoRequired || signInWithToken ? null : !showTotpField ? (
                     loginShowTotp ? (
                     <button
                       type="button"
@@ -1227,8 +1474,23 @@ export default function LoginPage() {
                     </div>
                   )}
 
+                  {loginShowTokenLogin && !isMobileHandoff && !liteSsoRequired && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        clearError();
+                        setTokenMode(!signInWithToken);
+                        setTimeout(() => (signInWithToken ? inputRef : tokenInputRef).current?.focus(), 50);
+                      }}
+                      className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                      <KeyRound className="w-3.5 h-3.5" />
+                      {signInWithToken ? t("password_toggle") : t("token_toggle")}
+                    </button>
+                  )}
+
                   {/* Remember me */}
-                  {rememberMeEnabled && (
+                  {showRememberMe && (
                     <label className="flex items-center gap-2.5 cursor-pointer group select-none pt-1">
                       <span className="relative flex items-center justify-center">
                         <input
@@ -1255,9 +1517,9 @@ export default function LoginPage() {
                 <Button
                   type="submit"
                   className="w-full h-11 font-medium text-[15px] bg-primary hover:bg-primary/90 transition-all duration-200 rounded-xl shadow-md shadow-primary/15 hover:shadow-lg hover:shadow-primary/20"
-                  disabled={isLoading}
+                  disabled={isLoading || (liteSsoRequired && oauthLoading)}
                 >
-                  {isLoading ? (
+                  {isLoading || (liteSsoRequired && oauthLoading) ? (
                     <div className="flex items-center gap-2">
                       <Loader2 className="w-4 h-4 animate-spin" />
                       {t("signing_in")}
@@ -1265,12 +1527,12 @@ export default function LoginPage() {
                   ) : (
                     <div className="flex items-center gap-2">
                       <LogIn className="w-4 h-4" />
-                      {t("sign_in")}
+                      {liteSsoRequired ? t("sign_in_sso") : t("sign_in")}
                     </div>
                   )}
                 </Button>
 
-                {oauthMetadata && (
+                {(oauthMetadata || liteSsoOffered || otherOauthButtons.length > 0) && (
                   <>
                     <div className="relative my-2">
                       <div className="absolute inset-0 flex items-center">
@@ -1281,24 +1543,27 @@ export default function LoginPage() {
                       </div>
                     </div>
 
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className="w-full h-11 font-medium text-[15px] rounded-xl border-border/60 hover:bg-muted/50"
-                      onClick={handleOAuthLogin}
-                      disabled={oauthLoading || isLoading}
-                    >
-                      {oauthLoading ? (
-                        <Loader2 className="w-4 h-4 animate-spin me-2" />
-                      ) : (
-                        <LogIn className="w-4 h-4 me-2" />
-                      )}
-                      {t("sign_in_sso")}
-                    </Button>
+                    {(oauthMetadata || liteSsoOffered) && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="w-full h-11 font-medium text-[15px] rounded-xl border-border/60 hover:bg-muted/50"
+                        onClick={() => handleOAuthLogin()}
+                        disabled={oauthLoading || isLoading}
+                      >
+                        {oauthLoading ? (
+                          <Loader2 className="w-4 h-4 animate-spin me-2" />
+                        ) : (
+                          <LogIn className="w-4 h-4 me-2" />
+                        )}
+                        {selectedServer?.oauth?.buttonLabel || t("sign_in_sso")}
+                      </Button>
+                    )}
+                    {otherOauthButtons}
                   </>
                 )}
 
-                {oauthEnabled && oauthDiscoveryDone && !oauthMetadata && (
+                {((serverOauthEnabled && oauthDiscoveryDone && !oauthMetadata) || liteOAuthFailed) && (
                   <div className="mt-2 p-3 rounded-xl border border-warning/20 bg-warning/5 flex items-start gap-3">
                     <div className="w-10 h-10 rounded-full bg-warning/15 text-warning flex items-center justify-center flex-shrink-0 shadow-sm">
                       <AlertCircle className="w-5 h-5" />
@@ -1401,5 +1666,15 @@ export default function LoginPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+// useSearchParams() above must sit under a Suspense boundary for the route to
+// prerender (the static Lite build); at runtime the boundary never suspends.
+export default function LoginPage() {
+  return (
+    <Suspense fallback={null}>
+      <LoginPageContent />
+    </Suspense>
   );
 }

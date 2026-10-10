@@ -4,10 +4,11 @@ import { useState, useEffect, useRef, useMemo, useCallback, useLayoutEffect } fr
 import { useTranslations, useLocale } from "next-intl";
 import { createPortal } from "react-dom";
 import { Button } from "@/components/ui/button";
+import { LinkifiedText } from "@/components/ui/linkified-text";
 import {
   X, Clock, MapPin, Video, Users, Repeat, Bell, AlignLeft,
   Pencil, Trash2, Copy, Send, Check,
-} from "lucide-react";
+} from "@/components/icons";
 import { format, isSameDay } from "date-fns";
 import { cn } from "@/lib/utils";
 import type { CalendarEvent, Calendar, CalendarParticipant } from "@/lib/jmap/types";
@@ -19,8 +20,10 @@ import {
   getUserStatus,
   getParticipantList,
 } from "@/lib/calendar-participants";
-import { getEventEditability } from "@/lib/calendar-editability";
+import { canUserRsvp, getEventEditability, type EditabilityContext } from "@/lib/calendar-editability";
 import { useFormatEventDate } from "@/hooks/use-format-event-date";
+import { useContactNameResolver } from "@/hooks/use-contact-name-resolver";
+import { findMeetingLink, locationAction, mapsUrl, primaryLocationName } from "@/lib/event-links";
 
 interface EventDetailPopoverProps {
   event: CalendarEvent;
@@ -136,6 +139,10 @@ export function EventDetailPopover({
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isSavingNote, setIsSavingNote] = useState(false);
 
+  // Bare addresses (the organizer above all — Stalwart drops its display name)
+  // render with the contact card's name instead of the raw email.
+  const resolveContactName = useContactNameResolver();
+
   const color = getEventColor(event, calendar);
   const startDate = getEventStartDate(event);
   const durationMinutes = parseDuration(event.duration);
@@ -143,32 +150,66 @@ export function EventDetailPopover({
   const displayEndDate = getEventDisplayEndDate(event);
   const isMultiDay = !isSameDay(startDate, displayEndDate);
 
-  const locationName = useMemo(() => {
-    if (!event.locations) return null;
-    return Object.values(event.locations)[0]?.name || null;
-  }, [event.locations]);
+  const locationName = useMemo(() => primaryLocationName(event) ?? null, [event]);
 
-  const virtualLocation = useMemo(() => {
-    if (!event.virtualLocations) return null;
-    const first = Object.values(event.virtualLocations)[0];
-    return first?.uri || null;
-  }, [event.virtualLocations]);
+  // Invitations (Teams above all) leave virtualLocations empty and bury the
+  // join URL in the description; surface it as the meeting link anyway.
+  const meeting = useMemo(() => findMeetingLink(event), [event]);
+  const virtualLocation = meeting?.uri ?? null;
 
-  const participants = useMemo(() => getParticipantList(event), [event]);
+  // A URL opens as a link, a location that only names the service joins the
+  // meeting, a postal address opens in the maps.
+  const locationHref = useMemo(() => {
+    if (!locationName) return null;
+    const action = locationAction(locationName, meeting);
+    return action.kind === "url" ? action.uri : mapsUrl(action.query);
+  }, [locationName, meeting]);
+  const [locationCopied, setLocationCopied] = useState(false);
+  const copiedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => {
+    if (copiedTimer.current) clearTimeout(copiedTimer.current);
+  }, []);
+  const copyLocation = useCallback(async () => {
+    if (!locationName) return;
+    try {
+      await navigator.clipboard.writeText(locationName);
+      setLocationCopied(true);
+      if (copiedTimer.current) clearTimeout(copiedTimer.current);
+      copiedTimer.current = setTimeout(() => setLocationCopied(false), 1500);
+    } catch {
+      // clipboard refused (insecure context or permission) - nothing to do
+    }
+  }, [locationName]);
+
+  const participants = useMemo(
+    () => getParticipantList(event, { resolveName: resolveContactName }),
+    [event, resolveContactName]
+  );
   const recurrenceLabel = useMemo(() => getRecurrenceLabel(event, t, locale), [event, t, locale]);
   const alertLabel = useMemo(() => getAlertLabel(event, t), [event, t]);
 
   // Gate affordances on calendar rights, not identity (see calendar-editability).
-  const editability = useMemo(() => {
+  const editabilityCtx = useMemo<EditabilityContext>(() => {
     const calendarsById = new Map(calendar ? [[calendar.id, calendar]] : []);
-    return getEventEditability(event, {
+    return {
       calendarsById,
       userCalendarAddresses: currentUserEmails,
       isSubscriptionCalendar: isSubscriptionCalendar ?? (() => false),
-    });
-  }, [event, calendar, currentUserEmails, isSubscriptionCalendar]);
+    };
+  }, [calendar, currentUserEmails, isSubscriptionCalendar]);
+
+  const editability = useMemo(
+    () => getEventEditability(event, editabilityCtx),
+    [event, editabilityCtx]
+  );
   const canEditBody = editability === "editable";
-  const rsvpMode = editability === "rsvp-only";
+
+  // Asked separately from editability: a received invite lands in the user's own
+  // calendar and resolves to 'editable', which renders no RSVP bar (#937).
+  const canRsvp = useMemo(
+    () => canUserRsvp(event, editabilityCtx),
+    [event, editabilityCtx]
+  );
 
   const userParticipantId = useMemo(
     () => getUserParticipantId(event, currentUserEmails),
@@ -387,21 +428,28 @@ export function EventDetailPopover({
         {locationName && (
           <div className="flex items-start gap-2.5">
             <MapPin className="w-4 h-4 text-muted-foreground mt-0.5 flex-shrink-0" />
-            {/^https?:\/\//i.test(locationName) ? (
-              <a
-                href={locationName}
-                target="_blank"
-                rel="noreferrer"
-                className="text-sm text-primary hover:underline truncate"
-                title={locationName}
-              >
-                {(() => {
+            <a
+              href={locationHref ?? undefined}
+              target="_blank"
+              rel="noreferrer"
+              className="text-sm text-primary hover:underline min-w-0 break-words"
+              title={locationName}
+            >
+              {/^https?:\/\//i.test(locationName)
+                ? (() => {
                   try { return new URL(locationName).hostname; } catch { return locationName; }
-                })()}
-              </a>
-            ) : (
-              <span className="text-sm text-foreground">{locationName}</span>
-            )}
+                })()
+                : locationName}
+            </a>
+            <button
+              type="button"
+              onClick={copyLocation}
+              className="ms-auto p-0.5 text-muted-foreground hover:text-foreground flex-shrink-0"
+              title={t("detail.copy_location")}
+              aria-label={t("detail.copy_location")}
+            >
+              {locationCopied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+            </button>
           </div>
         )}
 
@@ -479,8 +527,8 @@ export function EventDetailPopover({
         {event.description && (
           <div className="flex items-start gap-2.5">
             <AlignLeft className="w-4 h-4 text-muted-foreground mt-0.5 flex-shrink-0" />
-            <p className="text-sm text-muted-foreground whitespace-pre-line line-clamp-3">
-              {event.description}
+            <p className="text-sm text-muted-foreground whitespace-pre-line line-clamp-3 break-words">
+              <LinkifiedText text={event.description} />
             </p>
           </div>
         )}
@@ -537,7 +585,7 @@ export function EventDetailPopover({
       )}
 
       {/* RSVP Bar (for attendees) */}
-      {rsvpMode && onRsvp && userParticipantId && (
+      {canRsvp && onRsvp && userParticipantId && (
         <div className="px-4 py-3 border-t border-border">
           <p className="text-xs font-medium text-muted-foreground mb-2">
             {t("participants.rsvp_label")}

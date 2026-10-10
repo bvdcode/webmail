@@ -35,6 +35,21 @@ describe('settings sync debounce', () => {
     });
   });
 
+  it('defaults pushNotifyInboxOnly to false and round-trips it through the sync payload', async () => {
+    const settings = useSettingsStore.getState();
+    expect(settings.pushNotifyInboxOnly).toBe(false);
+
+    settings.enableSync('a@example.com', 'https://mail-a.example.com');
+    settings.updateSetting('pushNotifyInboxOnly', true);
+
+    await useSettingsStore.getState().flushSync();
+
+    const request = apiFetch.mock.calls[0][1] as RequestInit;
+    expect(JSON.parse(request.body as string)).toMatchObject({
+      settings: { pushNotifyInboxOnly: true },
+    });
+  });
+
   it('does not rewrite a pending account snapshot after another account becomes active', async () => {
     const settings = useSettingsStore.getState();
     settings.enableSync('a@example.com', 'https://mail-a.example.com');
@@ -168,5 +183,86 @@ describe('template sync (#825)', () => {
     expect(exported.templates).toHaveLength(1);
     expect(exported.templates[0].name).toBe('Exported');
     expect(exported.deletedTemplateIds).toEqual({});
+  });
+});
+
+describe('template push after a server load', () => {
+  const USER = 'a@example.com';
+  const SERVER = 'https://mail-a.example.com';
+  const remote = {
+    id: 'remote-1',
+    name: 'From server',
+    subject: '',
+    body: '',
+    category: '',
+    isFavorite: false,
+    createdAt: '2026-01-01T00:00:00Z',
+    updatedAt: '2026-01-01T00:00:00Z',
+  };
+
+  function serverReturns(settings: Record<string, unknown> | null) {
+    apiFetch.mockImplementation(async (_url: string, init?: RequestInit) =>
+      new Response(JSON.stringify(init?.method === 'POST' ? { ok: true } : { settings }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    );
+  }
+
+  function addLocal() {
+    return useTemplateStore.getState().addTemplate({
+      name: 'Local only', subject: '', body: '', category: '', isFavorite: false,
+    });
+  }
+
+  async function login() {
+    await useSettingsStore.getState().loadFromServer(USER, SERVER);
+    useSettingsStore.getState().enableSync(USER, SERVER);
+    await useSettingsStore.getState().flushSync();
+    return apiFetch.mock.calls
+      .map((call) => call[1] as RequestInit | undefined)
+      .filter((init) => init?.method === 'POST')
+      .map((init) => JSON.parse(init!.body as string));
+  }
+
+  beforeEach(() => {
+    apiFetch.mockReset();
+    useSettingsStore.getState().disableSync();
+    useSettingsStore.setState({ settingsSyncDisabled: false });
+    useTemplateStore.setState({ templates: [], recentTemplateIds: [], deletedTemplateIds: {} });
+  });
+
+  it('pushes a local template the server blob lacks', async () => {
+    serverReturns({ templates: [remote], deletedTemplateIds: {} });
+    const local = addLocal();
+
+    const pushes = await login();
+
+    expect(pushes).toHaveLength(1);
+    const ids = pushes[0].settings.templates.map((t: { id: string }) => t.id).sort();
+    expect(ids).toEqual([local.id, 'remote-1'].sort());
+  });
+
+  it('pushes local templates when the server has no blob yet', async () => {
+    serverReturns(null);
+    addLocal();
+
+    const pushes = await login();
+
+    expect(pushes).toHaveLength(1);
+    expect(pushes[0].settings.templates).toHaveLength(1);
+  });
+
+  it('does not push when the server blob already matches', async () => {
+    serverReturns({ templates: [remote], deletedTemplateIds: {} });
+
+    expect(await login()).toHaveLength(0);
+  });
+
+  it('does not push when the user turned sync off', async () => {
+    serverReturns({ templates: [], deletedTemplateIds: {}, settingsSyncDisabled: true });
+    addLocal();
+
+    expect(await login()).toHaveLength(0);
   });
 });

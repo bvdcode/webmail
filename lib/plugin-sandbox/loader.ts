@@ -15,11 +15,13 @@ import {
 } from '../plugin-hooks';
 import { useMessageListTabsStore } from '@/stores/message-list-tabs-store';
 import { verifyBundle } from './bundle-integrity';
+import { downloadManagedBundle } from './bundle-fetch';
 import { createBackgroundInstance } from './host-bridge';
 import { resolvePluginTier } from './tier';
 import { register as registerActive, deregister as deregisterActive, all as allActiveEntries } from './registry';
 import { cancelPluginDialogs } from './host-api';
 import { registerShortcuts } from './shortcuts';
+import { mayOfferSlot, mayRegisterHook } from './permissions';
 
 // ─── Hook-bus lookup (one flat map for name → bus) ────────────
 
@@ -59,16 +61,53 @@ export function setSandboxLocale(locale: string): void {
 
 // ─── Bundle fetch ─────────────────────────────────────────────
 
+async function readCachedBundle(plugin: InstalledPlugin): Promise<string | null> {
+  try {
+    return await pluginStorage.getCode(plugin.id);
+  } catch (err) {
+    // IndexedDB itself is unusable (some private modes, storage disabled). A
+    // managed bundle can still be fetched and run from memory; a user upload
+    // has no other copy, so surface the storage error for it.
+    if (!plugin.managed) throw err;
+    console.warn(`[plugin-sandbox] Could not read cached bundle for "${plugin.id}":`, err);
+    return null;
+  }
+}
+
 async function getBundleCode(plugin: InstalledPlugin): Promise<string> {
-  // Dev plugins are written into IndexedDB by the same install flow; the
-  // bundle endpoint is the source of truth for managed plugins. For Phase 1
-  // we read from IndexedDB to match the existing flow; the store-side install
-  // path already populates this from /api/admin/plugins/[id]/bundle.
-  const code = await pluginStorage.getCode(plugin.id);
-  if (!code) {
+  // IndexedDB is the fast path: the store's server sync (managed plugins) and
+  // the upload flow (user plugins) both populate it. It is per-browser though,
+  // while a managed plugin's record travels with the server registry to every
+  // user - so the record can exist without a local copy of the bundle: another
+  // browser or profile, a private window, cleared site data, an evicted
+  // IndexedDB (#636). Managed bundles are re-fetched from the server in that
+  // case, signature- and hash-checked, and cached again. User-uploaded
+  // bundles only ever existed in this browser, so reinstalling is the only
+  // way back for those.
+  const cached = await readCachedBundle(plugin);
+  if (cached) {
+    try {
+      await verifyBundle(cached, plugin.bundleHash);
+      return cached;
+    } catch (err) {
+      if (!plugin.managed) throw err;
+      // Stale (sync updated the record but not the bytes) or corrupt copy; the
+      // server has the canonical bytes, so try those before giving up.
+      console.warn(`[plugin-sandbox] Cached bundle for "${plugin.id}" failed verification, re-downloading:`, err);
+    }
+  }
+  if (!plugin.managed) {
     throw new Error(`No bundle in storage for plugin "${plugin.id}". Reinstall to populate.`);
   }
+
+  const code = await downloadManagedBundle(plugin.id, plugin.bundleHash);
   await verifyBundle(code, plugin.bundleHash);
+  try {
+    await pluginStorage.saveCode(plugin.id, code);
+  } catch (err) {
+    // Caching is best effort - the plugin runs from the fetched bytes either way.
+    console.warn(`[plugin-sandbox] Could not cache bundle for "${plugin.id}":`, err);
+  }
   return code;
 }
 
@@ -127,12 +166,18 @@ export async function loadSandboxedPlugin(plugin: InstalledPlugin): Promise<void
     // Wire hook proxies: every hookName the plugin registered gets a HookBus
     // entry whose handler dispatches into the sandbox. `shortcut:<id>` hooks
     // are dispatched by the keyboard module separately and don't have a bus.
+    // A hook hands the plugin data or a say in what the host sends, so it
+    // needs the same manifest permission as the matching API call.
     const hookDisposables: Disposable[] = [];
     for (const hookName of info.hooks) {
       if (hookName.startsWith('shortcut:')) continue;
       const bus = HOOK_BUSES[hookName];
       if (!bus) {
         console.warn(`[plugin-sandbox] Plugin "${plugin.id}" registered unknown hook "${hookName}"`);
+        continue;
+      }
+      if (!mayRegisterHook(plugin, hookName)) {
+        console.warn(`[plugin-sandbox] Plugin "${plugin.id}" lacks the permission for hook "${hookName}"; not registered`);
         continue;
       }
       const proxy = async (...args: unknown[]) => {
@@ -150,12 +195,18 @@ export async function loadSandboxedPlugin(plugin: InstalledPlugin): Promise<void
     const shortcutDispose = registerShortcuts(bg, info.shortcuts ?? []);
     hookDisposables.push({ dispose: shortcutDispose });
 
+    const slotOffers = info.slots.filter((offer) => {
+      if (mayOfferSlot(plugin, offer.name)) return true;
+      console.warn(`[plugin-sandbox] Plugin "${plugin.id}" lacks the permission for slot "${offer.name}"; not rendered`);
+      return false;
+    });
+
     registerActive({
       plugin,
       code,
       tier,
       background: bg,
-      slotOffers: info.slots,
+      slotOffers,
       hookDisposables,
     });
 

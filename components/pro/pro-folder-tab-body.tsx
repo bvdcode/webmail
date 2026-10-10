@@ -2,14 +2,14 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
-import { Folder, Loader2, Paperclip, RefreshCw, Star } from "lucide-react";
-import { cn, formatDate } from "@/lib/utils";
+import { Folder, Loader2, Paperclip, RefreshCw, Star } from "@/components/icons";
+import { cn, cleanPreview, formatDate } from "@/lib/utils";
 import { localizeMailboxName } from "@/lib/mailbox-label";
 import { EmailViewer } from "@/components/email/email-viewer";
 import { ProEmailView } from "@/components/pro/pro-email-tab-body";
 import { useAuthStore } from "@/stores/auth-store";
 import { useEmailStore } from "@/stores/email-store";
-import { useSettingsStore } from "@/stores/settings-store";
+import { getMessageListOrderFor, useSettingsStore } from "@/stores/settings-store";
 import { useProTabStore, type ProFolderTabData } from "@/stores/pro-tab-store";
 import { useDeviceDetection } from "@/hooks/use-media-query";
 import { usePaneId } from "@/hooks/use-pane-context";
@@ -78,22 +78,32 @@ export function ProFolderTabBody({ tabId, data }: ProFolderTabBodyProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [folderLabel, tabId, updateTabTitle]);
 
+  // The configured list order (#718) depends on the folder's role (Inbox-only
+  // by default), and every page of the tab must ask for the same order.
+  const mailboxRole = mailbox?.role;
   const loadPage = useCallback(async (position: number) => {
     if (!client) return;
     const seq = ++fetchSeqRef.current;
     if (position === 0) setIsLoading(true); else setIsLoadingMore(true);
-    // getEmails never throws - it reports failures as an empty page.
-    const result = await client.getEmails(jmapMailboxId, jmapAccountId, emailsPerPage, position, undefined, true);
-    if (seq !== fetchSeqRef.current) return;
-    setEmails((prev) => {
-      if (position === 0) return result.emails;
-      const known = new Set(prev.map((e) => e.id));
-      return [...prev, ...result.emails.filter((e) => !known.has(e.id))];
-    });
-    setTotal(result.total);
-    setHasMore(result.hasMore);
-    if (position === 0) setIsLoading(false); else setIsLoadingMore(false);
-  }, [client, jmapMailboxId, jmapAccountId, emailsPerPage]);
+    try {
+      const result = await client.getEmails(jmapMailboxId, jmapAccountId, emailsPerPage, position, undefined, true, undefined, getMessageListOrderFor(mailboxRole));
+      if (seq !== fetchSeqRef.current) return;
+      setEmails((prev) => {
+        if (position === 0) return result.emails;
+        const known = new Set(prev.map((e) => e.id));
+        return [...prev, ...result.emails.filter((e) => !known.has(e.id))];
+      });
+      setTotal(result.total);
+      setHasMore(result.hasMore);
+    } catch (error) {
+      // Keep what is on screen: a failed page is not an empty folder.
+      console.error('Failed to load folder tab:', error);
+    } finally {
+      if (seq === fetchSeqRef.current) {
+        if (position === 0) setIsLoading(false); else setIsLoadingMore(false);
+      }
+    }
+  }, [client, jmapMailboxId, jmapAccountId, emailsPerPage, mailboxRole]);
 
   useEffect(() => {
     setSelectedEmailId(null);
@@ -230,9 +240,9 @@ export function ProFolderTabBody({ tabId, data }: ProFolderTabBodyProps) {
                       <Star className="h-3.5 w-3.5 flex-shrink-0 fill-yellow-400 text-yellow-400" aria-hidden="true" />
                     )}
                   </div>
-                  {email.preview && (
+                  {cleanPreview(email.preview) && (
                     <div className="mt-0.5 truncate text-xs text-muted-foreground">
-                      {email.preview}
+                      {cleanPreview(email.preview)}
                     </div>
                   )}
                 </div>

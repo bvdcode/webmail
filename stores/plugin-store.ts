@@ -8,14 +8,16 @@ import { pluginStorage } from '@/lib/plugin-storage';
 import { extractPlugin } from '@/lib/plugin-validator';
 import { loadPlugin, deactivatePlugin, setPluginStoreAccessor, setupAutoDisable, setSandboxLocale } from '@/lib/plugin-loader';
 import { useLocaleStore } from '@/stores/locale-store';
+import { getEffectiveLocale } from '@/i18n/detect-locale';
 import { removeAllPluginHooks } from '@/lib/plugin-hooks';
 import { requestConsent } from '@/lib/plugin-sandbox/consent';
 import { sha256Hex } from '@/lib/plugin-sandbox/bundle-integrity';
-import { verifySignature } from '@/lib/plugin-sandbox/bundle-signing';
+import { downloadManagedBundle } from '@/lib/plugin-sandbox/bundle-fetch';
 import { usePolicyStore } from '@/stores/policy-store';
 import { apiFetch } from '@/lib/browser-navigation';
 import { IMPLICIT_PERMISSIONS } from '@/lib/plugin-types';
 import type { Permission } from '@/lib/plugin-types';
+import { IS_LITE } from '@/lib/lite';
 
 let pluginInitializationPromise: Promise<void> | null = null;
 // One-time guard so we attach the locale->sandbox subscription only once.
@@ -243,6 +245,9 @@ export const usePluginStore = create<PluginStoreState>()(
       },
 
       initializePlugins: async () => {
+        // Plugins need the sandbox routes and the plugin API; both are
+        // server-side, and policy pins pluginsEnabled off in the static build.
+        if (IS_LITE) return;
         if (get().initialized) return;
 
         if (pluginInitializationPromise) {
@@ -268,10 +273,20 @@ export const usePluginStore = create<PluginStoreState>()(
           // in the dead activateAllPlugins() path, so the sandbox locale stayed
           // 'en' forever and plugin i18n never localized). Subscribe once for
           // later language switches; those affect plugins/slots loaded after.
-          setSandboxLocale(useLocaleStore.getState().locale);
+          //
+          // Use getEffectiveLocale(), NOT the raw store value: the stored
+          // choice is '' by default and stays '' under "Automatic" (see
+          // language-switcher.tsx / settings/language-settings.tsx) - the
+          // app's own UI resolves that via document.documentElement.lang /
+          // detectBrowserLocale (see i18n/detect-locale.ts), so a plugin
+          // reading the raw store value would see an empty string (falling
+          // back to English) even when the app itself is fully localized to
+          // the visitor's browser language. Found via a plugin dev report:
+          // native UI in Hungarian, plugin's own i18n stuck on English.
+          setSandboxLocale(getEffectiveLocale());
           if (!localeSubscribed) {
             localeSubscribed = true;
-            useLocaleStore.subscribe((s) => setSandboxLocale(s.locale));
+            useLocaleStore.subscribe(() => setSandboxLocale(getEffectiveLocale()));
           }
 
           // Sync server-managed plugins before loading
@@ -470,11 +485,22 @@ async function syncServerPlugins(
       }
 
       // Existing plugin. Re-download the bundle only when the code actually
-      // changed, but ALWAYS re-derive server-owned metadata from one place
-      // (serverMeta) so no passthrough field is silently dropped on a
-      // metadata-only change. Only write when something differs, to avoid a
-      // needless persist/re-render on every sync.
+      // changed or the local copy is gone, but ALWAYS re-derive server-owned
+      // metadata from one place (serverMeta) so no passthrough field is
+      // silently dropped on a metadata-only change. Only write when something
+      // differs, to avoid a needless persist/re-render on every sync.
+      //
+      // The record (persisted store) and the bundle (IndexedDB) have separate
+      // lifetimes: the bundle can be evicted, cleared, or never have been
+      // written in this browser while the record says everything is current.
+      // The loader used to strand such plugins on "No bundle in storage" with
+      // no way for a non-admin to recover (#636); a missing local copy is
+      // treated exactly like a changed one instead.
+      const hasLocalBundle = await pluginStorage.getCode(sp.id)
+        .then((code) => !!code)
+        .catch(() => false);
       const needsBundle =
+        !hasLocalBundle ||
         local.version !== sp.version ||
         // bundleHash mismatch covers re-uploads of the same version with new
         // code; a falsy local hash (older installs) also forces a refresh so
@@ -527,32 +553,17 @@ async function syncServerPlugins(
   }
 }
 
+/**
+ * Download + signature-check a managed bundle; `null` (after logging) on any
+ * failure so the sync loop skips that plugin and carries on with the rest.
+ * The sandbox loader shares the same download path
+ * (`lib/plugin-sandbox/bundle-fetch`) to refill a missing bundle at load time.
+ */
 async function downloadPluginBundle(pluginId: string, bundleHash?: string): Promise<string | null> {
   try {
-    // Append the hash as a query string so any intermediary HTTP cache
-    // (browser, service worker, CDN) treats each version as a distinct URL.
-    const suffix = bundleHash ? `?v=${encodeURIComponent(bundleHash)}` : '';
-    const res = await apiFetch(`/api/admin/plugins/${encodeURIComponent(pluginId)}/bundle${suffix}`);
-    if (!res.ok) return null;
-    const code = await res.text();
-    // Ed25519 signature verification. Present on every server-managed bundle
-    // since the signing module is server-side; refuse to persist a bundle
-    // that fails verification. If the header is missing (older server / dev
-    // build with signing disabled) we log and allow - the SHA-256 hash check
-    // at load time still catches transport corruption.
-    const sig = res.headers.get('X-Bundle-Signature');
-    if (sig) {
-      const ok = await verifySignature(code, sig);
-      if (!ok) {
-        console.error(`[plugin-store] Refusing bundle for "${pluginId}": signature verification failed`);
-        return null;
-      }
-    } else {
-      console.warn(`[plugin-store] Bundle for "${pluginId}" has no Ed25519 signature; loading without it`);
-    }
-    return code;
-  } catch {
-    console.warn(`[plugin-store] Failed to download bundle for plugin "${pluginId}"`);
+    return await downloadManagedBundle(pluginId, bundleHash);
+  } catch (err) {
+    console.error(`[plugin-store] ${err instanceof Error ? err.message : String(err)}`);
     return null;
   }
 }

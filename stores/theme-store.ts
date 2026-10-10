@@ -15,6 +15,7 @@ import { usePolicyStore } from '@/stores/policy-store';
 import { apiFetch } from '@/lib/browser-navigation';
 import { themeHooks } from '@/lib/plugin-hooks';
 import { syncThemeColorMeta } from '@/lib/theme-color-meta';
+import { IS_LITE } from '@/lib/lite';
 
 type Theme = 'light' | 'dark' | 'system';
 
@@ -330,6 +331,8 @@ export const useThemeStore = create<ThemeState>()(
       },
 
       syncServerThemes: async () => {
+        // Server-managed themes come from the admin dashboard; none in Lite.
+        if (IS_LITE) return;
         if (themeSyncPromise) {
           await themeSyncPromise;
           return;
@@ -542,7 +545,8 @@ function applyCustomThemeCSS(theme: InstalledTheme, resolvedTheme: 'light' | 'da
       // Bail out if the user switched themes while we were awaiting handlers.
       if (useThemeStore.getState().activeThemeId !== themeId) return;
       if (transformed && transformed !== theme.css) {
-        injectThemeCSS(transformed);
+        // A plugin's output gets no more reach than a theme's own CSS.
+        injectThemeCSS(sanitizeThemeCSS(transformed).css);
       }
     })
     .catch(() => {

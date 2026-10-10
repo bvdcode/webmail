@@ -3,14 +3,14 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "@/i18n/navigation";
 import { useTranslations } from "next-intl";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft } from "@/components/icons";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { useConfirmDialog } from "@/hooks/use-confirm-dialog";
 import { useAuthStore, redirectToLogin, saveRedirectAfterLogin } from '@/stores/auth-store';
 import { useAccountStore } from "@/stores/account-store";
 import { useEmailStore } from "@/stores/email-store";
-import { useFileStore } from "@/stores/file-store";
+import { useFileStore, resourceServerRef } from "@/stores/file-store";
 import { toast } from "@/stores/toast-store";
 import { cn, formatFileSize } from "@/lib/utils";
 import { NavigationRail } from "@/components/layout/navigation-rail";
@@ -26,24 +26,32 @@ import { FileBrowser } from "@/components/files/file-browser";
 import type { FileNodeRights } from "@/lib/jmap/types";
 import { ImagePreviewModal } from "@/components/files/image-preview-modal";
 import { FilePreviewModal } from "@/components/files/file-preview-modal";
+import { WopiEditor } from "@/components/files/wopi-editor";
+import { useWopiStatus, canWopiOpen } from "@/hooks/use-wopi-status";
 import { loadFilesSettings } from "@/components/files/files-settings-dialog";
 import type { FolderLayout } from "@/components/files/files-settings-dialog";
 import { AppTopBannerSlot } from "@/components/plugins/app-top-banner-slot";
-import { AlertTriangle, Loader2 } from "lucide-react";
+import { AlertTriangle, Loader2 } from "@/components/icons";
 import { isFilePreviewable } from "@/lib/file-preview";
 import { appPath, buildFilesPath, parseFilesPath, type FilesDeepLink } from "@/lib/deep-links";
-import { consumePendingDeepLink, subscribePendingDeepLink } from "@/lib/deep-link-handoff";
+import { consumePendingDeepLinkEntry, subscribePendingDeepLink } from "@/lib/deep-link-handoff";
 import { useDeepLinkUrl } from "@/hooks/use-deep-link-url";
 import { useProInterfaceActive } from "@/components/pro/pro-interface-redirect";
+import { useLiteLinkSegments } from "@/hooks/use-lite-link-segments";
+import { useDocumentTitle } from "@/hooks/use-document-title";
 
 export interface FilesAppProps {
   /** Path segments after `/files` - the folder path, one segment per level. */
   linkSegments?: string[];
 }
 
-export function FilesApp({ linkSegments }: FilesAppProps = {}) {
+export function FilesApp({ linkSegments: routeSegments }: FilesAppProps = {}) {
+  // Static Lite build: the route params are empty, read the link from the URL.
+  const linkSegments = useLiteLinkSegments('files', routeSegments);
   const router = useRouter();
   const t = useTranslations("files");
+  const tSidebar = useTranslations("sidebar");
+  useDocumentTitle(tSidebar("files"));
   const tDeepLink = useTranslations("deep_link");
   const filesEnabled = usePolicyStore((s) => s.isFeatureEnabled('filesEnabled'));
   const { isAuthenticated, logout, checkAuth, isLoading: authLoading, client } = useAuthStore();
@@ -127,6 +135,10 @@ export function FilesApp({ linkSegments }: FilesAppProps = {}) {
   const { dialogProps: confirmDialogProps, confirm: confirmDialog } = useConfirmDialog();
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [previewFile, setPreviewFile] = useState<string | null>(null);
+  // WOPI document editing (#425): name of the file open in the editor overlay.
+  const [editFile, setEditFile] = useState<string | null>(null);
+  const wopiStatus = useWopiStatus(filesEnabled);
+  const isOfficeEditable = useCallback((name: string) => canWopiOpen(wopiStatus, name), [wopiStatus]);
   const [showDetails, setShowDetails] = useState(false);
   const [detailName, setDetailName] = useState<string | null>(null);
 
@@ -198,9 +210,9 @@ export function FilesApp({ linkSegments }: FilesAppProps = {}) {
   useEffect(() => {
     // Inside the Pro shell the route is /pro, so the segments arrive through
     // the handoff the redirect parked rather than as route params.
-    const segments = linkSegments ?? consumePendingDeepLink('files');
-    if (!segments) return;
-    const link = parseFilesPath(segments, new URLSearchParams(window.location.search));
+    const entry = linkSegments ? { segments: linkSegments } : consumePendingDeepLinkEntry('files');
+    if (!entry) return;
+    const link = parseFilesPath(entry.segments, new URLSearchParams(entry.search ?? window.location.search));
     // Never overwrite with null: this effect re-runs (twice on mount under
     // StrictMode) and the handoff only yields its segments once.
     if (link) filesLinkRef.current = link;
@@ -223,8 +235,8 @@ export function FilesApp({ linkSegments }: FilesAppProps = {}) {
   navigateByPathRef.current = navigateByPath;
   useEffect(() => {
     if (!isEmbedded) return;
-    return subscribePendingDeepLink('files', (segments) => {
-      const link = parseFilesPath(segments, new URLSearchParams(window.location.search));
+    return subscribePendingDeepLink('files', (segments, search) => {
+      const link = parseFilesPath(segments, new URLSearchParams(search ?? window.location.search));
       if (!link) return;
       if (link.preview) pendingPreviewRef.current = link.preview;
       void navigateByPathRef.current(link.path);
@@ -649,6 +661,8 @@ export function FilesApp({ linkSegments }: FilesAppProps = {}) {
                   onMoveToParent={handleMoveToParent}
                   onPreviewImage={handlePreviewImage}
                   onPreviewFile={handlePreviewFile}
+                  isOfficeEditable={isOfficeEditable}
+                  onEditFile={setEditFile}
                   onShowDetails={handleShowDetails}
                   onCreateTextFile={handleCreateTextFile}
                   onDuplicate={handleDuplicate}
@@ -706,6 +720,25 @@ export function FilesApp({ linkSegments }: FilesAppProps = {}) {
           getFileContent={() => getFileContent(previewFile)}
         />
       )}
+
+      {/* WOPI document editor overlay (#425) */}
+      {editFile && (() => {
+        const editResource = resources.find(r => r.name === editFile);
+        if (!editResource) return null;
+        // A file shared with the user lives in the owner's account (#1094).
+        const node = resourceServerRef(editResource);
+        return (
+          <WopiEditor
+            target={{ kind: "file", id: node.id, name: editResource.name }}
+            accountId={node.accountId ?? filesAccountId}
+            onClose={() => {
+              setEditFile(null);
+              // The editor may have saved new content - pick up size/mtime.
+              refresh();
+            }}
+          />
+        );
+      })()}
 
       {/* Legacy file migration progress (issue #379) */}
       {migrationProgress && (

@@ -1,5 +1,9 @@
 import { lookup } from 'node:dns/promises';
 import { isIP } from 'node:net';
+import { isPrivateAddress } from '@/lib/security/ip-ranges';
+import { fetchPublicUrl } from '@/lib/security/url-guard';
+
+export { isPrivateAddress, parseV6Groups } from '@/lib/security/ip-ranges';
 
 // Block telemetry endpoints from pointing at internal/loopback addresses.
 // Required because the admin UI lets an authenticated admin set an arbitrary
@@ -8,42 +12,6 @@ import { isIP } from 'node:net';
 //
 // Set BULWARK_TELEMETRY_ALLOW_PRIVATE=1 to bypass - useful only for local
 // dev where the collector is on the loopback.
-
-const PRIVATE_V4: RegExp[] = [
-  /^0\./,                                          // 0.0.0.0/8
-  /^10\./,                                         // 10.0.0.0/8
-  /^127\./,                                        // loopback
-  /^169\.254\./,                                   // link-local + cloud metadata
-  /^172\.(1[6-9]|2\d|3[0-1])\./,                   // 172.16.0.0/12
-  /^192\.168\./,                                   // 192.168.0.0/16
-  /^192\.0\.0\./,                                  // IETF reserved
-  /^198\.(1[8-9])\./,                              // benchmarking 198.18.0.0/15
-  /^100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\./,      // 100.64.0.0/10 CGNAT
-  /^22[4-9]\./,                                    // 224.0.0.0/4 multicast
-  /^23\d\./,
-  /^2[4-5]\d\./,                                   // 240.0.0.0/4 reserved
-];
-
-function isPrivateV4(ip: string): boolean {
-  return PRIVATE_V4.some((re) => re.test(ip));
-}
-
-function isPrivateV6(ip: string): boolean {
-  const lower = ip.toLowerCase();
-  if (lower === '::1' || lower === '::') return true;
-  if (/^fe[89ab][0-9a-f]:/.test(lower)) return true;     // fe80::/10 link-local
-  if (/^f[cd][0-9a-f]{2}:/.test(lower)) return true;     // fc00::/7 ULA
-  const mapped = lower.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/);
-  if (mapped) return isPrivateV4(mapped[1]);
-  return false;
-}
-
-export function isPrivateAddress(ip: string): boolean {
-  const family = isIP(ip);
-  if (family === 4) return isPrivateV4(ip);
-  if (family === 6) return isPrivateV6(ip);
-  return false;
-}
 
 const BAD_HOSTS = new Set([
   'localhost',
@@ -109,7 +77,31 @@ export async function resolveEndpointAllowed(raw: string): Promise<EndpointCheck
     // Don't block on transient DNS failures - fetch will fail loudly anyway,
     // and we don't want to lock admins out of their config when the resolver
     // is flaky. The literal-IP check above already covers the direct-attack
-    // case.
+    // case, and fetchTelemetryTarget re-checks at connect time, failing
+    // closed.
     return { ok: true };
   }
+}
+
+export interface TelemetryFetchInit {
+  method: 'GET' | 'POST';
+  headers?: Record<string, string>;
+  body?: string;
+  signal?: AbortSignal;
+}
+
+/**
+ * Fetch a telemetry target (the collector, the JMAP server's version
+ * probe). resolveEndpointAllowed runs its own DNS lookup, so on its own it
+ * is check-then-fetch: the socket resolves again and a rebinding answer, or
+ * a lookup that failed at check time, lands wherever it points. Unless the
+ * dev bypass is on, the address is checked inside the socket's own lookup
+ * instead, and a lookup failure fails the request. Redirects are never
+ * followed.
+ */
+export async function fetchTelemetryTarget(url: string, init: TelemetryFetchInit): Promise<Response> {
+  if (bypassEnabled()) {
+    return fetch(url, { ...init, redirect: 'manual' });
+  }
+  return (await fetchPublicUrl(url, init)) as unknown as Response;
 }

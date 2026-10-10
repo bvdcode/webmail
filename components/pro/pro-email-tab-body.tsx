@@ -347,7 +347,9 @@ export function ProEmailView({ emailId, client: clientOverride, accountId, onLoa
         to: email.to?.map((a) => a.email).filter(Boolean).join(', ') || '',
         cc: email.cc?.map((a) => a.email).filter(Boolean).join(', ') || '',
         bcc: email.bcc?.map((a) => a.email).filter(Boolean).join(', ') || '',
-        subject: email.subject || '',
+        // Drafts saved before #1189 stored an empty subject as the composer's
+        // "(No Subject)" placeholder; reopen those with an empty field.
+        subject: email.subject && email.subject !== t('email_composer.no_subject') ? email.subject : '',
         body: htmlBody || bodyText,
         showCc: (email.cc?.length || 0) > 0,
         showBcc: (email.bcc?.length || 0) > 0,
@@ -355,6 +357,10 @@ export function ProEmailView({ emailId, client: clientOverride, accountId, onLoa
         subAddressTag: '',
         mode: 'compose',
         draftId: email.id,
+        // The draft's already-uploaded parts - the classic path carries them
+        // since #849; without this the Pro draft tab still opened the
+        // composer without its files and the next save stripped them.
+        attachments: email.attachments,
       },
     });
     onClose();
@@ -398,6 +404,7 @@ export function ProEmailTabBody({ tabId, data }: ProEmailTabBodyProps) {
   const closeTab = useProTabStore((s) => s.closeTab);
   const updateTabTitle = useProTabStore((s) => s.updateTabTitle);
   const mailboxes = useEmailStore((s) => s.mailboxes);
+  const getClientForAccount = useAuthStore((s) => s.getClientForAccount);
 
   const handleLoaded = useCallback((email: Email) => {
     if (email.subject) updateTabTitle(tabId, email.subject);
@@ -414,10 +421,15 @@ export function ProEmailTabBody({ tabId, data }: ProEmailTabBodyProps) {
     return mb?.isShared ? mb.accountId : undefined;
   }, [mailboxes, data.mailboxId]);
 
+  // A hit opened from another login (global search) is fetched through that
+  // login's client, targeting the owner accountId stamped on the hit (#847).
+  const clientOverride = data.clientAccountId ? getClientForAccount(data.clientAccountId) ?? null : null;
+
   return (
     <ProEmailView
       emailId={data.emailId}
-      accountId={ownerAccountId}
+      client={clientOverride ?? undefined}
+      accountId={clientOverride ? data.accountId : ownerAccountId}
       onLoaded={handleLoaded}
       onClose={handleClose}
       className="w-full"
