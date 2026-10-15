@@ -2,7 +2,6 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render } from '@testing-library/react';
 import { FaviconBadge } from '@/components/favicon-badge';
 import { useFaviconBadge } from '@/hooks/use-favicon-badge';
-import { useAppBadge } from '@/hooks/use-app-badge';
 import { useEmailStore } from '@/stores/email-store';
 import { useSettingsStore } from '@/stores/settings-store';
 import type { Mailbox } from '@/lib/jmap/types';
@@ -10,12 +9,8 @@ import type { Mailbox } from '@/lib/jmap/types';
 vi.mock('@/hooks/use-favicon-badge', () => ({
   useFaviconBadge: vi.fn(),
 }));
-vi.mock('@/hooks/use-app-badge', () => ({
-  useAppBadge: vi.fn(),
-}));
 
 const useFaviconBadgeMock = vi.mocked(useFaviconBadge);
-const useAppBadgeMock = vi.mocked(useAppBadge);
 
 function mailbox(patch: Partial<Mailbox> & { id: string }): Mailbox {
   return {
@@ -63,7 +58,6 @@ describe('FaviconBadge', () => {
     const { container } = render(<FaviconBadge />);
 
     expect(useFaviconBadgeMock).toHaveBeenCalledWith(7, true);
-    expect(useAppBadgeMock).toHaveBeenCalledWith(7, true);
     expect(container.firstChild).toBeNull(); // renders no markup
   });
 
@@ -76,7 +70,6 @@ describe('FaviconBadge', () => {
     render(<FaviconBadge />);
 
     expect(useFaviconBadgeMock).toHaveBeenCalledWith(7, false);
-    expect(useAppBadgeMock).toHaveBeenCalledWith(7, false);
   });
 
   it('ignores a shared inbox, even when it sorts first', () => {
@@ -93,7 +86,6 @@ describe('FaviconBadge', () => {
     render(<FaviconBadge />);
 
     expect(useFaviconBadgeMock).toHaveBeenCalledWith(4, true);
-    expect(useAppBadgeMock).toHaveBeenCalledWith(4, true);
   });
 
   it('badges zero when there is no inbox yet', () => {
@@ -102,6 +94,5 @@ describe('FaviconBadge', () => {
     render(<FaviconBadge />);
 
     expect(useFaviconBadgeMock).toHaveBeenCalledWith(0, true);
-    expect(useAppBadgeMock).toHaveBeenCalledWith(0, true);
   });
 });

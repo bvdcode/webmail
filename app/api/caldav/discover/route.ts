@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { rejectCrossOriginRequest } from '@/lib/security/same-origin';
 import { logger } from '@/lib/logger';
 import { getStalwartCredentials } from '@/lib/stalwart/credentials';
-import { fetchJmapServer } from '@/lib/stalwart/server-fetch';
 
 interface DiscoveryAccountRequest {
   key: string;
@@ -18,14 +16,9 @@ function buildPublicUrl(serverUrl: string, path: string): string {
   return new URL(path, serverUrl).toString();
 }
 
-async function probeCalendarHome(
-  serverUrl: string,
-  authHeader: string,
-  accountName: string,
-  trusted: boolean,
-): Promise<string | null> {
+async function probeCalendarHome(serverUrl: string, authHeader: string, accountName: string): Promise<string | null> {
   const targetUrl = buildPublicUrl(serverUrl, `/dav/cal/${encodeURIComponent(accountName)}`);
-  const response = await fetchJmapServer(targetUrl, {
+  const response = await fetch(targetUrl, {
     method: 'PROPFIND',
     headers: {
       Authorization: authHeader,
@@ -40,7 +33,7 @@ async function probeCalendarHome(
   </D:prop>
 </D:propfind>`,
     redirect: 'manual',
-  }, trusted);
+  });
 
   if (response.status === 207) {
     return targetUrl;
@@ -57,10 +50,6 @@ async function probeCalendarHome(
 }
 
 export async function POST(request: NextRequest) {
-  // CSRF gate (GHSA-9mvj-98f5-9q6g): this handler acts with the caller's
-  // session cookie, which SameSite=Lax still sends from a same-site page.
-  const crossOrigin = rejectCrossOriginRequest(request);
-  if (crossOrigin) return crossOrigin;
   try {
     const creds = await getStalwartCredentials(request);
     if (!creds) {
@@ -86,7 +75,7 @@ export async function POST(request: NextRequest) {
 
       for (const candidate of candidates) {
         try {
-          url = await probeCalendarHome(creds.serverUrl, creds.authHeader, candidate, creds.trusted);
+          url = await probeCalendarHome(creds.serverUrl, creds.authHeader, candidate);
           if (url) {
             resolvedAccount = candidate;
             break;

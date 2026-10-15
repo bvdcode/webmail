@@ -1,5 +1,4 @@
 import { locales } from '@/i18n/routing';
-import { getLiteMount } from '@/lib/lite';
 
 export function replaceWindowLocation(url: string): void {
   if (typeof window === 'undefined') {
@@ -31,10 +30,6 @@ const STATIC_BASE_PATH = (process.env.NEXT_PUBLIC_BASE_PATH ?? '').replace(/\/+$
 export function getPathPrefix(locale?: string): string {
   if (STATIC_BASE_PATH) return STATIC_BASE_PATH;
   if (typeof window === 'undefined') return '';
-  // Lite on Stalwart: the entry document read the prefix from <base href>,
-  // which works for URLs without a locale segment too (`/webmail/`).
-  const liteMount = getLiteMount();
-  if (liteMount !== null) return liteMount;
 
   const segments = window.location.pathname.split('/').filter(Boolean);
 

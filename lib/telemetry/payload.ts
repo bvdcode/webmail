@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { configManager } from '@/lib/admin/config-manager';
 import { logger } from '@/lib/logger';
-import { fetchTelemetryTarget, resolveEndpointAllowed } from './endpoint-guard';
+import { resolveEndpointAllowed } from './endpoint-guard';
 import { getInstanceId } from './state';
 import { getLoginCounts } from './login-tracker';
 import type {
@@ -103,7 +103,7 @@ async function detectStalwartVersion(): Promise<string | null> {
     return null;
   }
   try {
-    const res = await fetchTelemetryTarget(wellKnown, {
+    const res = await fetch(wellKnown, {
       method: 'GET',
       signal: AbortSignal.timeout(3000),
     });

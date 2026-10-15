@@ -2,7 +2,8 @@ import { defineConfig } from '@playwright/test';
 
 /**
  * Integration test config: drives the containerised webmail (+ Stalwart) stack
- * managed by integration/tests/global-setup.ts.
+ * managed by integration/tests/global-setup.ts. Distinct from the root
+ * playwright.config.ts (fast UI smoke tests against `npm run dev`).
  *
  * Run:  npx playwright test -c playwright.integration.config.ts
  */

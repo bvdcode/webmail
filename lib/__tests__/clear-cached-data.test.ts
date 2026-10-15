@@ -24,7 +24,6 @@ describe('clearCachedData', () => {
     localStorage.setItem('calendar-storage', '1');
     localStorage.setItem('identity-storage', '1');
     localStorage.setItem('calendar-notification-storage', '1');
-    localStorage.setItem('email-snapshot', '{"v":2}');
     // Must survive — losing these is exactly the pain we're avoiding.
     localStorage.setItem('account-registry', 'accounts');
     localStorage.setItem('auth-storage', 'session');
@@ -37,7 +36,6 @@ describe('clearCachedData', () => {
     expect(localStorage.getItem('calendar-storage')).toBeNull();
     expect(localStorage.getItem('identity-storage')).toBeNull();
     expect(localStorage.getItem('calendar-notification-storage')).toBeNull();
-    expect(localStorage.getItem('email-snapshot')).toBeNull();
 
     expect(localStorage.getItem('account-registry')).toBe('accounts');
     expect(localStorage.getItem('auth-storage')).toBe('session');

@@ -1,8 +1,5 @@
 export { startScheduler, stopScheduler, checkOnce } from './sender';
-export {
-  loadState, saveState, effectiveEndpoint, disabledByEnv,
-  getCurrentVersion, isStatusStale, freshStatus,
-} from './state';
+export { loadState, saveState, effectiveEndpoint, disabledByEnv } from './state';
 export { fetchStatus, parseStatus } from './fetcher';
 export type {
   UpdateStatus, UpdateSeverity, VersionCheckStateFile,

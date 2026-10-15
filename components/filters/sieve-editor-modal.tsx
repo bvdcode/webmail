@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
-import { X, AlertTriangle, CheckCircle, Loader2 } from "@/components/icons";
+import { X, AlertTriangle, CheckCircle, Loader2 } from "lucide-react";
 import { useFocusTrap } from "@/hooks/use-focus-trap";
 
 interface SieveEditorModalProps {

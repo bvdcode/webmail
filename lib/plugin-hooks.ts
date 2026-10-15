@@ -337,7 +337,7 @@ export const emailHooks = {
   // They can add, remove, or modify chips (e.g. rewrite addresses, add colors/icons).
   // Take Recipient[] as argument.
   onRecipientChipsChange: new HookBus(),
-  // Transform hooks - lets plugins modify the email before host use it to populate fields. 
+  // Transform hooks - lets plugins modify the email before host use it to populate fields.
   onBeforeComposeOpenToForwardAsAttachment: new HookBus(),
   onBeforeComposeOpenToReply: new HookBus(),
   onBeforeComposeOpenToReplyAll: new HookBus(),
@@ -427,15 +427,6 @@ export const authHooks = {
   onAccountRemove: new HookBus(),
   onTokenRefresh: new HookBus(),
   onAuthReady: new HookBus(),
-  /**
-   * Fired when a third-party OAuth provider redirects back to the generic
-   * plugin OAuth callback page (`/[locale]/plugins/oauth/callback`). The
-   * payload is `{ code, state, receivedAt }` exactly as the provider sent it.
-   * Each plugin validates `state` against the verifier it stashed before
-   * redirecting, so plugins that did not initiate a flow simply ignore the
-   * event. See `components/providers/plugin-oauth-callback-listener.tsx`.
-   */
-  onOAuthCallback: new HookBus(),
 };
 
 // §7.6 Settings Hooks

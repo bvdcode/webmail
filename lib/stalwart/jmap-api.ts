@@ -17,16 +17,28 @@
  * this process — see calendar-agenda's session handling).
  */
 
-import { fetchJmapServer } from '@/lib/stalwart/server-fetch';
-
 const MAX_REDIRECTS = 3;
 
-/**
- * `trusted` mirrors `StalwartCredentials.trusted`: pass `false` for a
- * user-chosen server so the request goes through the rebinding-safe fetch.
- */
-export interface JmapFetchOptions {
-  trusted?: boolean;
+function normalizeServerUrl(serverUrl: string): string {
+  return serverUrl.trim().replace(/\/+$/, '');
+}
+
+export function resolveJmapRequestServerUrl(serverUrl: string): string {
+  const publicServerUrl = normalizeServerUrl(serverUrl);
+  const internalServerUrl = process.env.JMAP_INTERNAL_SERVER_URL?.trim();
+  const configuredServerUrl = (
+    process.env.JMAP_SERVER_URL
+    ?? process.env.NEXT_PUBLIC_JMAP_SERVER_URL
+    ?? ''
+  ).trim();
+
+  if (!internalServerUrl || !configuredServerUrl) {
+    return publicServerUrl;
+  }
+  if (normalizeServerUrl(configuredServerUrl) !== publicServerUrl) {
+    return publicServerUrl;
+  }
+  return normalizeServerUrl(internalServerUrl);
 }
 
 export interface JmapSessionDocument {
@@ -61,11 +73,10 @@ export async function postJmap(
   apiUrl: string,
   authHeader: string,
   body: string,
-  options: JmapFetchOptions = {},
 ): Promise<Response> {
   let url = new URL(apiUrl);
   for (let attempt = 0; attempt <= MAX_REDIRECTS; attempt++) {
-    const response = await fetchJmapServer(url.toString(), {
+    const response = await fetch(url, {
       method: 'POST',
       headers: {
         'Authorization': authHeader,
@@ -73,7 +84,7 @@ export async function postJmap(
       },
       body,
       redirect: 'manual',
-    }, options.trusted);
+    });
 
     if (response.status < 300 || response.status >= 400) {
       return response;
@@ -102,16 +113,19 @@ export async function postJmap(
 export async function fetchJmapSession(
   serverUrl: string,
   authHeader: string,
-  options: JmapFetchOptions = {},
 ): Promise<JmapSessionDocument | null> {
-  const candidates = [`${serverUrl}/jmap/session`, `${serverUrl}/.well-known/jmap`];
+  const requestServerUrl = resolveJmapRequestServerUrl(serverUrl);
+  const candidates = [
+    `${requestServerUrl}/jmap/session`,
+    `${requestServerUrl}/.well-known/jmap`,
+  ];
   for (const url of candidates) {
     try {
-      const res = await fetchJmapServer(url, {
+      const res = await fetch(url, {
         method: 'GET',
         headers: { Authorization: authHeader },
         redirect: 'follow',
-      }, options.trusted);
+      });
       if (!res.ok) continue;
       const session = (await res.json()) as JmapSessionDocument;
       if (session && typeof session === 'object' && session.primaryAccounts) {
@@ -136,7 +150,7 @@ export function rebaseApiUrl(
   if (!session?.apiUrl) return null;
   try {
     const api = new URL(session.apiUrl, `${serverUrl}/`);
-    const base = new URL(serverUrl);
+    const base = new URL(resolveJmapRequestServerUrl(serverUrl));
     return new URL(api.pathname + api.search, base.origin).toString();
   } catch {
     return null;

@@ -2,8 +2,8 @@
 
 import { useMemo, useState, useCallback, useEffect, useRef, type DragEvent } from "react";
 import { useTranslations } from "next-intl";
-import { BookUser, User, Users, Plus, Share2, Book, BookPlus, ChevronRight, ChevronDown, UserPlus, UsersRound, Upload, Tag, Pencil, Trash2, Settings, Mail, Star } from "@/components/icons";
-import { useRouter } from "@/i18n/navigation";
+import { BookUser, User, Users, Plus, Share2, Book, BookPlus, ChevronRight, ChevronDown, UserPlus, UsersRound, Upload, Tag, Pencil, Trash2, Settings, Mail } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { ContextMenu, ContextMenuItem, ContextMenuSeparator, ContextMenuSubMenu } from "@/components/ui/context-menu";
 import { useContextMenu } from "@/hooks/use-context-menu";
@@ -31,7 +31,6 @@ interface ContactsSidebarProps {
   onDropContactsToCategory?: (contactIds: string[], keyword: string) => void;
   onRenameAddressBook?: (addressBook: AddressBook) => void;
   onShareAddressBook?: (addressBook: AddressBook) => void;
-  onSetDefaultAddressBook?: (addressBook: AddressBook) => void;
   onCreateContactInBook?: (addressBook: AddressBook) => void;
   onDeleteAddressBook?: (addressBook: AddressBook) => void;
   onRenameKeyword?: (keyword: string) => void;
@@ -102,7 +101,6 @@ export function ContactsSidebar({
   onDropContactsToCategory,
   onRenameAddressBook,
   onShareAddressBook,
-  onSetDefaultAddressBook,
   onCreateContactInBook,
   onDeleteAddressBook,
   onRenameKeyword,
@@ -113,7 +111,6 @@ export function ContactsSidebar({
   const router = useRouter();
   const { contextMenu: groupContextMenu, openContextMenu: openGroupContextMenu, closeContextMenu: closeGroupContextMenu, menuRef: groupMenuRef } = useContextMenu<ContactCard>();
   const { contextMenu: bookContextMenu, openContextMenu: openBookContextMenu, closeContextMenu: closeBookContextMenu, menuRef: bookMenuRef } = useContextMenu<AddressBook>();
-  const hasBookMenu = !!(onRenameAddressBook || onShareAddressBook || onSetDefaultAddressBook || onCreateContactInBook || onDeleteAddressBook);
   const { contextMenu: keywordContextMenu, openContextMenu: openKeywordContextMenu, closeContextMenu: closeKeywordContextMenu, menuRef: keywordMenuRef } = useContextMenu<string>();
 
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>(loadCollapsed);
@@ -386,7 +383,7 @@ export function ContactsSidebar({
                             contactCount={contactCountByBook[book.id] || 0}
                             onSelect={() => onSelectCategory({ addressBookId: book.id })}
                             onDropContacts={onDropContacts}
-                            onContextMenu={hasBookMenu ? (e) => openBookContextMenu(e, book) : undefined}
+                            onContextMenu={(onRenameAddressBook || onShareAddressBook || onCreateContactInBook || onDeleteAddressBook) ? (e) => openBookContextMenu(e, book) : undefined}
                           />
                         ))}
                       </div>
@@ -405,7 +402,7 @@ export function ContactsSidebar({
                             contactCount={contactCountByBook[book.id] || 0}
                             onSelect={() => onSelectCategory({ addressBookId: book.id })}
                             onDropContacts={onDropContacts}
-                            onContextMenu={hasBookMenu ? (e) => openBookContextMenu(e, book) : undefined}
+                            onContextMenu={(onRenameAddressBook || onShareAddressBook || onCreateContactInBook || onDeleteAddressBook) ? (e) => openBookContextMenu(e, book) : undefined}
                           />
                         ))}
                       </div>
@@ -452,7 +449,7 @@ export function ContactsSidebar({
                   contactCount={contactCountByBook[book.id] || 0}
                   onSelect={() => onSelectCategory({ addressBookId: book.id })}
                   onDropContacts={onDropContacts}
-                  onContextMenu={hasBookMenu ? (e) => openBookContextMenu(e, book) : undefined}
+                  onContextMenu={(onRenameAddressBook || onShareAddressBook || onCreateContactInBook || onDeleteAddressBook) ? (e) => openBookContextMenu(e, book) : undefined}
                 />
               ))}
             </div>
@@ -596,7 +593,7 @@ export function ContactsSidebar({
                 contactCount={contactCountByBook[book.id] || 0}
                 onSelect={() => onSelectCategory({ addressBookId: book.id })}
                 onDropContacts={onDropContacts}
-                onContextMenu={hasBookMenu ? (e) => openBookContextMenu(e, book) : undefined}
+                onContextMenu={(onRenameAddressBook || onShareAddressBook || onCreateContactInBook || onDeleteAddressBook) ? (e) => openBookContextMenu(e, book) : undefined}
               />
             ))}
           </div>
@@ -604,16 +601,13 @@ export function ContactsSidebar({
       </div>
 
       {/* Address book context menu */}
-      {bookContextMenu.data && hasBookMenu && (() => {
+      {bookContextMenu.data && (onRenameAddressBook || onShareAddressBook || onCreateContactInBook || onDeleteAddressBook) && (() => {
         const book = bookContextMenu.data;
         const canCreate = onCreateContactInBook && book.myRights?.mayWrite !== false;
         const canRename = onRenameAddressBook && book.myRights?.mayWrite !== false;
         const canShare = onShareAddressBook && book.myRights?.mayShare && !book.isShared;
-        // The default only applies to books the account owns, and re-setting the
-        // current default is a no-op, so hide it in both cases.
-        const canSetDefault = onSetDefaultAddressBook && !book.isShared && !book.isDefault;
         const canDelete = onDeleteAddressBook && !book.isDefault && !book.isShared && book.myRights?.mayDelete !== false;
-        const showSeparator = (canCreate || canRename || canShare || canSetDefault) && canDelete;
+        const showSeparator = (canCreate || canRename || canShare) && canDelete;
         return (
           <ContextMenu
             ref={bookMenuRef}
@@ -648,16 +642,6 @@ export function ContactsSidebar({
                 onClick={() => {
                   closeBookContextMenu();
                   onShareAddressBook(book);
-                }}
-              />
-            )}
-            {canSetDefault && (
-              <ContextMenuItem
-                icon={Star}
-                label={t("address_books.set_default")}
-                onClick={() => {
-                  closeBookContextMenu();
-                  onSetDefaultAddressBook(book);
                 }}
               />
             )}

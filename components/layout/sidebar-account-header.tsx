@@ -1,21 +1,19 @@
 "use client";
 
+import { ChevronsLeft, ChevronsRight, X } from "lucide-react";
 import { useTranslations } from "next-intl";
-import { ChevronsLeft, ChevronsRight, X } from "@/components/icons";
 import { AccountSwitcher } from "@/components/layout/account-switcher";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 interface SidebarAccountHeaderProps {
   isCollapsed: boolean;
-  showAccountSwitcher?: boolean;
   onToggleCollapsed: () => void;
   onSidebarClose?: () => void;
 }
 
 export function SidebarAccountHeader({
   isCollapsed,
-  showAccountSwitcher = true,
   onToggleCollapsed,
   onSidebarClose,
 }: SidebarAccountHeaderProps) {
@@ -39,7 +37,7 @@ export function SidebarAccountHeader({
         <X className="w-5 h-5" />
       </Button>
 
-      {!isCollapsed && showAccountSwitcher && <AccountSwitcher variant="expanded" className="flex-1" />}
+      {!isCollapsed && <AccountSwitcher variant="expanded" className="flex-1" />}
 
       <Button
         variant="ghost"

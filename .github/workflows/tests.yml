@@ -24,8 +24,17 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Type-check
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Audit dependencies
+        run: npm audit
+
       - name: Run test suite
         # forks + a small worker count keeps the load-sensitive component tests
         # from timing out on the shared runners; the longer per-test timeout
         # covers the jsdom-heavy suites.
-        run: npx vitest run --pool=forks --maxWorkers=2 --testTimeout=15000
+        run: npm run test -- --pool=forks --maxWorkers=2 --testTimeout=15000

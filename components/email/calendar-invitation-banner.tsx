@@ -17,12 +17,11 @@ import {
   AlertCircle,
   ChevronDown,
   ChevronUp,
-} from '@/components/icons';
+} from 'lucide-react';
 import { useTranslations, useFormatter } from 'next-intl';
 import { useRouter } from '@/i18n/navigation';
 import { isDocumentRTL } from '@/i18n/direction';
 import { useAuthStore } from '@/stores/auth-store';
-import { useEmailStore } from '@/stores/email-store';
 import { useCalendarStore } from '@/stores/calendar-store';
 import { useSettingsStore } from '@/stores/settings-store';
 import type { Email, CalendarEvent } from '@/lib/jmap/types';
@@ -364,28 +363,6 @@ export function CalendarInvitationBanner({ email }: CalendarInvitationBannerProp
   const format = useFormatter();
   const router = useRouter();
   const client = useAuthStore((s) => s.client);
-  const getClientForAccount = useAuthStore((s) => s.getClientForAccount);
-  const viewingAccountId = useEmailStore((s) => s.viewingAccountId);
-  const selectedMailboxId = useEmailStore((s) => s.selectedMailbox);
-  const viewMailboxes = useEmailStore((s) => (
-    s.viewingAccountId ? (s.accountMailboxes[s.viewingAccountId] ?? s.mailboxes) : s.mailboxes
-  ));
-  // Blobs are per-account, so the invitation must be parsed and fetched through
-  // the login the message is reachable from - its source stamp in aggregate
-  // views, the per-account sidebar's viewing account otherwise - and against its
-  // owning JMAP account. Against any other account Stalwart answers
-  // CalendarEvent/parse with an error. Calendar actions (import / RSVP) keep
-  // using the active client, whose calendars the calendar store holds. (#867)
-  const sourceClientId = email.sourceClientAccountId ?? viewingAccountId ?? null;
-  const parseClient = (sourceClientId ? getClientForAccount?.(sourceClientId) : undefined) ?? client;
-  // An undecorated message opened directly in a shared/group folder (the
-  // "Shared" sidebar section) has no source stamp, but its blob lives in the
-  // folder owner's account, reached through the viewing client - mirrors
-  // resolveViewAccountId in the email store. Otherwise the blob is in the
-  // client's own mail account.
-  const viewedMailbox = viewMailboxes.find((m) => m.id === selectedMailboxId);
-  const sharedOwnerAccountId = viewedMailbox?.isShared ? viewedMailbox.accountId : undefined;
-  const blobAccountId = email.sourceAccountId ?? sharedOwnerAccountId ?? parseClient?.getAccountId();
   const currentUserEmail = useAuthStore((s) => s.primaryIdentity?.email);
   const calendarInvitationParsingEnabled = useSettingsStore((s) => s.calendarInvitationParsingEnabled);
   const timeFormat = useSettingsStore((s) => s.timeFormat);
@@ -403,27 +380,23 @@ export function CalendarInvitationBanner({ email }: CalendarInvitationBannerProp
   const [selectedCalendarId, setSelectedCalendarId] = useState<string>('');
   const [rawIcsMethod, setRawIcsMethod] = useState<InvitationMethod>('unknown');
   const [isCollapsed, setIsCollapsed] = useState(false);
-  // Underlying failure shown under the generic parse error, so "wrong account"
-  // or a network failure is distinguishable from an unparsable file.
-  const [parseError, setParseError] = useState<string | null>(null);
 
   const attachment = findCalendarAttachment(email);
 
   const parseEvent = useCallback(async () => {
-    if (!client || !parseClient || !blobAccountId || !attachment || !calendarInvitationParsingEnabled) return;
+    if (!client || !attachment || !calendarInvitationParsingEnabled) return;
     setState('loading');
     setActionNotice(null);
     setActionError(null);
-    setParseError(null);
     try {
       // JMAP strips parameters from Content-Type (RFC 8621), so method=REQUEST
       // is lost. Fetch raw ICS to extract METHOD as a reliable fallback - in
       // parallel with parsing to save a roundtrip.
       const [events, rawText] = await Promise.all([
-        parseClient.parseCalendarEvents(blobAccountId, attachment.blobId),
+        client.parseCalendarEvents(client.getCalendarsAccountId(), attachment.blobId),
         (async () => {
           try {
-            const blob = await parseClient.fetchBlob(attachment.blobId, 'invite.ics', 'text/calendar', blobAccountId);
+            const blob = await client.fetchBlob(attachment.blobId, 'invite.ics', 'text/calendar');
             return await blob.text();
           } catch {
             return null;
@@ -467,11 +440,10 @@ export function CalendarInvitationBanner({ email }: CalendarInvitationBannerProp
             .catch(() => { /* ignore lookup failure */ });
         }
       }
-    } catch (err) {
-      setParseError(err instanceof Error ? err.message : String(err));
+    } catch {
       setState('error');
     }
-  }, [calendarInvitationParsingEnabled, client, parseClient, blobAccountId, attachment, supportsCalendar]);
+  }, [calendarInvitationParsingEnabled, client, attachment, supportsCalendar]);
 
   useEffect(() => {
     if (attachment && calendarInvitationParsingEnabled) {
@@ -771,12 +743,7 @@ export function CalendarInvitationBanner({ email }: CalendarInvitationBannerProp
         <div className="w-10 h-10 rounded-full bg-destructive/15 text-destructive flex items-center justify-center flex-shrink-0 shadow-sm">
           <AlertCircle className="w-5 h-5" />
         </div>
-        <div className="flex flex-col min-w-0">
-          <span className="text-sm text-destructive">{t('parse_error')}</span>
-          {parseError && (
-            <span className="text-xs text-muted-foreground truncate" title={parseError}>{parseError}</span>
-          )}
-        </div>
+        <span className="text-sm text-destructive">{t('parse_error')}</span>
       </div>
     );
   }

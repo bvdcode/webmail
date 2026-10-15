@@ -5,7 +5,7 @@ import { useFocusTrap } from "@/hooks/use-focus-trap";
 import { useTotpReauthStore } from "@/stores/totp-reauth-store";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Shield } from "@/components/icons";
+import { Shield } from "lucide-react";
 
 /**
  * Modal dialog that prompts the user for a fresh TOTP code when their

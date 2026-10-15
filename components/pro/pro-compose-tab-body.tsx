@@ -1,17 +1,14 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { useTranslations } from "next-intl";
 import { EmailComposer, type ComposerDraftData } from "@/components/email/email-composer";
 import { ErrorBoundary, ComposerErrorFallback } from "@/components/error";
 import { useAuthStore } from "@/stores/auth-store";
 import { useEmailStore } from "@/stores/email-store";
-import { useAccountStore } from "@/stores/account-store";
-import { resolveComposeAccountEmail } from "@/lib/reply-identity";
 import { toast } from "@/stores/toast-store";
 import { useProTabStore, registerProTabCloseInterceptor, type ProComposeTabData } from "@/stores/pro-tab-store";
 import { debug } from "@/lib/debug";
-import { threadKeyFor } from "@/lib/thread-utils";
 
 interface ProComposeTabBodyProps {
   tabId: string;
@@ -119,13 +116,13 @@ export function ProComposeTabBody({ tabId, data }: ProComposeTabBodyProps) {
       if (data.sourceEmailId) {
         const emailState = useEmailStore.getState();
         const repliedEmail = emailState.emails.find(e => e.id === data.sourceEmailId);
-        if (repliedEmail?.threadId && emailState.expandedThreadIds.has(threadKeyFor(repliedEmail))) {
+        if (repliedEmail?.threadId && emailState.expandedThreadIds.has(repliedEmail.threadId)) {
           const accountId = client.getAccountId();
           const fullEmails = await client.getThreadEmails(repliedEmail.threadId, accountId);
           if (fullEmails.length > 0) {
             useEmailStore.setState((state) => {
               const c = new Map(state.threadEmailsCache);
-              c.set(threadKeyFor(repliedEmail), fullEmails);
+              c.set(repliedEmail.threadId!, fullEmails);
               return { threadEmailsCache: c };
             });
           }
@@ -186,28 +183,6 @@ export function ProComposeTabBody({ tabId, data }: ProComposeTabBodyProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Mirrors the standard shell (see the same prop in `components/mail/mail-app.tsx`).
-  // Without it `mode === 'compose'` resolves `findComposeIdentityId(identities,
-  // undefined)` -> null and every new message in the Pro shell defaults to the
-  // account owner, even with a shared folder open. The Pro shell hoists every
-  // "show composer" intent - including `mailto:` links - into a tab, so this
-  // omission covered the whole compose surface there.
-  //
-  // Read once, at mount: this is "the mailbox the message was started from",
-  // and the composer consumes it only while no identity has been picked yet.
-  // A tab body stays mounted (hidden) for as long as the tab is open, so
-  // subscribing to the mailbox list instead would re-render the composer - and
-  // its editor - on every counter refresh for the rest of the tab's life.
-  const [composeFromAccountEmail] = useState(() => {
-    const { mailboxes, selectedMailbox, viewingAccountId } = useEmailStore.getState();
-    const accountId = viewingAccountId ?? useAuthStore.getState().activeAccountId ?? '';
-    return resolveComposeAccountEmail(
-      mailboxes,
-      selectedMailbox,
-      useAccountStore.getState().getAccountById(accountId)?.email,
-    );
-  });
-
   return (
     <div className="flex h-full w-full flex-col bg-background">
       <ErrorBoundary fallback={ComposerErrorFallback}>
@@ -217,7 +192,6 @@ export function ProComposeTabBody({ tabId, data }: ProComposeTabBodyProps) {
           replyTo={data.replyTo}
           initialDraftText={data.initialDraftText}
           initialData={data.initialData}
-          composeFromAccountEmail={composeFromAccountEmail}
           onSend={handleSend}
           onScheduledSendCreated={handleScheduledSendCreated}
           onClose={handleClose}

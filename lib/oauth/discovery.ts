@@ -4,7 +4,6 @@ export interface OAuthMetadata {
   token_endpoint: string;
   revocation_endpoint?: string;
   end_session_endpoint?: string;
-  scopes_supported?: string[];
 }
 
 // Validates that a discovered endpoint URL is safe to follow. Server-side
@@ -70,18 +69,17 @@ function rememberFailure(serverUrl: string): void {
 // could point token_endpoint at 169.254.169.254 or 127.0.0.1:* and turn the
 // downstream fetch() into an SSRF with response-body reflection. Server-side
 // callers must pass `validateEndpoint`.
-// Returns the first endpoint the validator rejects, or null when all pass.
-async function findRejectedEndpoint(
+async function endpointsArePublic(
   endpoints: Array<string | undefined>,
   validate: EndpointValidator | undefined,
-): Promise<string | null> {
-  if (!validate) return null;
+): Promise<boolean> {
+  if (!validate) return true;
   for (const endpoint of endpoints) {
     if (endpoint === undefined) continue;
-    if (typeof endpoint !== 'string') return String(endpoint);
-    if (!(await validate(endpoint))) return endpoint;
+    if (typeof endpoint !== 'string') return false;
+    if (!(await validate(endpoint))) return false;
   }
-  return null;
+  return true;
 }
 
 // One pass over the well-known documents. Returns usable metadata, or null
@@ -103,19 +101,14 @@ async function attemptDiscovery(
 
       const data = await response.json();
       if (data.authorization_endpoint && data.token_endpoint) {
-        const rejected = await findRejectedEndpoint([
+        const allPublic = await endpointsArePublic([
           data.authorization_endpoint,
           data.token_endpoint,
           data.revocation_endpoint,
           data.end_session_endpoint,
         ], validate);
-        if (rejected !== null) {
-          // Name the endpoint: "unreachable" is the wrong lead when the IdP
-          // answered and only the address its endpoint resolves to was refused.
-          errors.push(
-            `${url} advertises ${rejected}, which is invalid or resolves to a non-public address ` +
-            '(set OAUTH_ALLOW_PRIVATE_ENDPOINTS=true if that host is internal on purpose)',
-          );
+        if (!allPublic) {
+          errors.push(`${url} returned non-public or invalid endpoint URL`);
           continue;
         }
         return {
@@ -124,9 +117,6 @@ async function attemptDiscovery(
           token_endpoint: data.token_endpoint,
           revocation_endpoint: data.revocation_endpoint,
           end_session_endpoint: data.end_session_endpoint,
-          ...(Array.isArray(data.scopes_supported)
-            ? { scopes_supported: data.scopes_supported.filter((s: unknown): s is string => typeof s === 'string') }
-            : {}),
         };
       }
       errors.push(`${url} response missing required endpoints`);

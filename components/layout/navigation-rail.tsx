@@ -2,9 +2,9 @@
 
 import { useState, useRef, useEffect, useLayoutEffect, useCallback } from "react";
 import { createPortal } from "react-dom";
-import { Mail, Calendar, BookUser, HardDrive, Settings, Keyboard, Plus, Shield, LogOut, Check, Search } from "@/components/icons";
+import { Mail, Calendar, BookUser, HardDrive, Settings, Keyboard, Plus, Shield, LogOut, Check } from "lucide-react";
 import { AccountSwitcher } from "./account-switcher";
-import { iconForName } from "@/components/icons";
+import { icons as lucideIcons, type LucideIcon } from "lucide-react";
 import { useConfig } from "@/hooks/use-config";
 import { useThemeStore } from "@/stores/theme-store";
 import { usePathname, Link, useRouter } from "@/i18n/navigation";
@@ -12,7 +12,6 @@ import { useTranslations } from "next-intl";
 import { useEmailStore } from "@/stores/email-store";
 import { useSettingsStore } from "@/stores/settings-store";
 import { usePolicyStore } from "@/stores/policy-store";
-import { useResolvedSidebarApps } from "@/hooks/use-resolved-sidebar-apps";
 import { useAuthStore } from "@/stores/auth-store";
 import { useAccountStore } from "@/stores/account-store";
 import { useUpdateStore, selectHasUpdate } from "@/stores/update-store";
@@ -25,8 +24,6 @@ import { PluginSlot } from "@/components/plugins/plugin-slot";
 import { KeyboardShortcutsModal } from "@/components/keyboard-shortcuts-modal";
 import { apiFetch, getPathPrefix, withBasePath } from "@/lib/browser-navigation";
 import { Avatar } from "@/components/ui/avatar";
-import { IS_LITE } from "@/lib/lite";
-import { toUnicodeEmail } from "@/lib/idn";
 import { useNavigationCapabilities } from '@/hooks/use-navigation-capabilities';
 
 interface NavItem {
@@ -63,11 +60,6 @@ interface NavigationRailProps {
    * active app).
    */
   activeItemId?: 'mail' | 'calendar' | 'contacts' | 'files' | 'settings' | null;
-  /**
-   * Pro shell only: renders a Search entry that opens the global search
-   * palette (#641) instead of navigating anywhere.
-   */
-  onOpenSearch?: () => void;
 }
 
 function StorageQuotaCircle({ quota, usagePercent }: { quota: { used: number; total: number }; usagePercent: number }) {
@@ -199,21 +191,18 @@ export function NavigationRail({
   activeAppId,
   onNavigate,
   activeItemId,
-  onOpenSearch,
 }: NavigationRailProps) {
   const t = useTranslations("sidebar");
-  const tGlobalSearch = useTranslations("global_search");
   const pathname = usePathname();
   const router = useRouter();
   const { appLogoLightUrl, appLogoDarkUrl } = useConfig();
   const resolvedTheme = useThemeStore((s) => s.resolvedTheme);
   const { mailboxes } = useEmailStore();
   const navigationCapabilities = useNavigationCapabilities();
+  const sidebarApps = useSettingsStore((s) => s.sidebarApps);
   const showRailAccountList = useSettingsStore((s) => s.showRailAccountList);
   const sidebarAppsEnabled = usePolicyStore((s) => s.isFeatureEnabled('sidebarAppsEnabled'));
-  // Operator-provided apps (#931) plus the user's own; the gate above only
-  // removes the user's, so a pinned set still shows when custom apps are off.
-  const visibleSidebarApps = useResolvedSidebarApps();
+  const visibleSidebarApps = sidebarAppsEnabled ? sidebarApps : [];
   const inboxUnread = mailboxes.find(m => m.role === "inbox")?.unreadEmails || 0;
   const [isStalwartAdmin, setIsStalwartAdmin] = useState(false);
   const hasUpdate = useUpdateStore(selectHasUpdate);
@@ -289,8 +278,7 @@ export function NavigationRail({
   useEffect(() => {
     let cancelled = false;
     const headers = getActiveAccountSlotHeaders();
-    // No admin console in the static Lite build.
-    if (IS_LITE || !headers['X-JMAP-Cookie-Slot']) return;
+    if (!headers['X-JMAP-Cookie-Slot']) return;
     apiFetch('/api/admin/auth', { headers })
       .then(res => res.json())
       .then(data => {
@@ -393,7 +381,7 @@ export function NavigationRail({
 
         {/* Custom sidebar apps (per-app mobile visibility) */}
         {visibleSidebarApps.filter((app) => app.showOnMobile).map((app) => {
-          const AppIcon = iconForName(app.icon);
+          const AppIcon = lucideIcons[app.icon as keyof typeof lucideIcons] as LucideIcon | undefined;
           const isActive = activeAppId === app.id;
           return (
             <button
@@ -508,24 +496,6 @@ export function NavigationRail({
         role="navigation"
         aria-label={t("nav_label")}
       >
-        {onOpenSearch && (
-          <button
-            type="button"
-            onClick={onOpenSearch}
-            data-tour="nav-search"
-            className={cn(
-              "relative flex items-center gap-2.5 rounded-md transition-colors duration-150 cursor-pointer",
-              collapsed ? "justify-center w-10 h-10" : "px-2.5 text-sm",
-              "max-lg:min-h-[44px]",
-              "text-muted-foreground hover:bg-muted hover:text-foreground"
-            )}
-            title={collapsed ? tGlobalSearch("title") : undefined}
-            style={collapsed ? undefined : { paddingBlock: 'var(--density-sidebar-py)' }}
-          >
-            <Search className="w-[18px] h-[18px] flex-shrink-0" />
-            {!collapsed && <span className="truncate">{tGlobalSearch("title")}</span>}
-          </button>
-        )}
         {visibleItems.map((item) => {
           const isActive = getIsActive(item.href, item.id);
           const Icon = item.icon;
@@ -574,7 +544,7 @@ export function NavigationRail({
           />
         )}
         {visibleSidebarApps.map((app) => {
-          const AppIcon = iconForName(app.icon);
+          const AppIcon = lucideIcons[app.icon as keyof typeof lucideIcons] as LucideIcon | undefined;
           const isActive = activeAppId === app.id;
           return (
             <button
@@ -722,7 +692,7 @@ export function NavigationRail({
                       ? "ring-2 ring-primary ring-offset-2 ring-offset-background"
                       : "opacity-70 hover:opacity-100"
                   )}
-                  title={`${toUnicodeEmail(account.displayName || account.label)} (${toUnicodeEmail(account.email || account.username)})`}
+                  title={`${account.displayName || account.label} (${account.email || account.username})`}
                 >
                   <Avatar
                     name={account.displayName || account.label}

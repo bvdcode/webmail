@@ -22,8 +22,8 @@ import {
   eachDayOfInterval,
   isSameDay,
   isSameMonth,
+  isToday,
 } from "date-fns";
-import { displayNow, isDisplayToday } from "@/lib/timezone";
 
 /**
  * Unified calendar-locale hook.
@@ -74,11 +74,11 @@ export function useCalendarLocale() {
   /** Is the given date "today" in the active calendar system? */
   const checkIsToday = (date: Date): boolean => {
     if (isJalali) {
-      const now = toJalali(displayNow());
+      const now = toJalali(new Date());
       const target = toJalali(date);
       return now.jy === target.jy && now.jm === target.jm && now.jd === target.jd;
     }
-    return isDisplayToday(date);
+    return isToday(date);
   };
 
   /** Does the date belong to the same month as the reference date? */

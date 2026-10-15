@@ -34,7 +34,7 @@ interface UIState {
   emailListWidth: number;
   emailListHeight: number;
 
-  // Sidebar collapsed state (desktop)
+  // Desktop sidebar state
   sidebarCollapsed: boolean;
 
   // Actions

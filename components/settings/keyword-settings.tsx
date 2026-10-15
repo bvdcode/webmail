@@ -2,7 +2,6 @@
 
 import React, { useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
-import { toast } from "@/stores/toast-store";
 import {
   useSettingsStore,
   KEYWORD_PALETTE,
@@ -14,7 +13,7 @@ import {
 import { useAuthStore } from "@/stores/auth-store";
 import { useEmailStore } from "@/stores/email-store";
 import { SettingsSection, SettingItem, ToggleSwitch, Select } from "./settings-section";
-import { Plus, Pencil, Trash2, GripVertical, Check, X, Loader2, Search } from "@/components/icons";
+import { Plus, Pencil, Trash2, GripVertical, Check, X, Loader2, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { KEYWORD_PREFIX } from "@/lib/thread-utils";
 import { findUnrecognizedKeywords, type UnrecognizedKeyword } from "@/lib/keyword-discovery";
@@ -581,11 +580,13 @@ export function KeywordSettings() {
         if (migration.refused > 0) {
           // Some mail kept the old keyword. The definition still follows the
           // messages that did move; the rest is what the warning is about.
-          toast.warning(t("migration_error"));
+          const toastModule = await import('sonner');
+          toastModule.toast.warning(t("migration_error"));
         }
       } catch (error) {
         console.error("Failed to migrate keyword:", error);
-        toast.error(t("migration_error"));
+        const toastModule = await import('sonner');
+        toastModule.toast.error(t("migration_error"));
         setIsMigrating(false);
         return;
       }

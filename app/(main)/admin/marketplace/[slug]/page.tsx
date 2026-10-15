@@ -20,7 +20,7 @@ import {
   FileCode,
   ChevronDown,
   ChevronUp,
-} from '@/components/icons';
+} from 'lucide-react';
 import { apiFetch } from '@/lib/browser-navigation';
 import { compareVersions, isVersionSatisfied } from '@/lib/version-compare';
 

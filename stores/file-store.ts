@@ -1,7 +1,6 @@
 import { create } from 'zustand';
 import type { IJMAPClient } from '@/lib/jmap/client-interface';
 import type { FileNode, FileNodeRights } from '@/lib/jmap/types';
-import { imageBlobUrl } from '@/lib/file-preview';
 
 export interface FileResource {
   id: string;
@@ -164,22 +163,6 @@ function childrenOf(nodes: FileNode[], parentId: string | null): FileNode[] {
 // separator unambiguously marks a node we're browsing inside a shared account.
 function isCrossAccountId(id: string | null): boolean {
   return id != null && id.includes(':');
-}
-
-/**
- * The account and bare server id behind a listed resource, for callers that
- * address the node on the server themselves (the WOPI editor, #1094). A node
- * of a shared account is listed as "accountId:nodeId"; `accountId` is only
- * known for nodes listed across accounts.
- */
-export function resourceServerRef(
-  resource: Pick<FileResource, 'id' | 'ownerAccountId'>,
-): { accountId?: string; id: string } {
-  const owner = resource.ownerAccountId;
-  if (owner && resource.id.startsWith(`${owner}:`)) {
-    return { accountId: owner, id: resource.id.slice(owner.length + 1) };
-  }
-  return { accountId: owner, id: resource.id };
 }
 
 function nodeToResource(node: FileNode): FileResource {
@@ -820,7 +803,7 @@ export const useFileStore = create<FileState>((set, get) => ({
     const resource = resources.find(r => r.name === name);
     if (!resource?.blobId) throw new Error('No blob');
 
-    return imageBlobUrl(await client.fetchBlob(resource.blobId, resource.name, resource.contentType), resource.contentType);
+    return client.fetchBlobAsObjectUrl(resource.blobId, resource.name, resource.contentType);
   },
 
   getFileContent: async (name: string) => {

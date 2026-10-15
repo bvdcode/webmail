@@ -2,7 +2,6 @@ import v8 from 'node:v8';
 import { NextResponse } from 'next/server';
 import { NextRequest } from 'next/server';
 import { logger } from '@/lib/logger';
-import { canSeeInstanceDetails } from '@/lib/auth/instance-details';
 
 const MEMORY_WARNING_THRESHOLD = 0.85;
 const MEMORY_CRITICAL_THRESHOLD = 0.95;
@@ -41,14 +40,12 @@ interface HealthStatus {
  * Health check endpoint for container orchestration
  *
  * GET /api/health - Liveness probe for container orchestration
- * GET /api/health?detailed=true - Diagnostics with advisory memory warnings,
- *   for signed-in users and admins (versions and memory fingerprint the
- *   instance); anyone else gets the plain liveness answer
+ * GET /api/health?detailed=true - Diagnostics with advisory memory warnings
  * HEAD /api/health - Lightweight liveness probe (status code only)
  */
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
-  const detailed = searchParams.get('detailed') === 'true' && await canSeeInstanceDetails(request);
+  const detailed = searchParams.get('detailed') === 'true';
 
   try {
     const timestamp = new Date().toISOString();

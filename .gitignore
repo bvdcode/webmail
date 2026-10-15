@@ -16,7 +16,6 @@
 # next.js
 /.next/
 /out/
-/lite-image/
 
 # production
 /build
@@ -54,3 +53,5 @@ next-env.d.ts
 
 # vscode settings
 .vscode/
+
+/notes/

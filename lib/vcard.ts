@@ -530,8 +530,6 @@ function buildContact(raw: Record<string, string[]>): ContactCard | null {
 
       switch (propName) {
         case "FN":
-          // Keep the verbatim FN in `full` (RFC 9553): it feeds the mandatory
-          // vCard FN on re-export, which strict clients require (#430).
           if (!card.name) {
             const parts = val.split(" ");
             const components: NameComponent[] = [];
@@ -541,9 +539,7 @@ function buildContact(raw: Record<string, string[]>): ContactCard | null {
             } else if (parts.length === 1) {
               components.push({ kind: "given", value: parts[0] });
             }
-            card.name = { components, isOrdered: true, full: val };
-          } else if (!card.name.full) {
-            card.name.full = val;
+            card.name = { components, isOrdered: true };
           }
           break;
 
@@ -560,8 +556,7 @@ function buildContact(raw: Record<string, string[]>): ContactCard | null {
           if (nParts[0]) components.push({ kind: "surname", value: nParts[0] });
           if (nParts[4]) components.push({ kind: "generation", value: nParts[4] });
           if (components.length > 0) {
-            // Preserve `full` captured from FN when FN preceded N.
-            card.name = { ...card.name, components, isOrdered: true };
+            card.name = { components, isOrdered: true };
           }
           break;
         }

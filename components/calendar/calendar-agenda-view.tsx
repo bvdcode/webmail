@@ -1,20 +1,17 @@
 "use client";
 
-import { useMemo, useRef, useCallback } from "react";
-import { useTranslations } from "next-intl";
-import { useDisplayDateFormatter } from "@/hooks/use-display-date-formatter";
-import { format, isTomorrow, startOfDay } from "date-fns";
-import { MapPin, Users } from "@/components/icons";
+import { useMemo, useRef, useEffect, useCallback } from "react";
+import { useTranslations, useFormatter } from "next-intl";
+import { format, isToday, isTomorrow, startOfDay } from "date-fns";
+import { MapPin, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getEventColor } from "./event-card";
 import { getEventDayBounds, getEventEndDate, getEventStartDate, getPrimaryCalendarId } from "@/lib/calendar-utils";
-import { displayNow, isDisplayToday } from "@/lib/timezone";
-import { getParticipantCount, isDeclinedByUser } from "@/lib/calendar-participants";
-import { useScrollWindow } from "@/hooks/use-scroll-window";
-import type { ScrollWindowViewProps } from "@/lib/calendar-scroll-window";
+import { getParticipantCount } from "@/lib/calendar-participants";
 import type { CalendarEvent, Calendar } from "@/lib/jmap/types";
 
-interface CalendarAgendaViewProps extends ScrollWindowViewProps {
+interface CalendarAgendaViewProps {
+  selectedDate: Date;
   events: CalendarEvent[];
   calendars: Calendar[];
   onSelectEvent: (event: CalendarEvent, anchorRect: DOMRect) => void;
@@ -22,8 +19,6 @@ interface CalendarAgendaViewProps extends ScrollWindowViewProps {
   onHoverLeave?: () => void;
   onContextMenuEvent?: (e: React.MouseEvent, event: CalendarEvent) => void;
   timeFormat?: "12h" | "24h";
-  /** The user's calendar addresses, to mark events they declined (#1110). */
-  currentUserEmails?: string[];
 }
 
 interface DayGroup {
@@ -33,26 +28,17 @@ interface DayGroup {
 }
 
 export function CalendarAgendaView({
-  focus,
+  selectedDate,
   events,
   calendars,
-  rangeStart,
-  rangeEnd,
-  windowKey,
-  onExtendStart,
-  onExtendEnd,
-  isLoading = false,
   onSelectEvent,
   onHoverEvent,
   onHoverLeave,
   onContextMenuEvent,
   timeFormat = "24h",
-  currentUserEmails,
 }: CalendarAgendaViewProps) {
   const t = useTranslations("calendar");
-  // Grid days / event dates are display dates (local fields = wall-clock in
-  // the user's zone); the app-wide formatter would shift them again (#755).
-  const intlFormatter = useDisplayDateFormatter();
+  const intlFormatter = useFormatter();
 
   const calendarMap = useMemo(() => {
     const map = new Map<string, Calendar>();
@@ -60,8 +46,8 @@ export function CalendarAgendaView({
     return map;
   }, [calendars]);
 
+  const todayRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
-  const bottomSentinelRef = useRef<HTMLDivElement>(null);
 
   const grouped = useMemo(() => {
     const sorted = [...events].sort((a, b) =>
@@ -89,57 +75,40 @@ export function CalendarAgendaView({
       } catch { /* skip invalid dates */ }
     });
 
-    // Keep a "Today" row as an anchor, but only when today is actually part
-    // of the loaded window - otherwise it would claim there is nothing on a
-    // day that was never fetched.
-    const today = startOfDay(displayNow());
-    const todayKey = format(today, "yyyy-MM-dd");
-    if (!groupMap.has(todayKey) && today >= startOfDay(rangeStart) && today <= rangeEnd) {
-      const todayGroup = { date: today, dateKey: todayKey, events: [] as CalendarEvent[] };
+    // Always include today's date in the groups so the view has a "Today" anchor
+    const todayKey = format(new Date(), "yyyy-MM-dd");
+    if (!groupMap.has(todayKey)) {
+      const todayGroup = { date: startOfDay(new Date()), dateKey: todayKey, events: [] as CalendarEvent[] };
       groupMap.set(todayKey, todayGroup);
       groups.push(todayGroup);
     }
 
     groups.sort((a, b) => a.date.getTime() - b.date.getTime());
     return groups;
-  }, [events, rangeStart, rangeEnd]);
+  }, [events]);
 
-  // The focus row is the first day at or after the focused day: where the
-  // list starts out, and where "Today" brings the user back to.
-  const focusKey = format(focus.date, "yyyy-MM-dd");
-  const focusIndex = grouped.findIndex((group) => group.dateKey >= focusKey);
-  const focusRowRef = useRef<HTMLDivElement>(null);
-  const scrollToFocus = useCallback(() => {
-    const el = scrollContainerRef.current;
-    const target = focusRowRef.current;
-    if (!el) return;
-    el.scrollTop = target
-      ? el.scrollTop + target.getBoundingClientRect().top - el.getBoundingClientRect().top
-      : 0;
+  // Auto-scroll to today's section on mount and when selectedDate changes to today
+  const scrollToToday = useCallback(() => {
+    if (todayRef.current) {
+      todayRef.current.scrollIntoView({ block: "start" });
+    }
   }, []);
 
-  const { requestStart, pendingSide } = useScrollWindow({
-    scrollRef: scrollContainerRef,
-    axis: "vertical",
-    isLoading,
-    windowKey,
-    focusNonce: focus.nonce,
-    scrollToFocus,
-    onExtendStart,
-    onExtendEnd,
-    endSentinelRef: bottomSentinelRef,
-    contentKey: grouped,
-    anchorSelector: "[data-agenda-day]",
-  });
+  useEffect(() => {
+    // Scroll to today on mount
+    const frame = requestAnimationFrame(scrollToToday);
+    return () => cancelAnimationFrame(frame);
+  }, [scrollToToday]);
 
-  // Wheeling up while already at the top reaches for earlier days. Touch
-  // users (and anyone whose list is too short to scroll) have the button.
-  const handleWheel = useCallback((e: React.WheelEvent<HTMLDivElement>) => {
-    if (e.deltaY < 0 && e.currentTarget.scrollTop <= 0) requestStart();
-  }, [requestStart]);
+  useEffect(() => {
+    // Scroll to today when selectedDate changes to today
+    if (isToday(selectedDate)) {
+      scrollToToday();
+    }
+  }, [selectedDate, scrollToToday]);
 
   const formatDateHeader = (date: Date): string => {
-    if (isDisplayToday(date)) return t("events.today_header");
+    if (isToday(date)) return t("events.today_header");
     if (isTomorrow(date)) return t("events.tomorrow_header");
     return intlFormatter.dateTime(date, { weekday: "long", month: "long", day: "numeric" });
   };
@@ -151,44 +120,14 @@ export function CalendarAgendaView({
     return format(date, "HH:mm");
   };
 
-  const formatRangeDate = (date: Date): string =>
-    intlFormatter.dateTime(date, { month: "short", day: "numeric", year: "numeric" });
-
-  const loadingPast = isLoading && pendingSide === "start";
-
   return (
-    <div
-      className="flex-1 overflow-y-auto [overflow-anchor:none]"
-      ref={scrollContainerRef}
-      onWheel={handleWheel}
-    >
-      <div className="px-4 py-2 text-center text-xs text-muted-foreground">
-        {onExtendStart ? (
-          <button
-            type="button"
-            onClick={requestStart}
-            disabled={isLoading}
-            className="rounded-md px-2 py-1 hover:bg-muted hover:text-foreground disabled:opacity-60"
-          >
-            {loadingPast ? t("events.agenda_loading") : t("events.agenda_show_earlier")}
-          </button>
-        ) : (
-          <span>{t("events.agenda_range_start", { date: formatRangeDate(rangeStart) })}</span>
-        )}
-      </div>
-
-      {grouped.length === 0 && !isLoading && (
-        <div className="px-4 py-6 text-center text-sm text-muted-foreground">
-          {t("events.no_events")}
-        </div>
-      )}
-
-      {grouped.map((group, index) => (
-        <div key={group.dateKey} ref={index === focusIndex ? focusRowRef : undefined} data-agenda-day={group.dateKey}>
+    <div className="flex-1 overflow-y-auto" ref={scrollContainerRef}>
+      {grouped.map((group) => (
+        <div key={group.dateKey} ref={isToday(group.date) ? todayRef : undefined}>
           <div className="sticky top-0 bg-muted/80 backdrop-blur-sm px-4 py-2 border-b border-border">
             <span className={cn(
               "text-sm font-medium",
-              isDisplayToday(group.date) && "text-primary"
+              isToday(group.date) && "text-primary"
             )}>
               {formatDateHeader(group.date)}
             </span>
@@ -210,9 +149,8 @@ export function CalendarAgendaView({
               const start = getEventStartDate(ev);
               const end = getEventEndDate(ev);
               // iTIP CANCEL marks the attendee's copy with status "cancelled"
-              // instead of deleting it (#572); a declined invitation stays
-              // listed too (#1110).
-              const isInactive = ev.status === "cancelled" || isDeclinedByUser(ev, currentUserEmails);
+              // instead of deleting it (#572).
+              const isCancelled = ev.status === "cancelled";
               const locationName = ev.locations
                 ? Object.values(ev.locations)[0]?.name
                 : null;
@@ -224,7 +162,10 @@ export function CalendarAgendaView({
                   onMouseEnter={(e) => onHoverEvent?.(ev, e.currentTarget.getBoundingClientRect())}
                   onMouseLeave={() => onHoverLeave?.()}
                   onContextMenu={onContextMenuEvent ? (e) => onContextMenuEvent(e, ev) : undefined}
-                  className="w-full flex items-start px-4 hover:bg-muted/50 transition-colors text-start"
+                  className={cn(
+                    "w-full flex items-start px-4 hover:bg-muted/50 transition-colors text-start",
+                    isCancelled && "opacity-60"
+                  )}
                   style={{ gap: 'var(--density-item-gap)', paddingBlock: 'var(--density-item-py)' }}
                 >
                   <div className="flex flex-col items-center pt-0.5 min-w-[60px]">
@@ -240,16 +181,13 @@ export function CalendarAgendaView({
                     )}
                   </div>
 
-                  {/* Calendar colour as a dot on the title line; hollow when
-                      declined or cancelled (repos/branding/APP.md). */}
-                  <span
-                    className="w-[9px] h-[9px] mt-[5.5px] rounded-full flex-shrink-0"
-                    style={isInactive ? { boxShadow: `inset 0 0 0 1.5px ${color}` } : { backgroundColor: color }}
-                    aria-hidden="true"
+                  <div
+                    className="w-1 self-stretch rounded-full flex-shrink-0"
+                    style={{ backgroundColor: color }}
                   />
 
                   <div className="flex-1 min-w-0">
-                    <div className={cn("text-sm font-medium truncate", isInactive && "line-through text-muted-foreground")}>
+                    <div className={cn("text-sm font-medium truncate", isCancelled && "line-through")}>
                       {ev.title || t("events.no_title")}
                     </div>
                     {locationName && (
@@ -277,16 +215,6 @@ export function CalendarAgendaView({
           )}
         </div>
       ))}
-
-      <div
-        ref={bottomSentinelRef}
-        data-testid="agenda-bottom-sentinel"
-        className="px-4 py-3 text-center text-xs text-muted-foreground"
-      >
-        {onExtendEnd
-          ? (isLoading && pendingSide === "end" ? t("events.agenda_loading") : " ")
-          : t("events.agenda_range_end", { date: formatRangeDate(rangeEnd) })}
-      </div>
     </div>
   );
 }

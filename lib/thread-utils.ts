@@ -1,33 +1,4 @@
 import type { Email, ThreadGroup } from "./jmap/types";
-import { compareEmails, type HeldKeywords, type SortLevel } from "./message-list-order";
-
-/**
- * Client-side identity of a thread.
- *
- * JMAP thread ids are only unique within their account (Stalwart hands out
- * per-account counters such as "b", "c", …), so in views that merge several
- * accounts two unrelated conversations can share a `threadId`. Emails fetched
- * through the aggregate paths carry their source stamps; scoping the key by
- * them keeps those threads apart. Unstamped emails (single-account views) keep
- * the bare id, so nothing changes there. `ThreadGroup.threadId` stays the raw
- * id for JMAP calls - `threadIdFromKey` is the reverse mapping.
- */
-export function threadKeyFor(
-  email: Pick<Email, "threadId" | "sourceClientAccountId" | "sourceAccountId">,
-): string {
-  const scope = [email.sourceClientAccountId, email.sourceAccountId].filter(Boolean).join("/");
-  return scope ? `${scope}:${email.threadId}` : email.threadId;
-}
-
-/**
- * The JMAP thread id behind a `threadKeyFor` key. JMAP ids never contain ":"
- * (RFC 8620 §1.2 limits them to the URL-safe base64 alphabet), so the last
- * separator always splits the scope from the id.
- */
-export function threadIdFromKey(threadKey: string): string {
-  const at = threadKey.lastIndexOf(":");
-  return at === -1 ? threadKey : threadKey.slice(at + 1);
-}
 
 /**
  * Groups emails by their threadId and creates ThreadGroup objects for UI display.
@@ -35,7 +6,7 @@ export function threadIdFromKey(threadKey: string): string {
  * When disableThreading is true, each email is placed into its own group using
  * its message ID as the key, so the list shows individual messages.
  *
- * @param threadEmailCounts - Optional map of threadKey → total email count across
+ * @param threadEmailCounts - Optional map of threadId → total email count across
  *   all folders (from Thread/get). When provided, emailCount reflects the full
  *   thread size rather than just the emails in the current folder.
  */
@@ -48,22 +19,21 @@ export function groupEmailsByThread(
     return [];
   }
 
-  // Group by the account-scoped thread key (or by message id when threading
-  // is disabled): bare thread ids collide across accounts in aggregate views.
+  // Group emails by threadId (or by message ID when threading is disabled)
   const threadMap = new Map<string, Email[]>();
 
   for (const email of emails) {
-    const key = disableThreading ? email.id : threadKeyFor(email);
-    if (!threadMap.has(key)) {
-      threadMap.set(key, []);
+    const threadId = disableThreading ? email.id : email.threadId;
+    if (!threadMap.has(threadId)) {
+      threadMap.set(threadId, []);
     }
-    threadMap.get(key)!.push(email);
+    threadMap.get(threadId)!.push(email);
   }
 
   // Convert to ThreadGroup array
   const threadGroups: ThreadGroup[] = [];
 
-  for (const [threadKey, threadEmails] of threadMap) {
+  for (const [threadId, threadEmails] of threadMap) {
     // Sort emails by receivedAt descending (newest first)
     const sortedEmails = [...threadEmails].sort(
       (a, b) => new Date(b.receivedAt).getTime() - new Date(a.receivedAt).getTime()
@@ -83,9 +53,7 @@ export function groupEmailsByThread(
     const hasForwarded = sortedEmails.some(e => e.keywords?.$forwarded);
 
     threadGroups.push({
-      // With threading off the "thread" is the single message, keyed by its id.
-      threadId: disableThreading ? latestEmail.id : latestEmail.threadId,
-      threadKey,
+      threadId,
       emails: sortedEmails,
       latestEmail,
       participantNames,
@@ -95,7 +63,7 @@ export function groupEmailsByThread(
       hasAttachment,
       hasAnswered,
       hasForwarded,
-      emailCount: threadEmailCounts?.get(threadKey) ?? sortedEmails.length,
+      emailCount: threadEmailCounts?.get(threadId) ?? sortedEmails.length,
     });
   }
 
@@ -103,27 +71,15 @@ export function groupEmailsByThread(
 }
 
 /**
- * Sorts thread groups to mirror the order the email list was fetched in.
+ * Sorts thread groups by their latest email's receivedAt date (newest first).
  * Threads containing a pinned email ($pinned keyword) stay on top, mirroring
- * the server-side pinned-first sort of the email list. Below that, each thread
- * takes the position of whichever of its emails sorts first under `order`
- * (RFC 8621 §4.4.3 thread collapsing semantics) - with the default order that
- * is the latest email's receivedAt date, newest first. `held` emails sort by
- * the keywords they had when their conversation was opened.
+ * the server-side pinned-first sort of the email list.
  */
-export function sortThreadGroups(groups: ThreadGroup[], order: SortLevel[] = [], held?: HeldKeywords): ThreadGroup[] {
-  const compare = compareEmails(order, { held });
-  const representative = new Map<ThreadGroup, Email>();
-  for (const group of groups) {
-    representative.set(
-      group,
-      group.emails.reduce((best, email) => (compare(email, best) < 0 ? email : best), group.emails[0] ?? group.latestEmail),
-    );
-  }
+export function sortThreadGroups(groups: ThreadGroup[]): ThreadGroup[] {
   return [...groups].sort(
     (a, b) =>
       (b.hasPinned ? 1 : 0) - (a.hasPinned ? 1 : 0) ||
-      compare(representative.get(a)!, representative.get(b)!)
+      new Date(b.latestEmail.receivedAt).getTime() - new Date(a.latestEmail.receivedAt).getTime()
   );
 }
 
@@ -193,7 +149,6 @@ export function mergeThreadEmails(
 
   return {
     threadId: existingGroup.threadId,
-    threadKey: existingGroup.threadKey,
     emails: mergedEmails,
     latestEmail,
     participantNames,

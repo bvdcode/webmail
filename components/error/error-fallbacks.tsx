@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertCircle, RefreshCw, Inbox, Mail, Settings, FolderOpen } from "@/components/icons";
+import { AlertCircle, RefreshCw, Inbox, Mail, Settings, FolderOpen } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { FallbackProps } from "./error-boundary";
 

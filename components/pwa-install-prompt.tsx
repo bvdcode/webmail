@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
-import { X, Download } from "@/components/icons";
+import { X, Download } from "lucide-react";
 import { useConfig } from "@/hooks/use-config";
 import { withBasePath } from "@/lib/browser-navigation";
 

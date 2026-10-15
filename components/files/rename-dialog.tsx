@@ -11,20 +11,17 @@ interface RenameDialogProps {
   label?: string;
   onConfirm: (newName: string) => Promise<void>;
   onCancel: () => void;
-  /** Returns an error message for a name the server would refuse. */
-  validate?: (name: string) => string | null;
 }
 
-export function RenameDialog({ currentName, title, label, onConfirm, onCancel, validate }: RenameDialogProps) {
+export function RenameDialog({ currentName, title, label, onConfirm, onCancel }: RenameDialogProps) {
   const t = useTranslations("files");
   const [name, setName] = useState(currentName);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const nameError = name.trim() ? validate?.(name.trim()) ?? null : null;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const trimmed = name.trim();
-    if (!trimmed || validate?.(trimmed)) return;
+    if (!trimmed) return;
 
     setIsSubmitting(true);
     try {
@@ -47,15 +44,13 @@ export function RenameDialog({ currentName, title, label, onConfirm, onCancel, v
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder={label || t("new_name")}
-            className={nameError ? "mb-1" : "mb-4"}
-            aria-invalid={!!nameError}
+            className="mb-4"
           />
-          {nameError && <p className="text-xs text-destructive mb-3">{nameError}</p>}
           <div className="flex justify-end gap-2">
             <Button type="button" variant="outline" onClick={onCancel} disabled={isSubmitting}>
               {t("cancel")}
             </Button>
-            <Button type="submit" disabled={!name.trim() || !!nameError || isSubmitting}>
+            <Button type="submit" disabled={!name.trim() || isSubmitting}>
               {t("save")}
             </Button>
           </div>

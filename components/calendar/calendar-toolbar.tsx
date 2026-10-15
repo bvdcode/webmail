@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from "react";
 import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
-import { ChevronLeft, ChevronRight, Plus, Upload, CalendarDays, Globe, ChevronDown, ArrowLeft, Menu } from "@/components/icons";
+import { ChevronLeft, ChevronRight, Plus, Upload, CalendarDays, Globe, ChevronDown, ArrowLeft, Menu } from "lucide-react";
 import { startOfWeek } from "date-fns";
 import { cn } from "@/lib/utils";
 import type { CalendarViewMode } from "@/stores/calendar-store";
@@ -12,8 +12,6 @@ import { useCalendarLocale } from "@/hooks/use-calendar-locale";
 
 interface CalendarToolbarProps {
   selectedDate: Date;
-  /** Day at the top / start of the scrolled view, when it differs from the selection. */
-  visibleDate?: Date | null;
   viewMode: CalendarViewMode;
   onPrev: () => void;
   onNext: () => void;
@@ -35,7 +33,6 @@ interface CalendarToolbarProps {
 
 export function CalendarToolbar({
   selectedDate,
-  visibleDate,
   viewMode,
   onPrev,
   onNext,
@@ -79,31 +76,26 @@ export function CalendarToolbar({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [showCalendarDropdown]);
 
-  // The views scroll freely (#759): while the user has scrolled away from
-  // the selected day, the title describes what is on screen instead.
-  const titleDate = visibleDate ?? selectedDate;
   const getDateLabel = (): string => {
     switch (viewMode) {
       case "month":
         return isMobile
-          ? formatMonthYearShort(titleDate)
-          : formatMonthYear(titleDate);
+          ? formatMonthYearShort(selectedDate)
+          : formatMonthYear(selectedDate);
       case "week": {
-        // A reported visible date is the first column in view; the selected
-        // day is shown from the start of its week.
-        const ws = visibleDate ?? startOfWeek(selectedDate, { weekStartsOn });
+        const ws = startOfWeek(selectedDate, { weekStartsOn });
         return isMobile
           ? formatWeekRangeShort(ws)
           : formatWeekRange(ws);
       }
       case "day":
         return isMobile
-          ? formatFullDate(titleDate)
-          : formatFullDate(titleDate);
+          ? formatFullDate(selectedDate)
+          : formatFullDate(selectedDate);
       case "agenda":
         return isMobile
-          ? formatMonthYearShort(titleDate)
-          : formatMonthYear(titleDate);
+          ? formatMonthYearShort(selectedDate)
+          : formatMonthYear(selectedDate);
       case "tasks":
         return t("views.tasks");
     }

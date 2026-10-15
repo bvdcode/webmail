@@ -165,15 +165,6 @@ function decodeMAPIString(data: Uint8Array, propType: number): string {
   return new TextDecoder('utf-8').decode(data.subarray(0, len));
 }
 
-/**
- * Read a multi-value count. Every value takes at least four bytes, so a count
- * larger than what is left of the block is a lie; clamp it rather than loop
- * up to 2^32 times on the UI thread.
- */
-function readValueCount(r: BinaryReader): number {
-  return Math.min(r.readUint32LE(), Math.floor(r.remaining / 4));
-}
-
 /** Parse MAPI properties from a raw attribute data block */
 function parseMAPIProps(data: Uint8Array): Map<number, { type: number; value: Uint8Array | number | null }> {
   const props = new Map<number, { type: number; value: Uint8Array | number | null }>();
@@ -209,25 +200,19 @@ function parseMAPIProps(data: Uint8Array): Map<number, { type: number; value: Ui
     if (isVarLengthType(baseType)) {
       // Variable-length types always have a value count (1 for single-value)
       if (r.remaining < 4) break;
-      const valueCount = readValueCount(r);
+      const valueCount = r.readUint32LE();
       let lastValue: Uint8Array | null = null;
       for (let j = 0; j < valueCount && r.remaining > 0; j++) {
-        const value = readMAPIVarValue(r);
-        // A truncated value consumes nothing; retrying it would spin on the
-        // same bytes for as many rounds as the sender's count asks for.
-        if (value === null) break;
-        lastValue = value;
+        lastValue = readMAPIVarValue(r);
       }
       if (!isMultiValue && lastValue) {
         props.set(propID, { type: propType, value: lastValue });
       }
     } else if (isMultiValue) {
       if (r.remaining < 4) break;
-      const valueCount = readValueCount(r);
+      const valueCount = r.readUint32LE();
       for (let j = 0; j < valueCount && r.remaining > 0; j++) {
-        const before = r.remaining;
         readMAPIFixedValue(r, baseType);
-        if (r.remaining >= before) break;
       }
     } else {
       const value = readMAPIFixedValue(r, baseType);

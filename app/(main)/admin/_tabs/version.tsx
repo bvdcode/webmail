@@ -8,7 +8,7 @@ import {
   AlertTriangle,
   ShieldAlert,
   ExternalLink,
-} from '@/components/icons';
+} from 'lucide-react';
 import { SettingsSection, SettingItem } from '@/components/settings/settings-section';
 import { apiFetch } from '@/lib/browser-navigation';
 import type { UpdateStatus, UpdateSeverity } from '@/lib/version-check/types';

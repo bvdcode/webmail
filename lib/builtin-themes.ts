@@ -1,5 +1,4 @@
 import type { InstalledTheme } from './plugin-types';
-import { flatFieldsCSS, flatFieldsSkin } from './theme-flat-fields';
 
 const quiCSS = `
 :root {
@@ -876,18 +875,6 @@ body[data-theme-skin="builtin-aurora-glass"] [role="menu"] [role="menuitem"]:foc
 }`;
 
 export const BUILTIN_THEMES: InstalledTheme[] = [
-  {
-    id: 'builtin-flat-fields',
-    name: 'Flat fields',
-    version: '1.0.0',
-    author: 'Built-in',
-    description: 'The bulwarkmail.org design system: neutral grounds, square panes, Hanken Grotesk, and raspberry only as a small mark',
-    css: flatFieldsCSS,
-    skin: flatFieldsSkin,
-    variants: ['light', 'dark'],
-    enabled: true,
-    builtIn: true,
-  },
   {
     id: 'builtin-qui',
     name: 'Qui',

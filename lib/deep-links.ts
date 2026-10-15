@@ -32,23 +32,6 @@ import type { CalendarViewMode } from '@/stores/calendar-store';
 /** Sentinel mailbox id for the virtual "Scheduled" view (see the mail page). */
 export const SCHEDULED_MAILBOX_ID = '__scheduled__';
 
-/**
- * Sidebar-only id for a shared account's "Scheduled" row. The store keeps a
- * single virtual scheduled mailbox (SCHEDULED_MAILBOX_ID); the account is
- * carried alongside it as a view scope, so this suffixed form never reaches
- * the store or a deep link.
- */
-export const scopedScheduledMailboxId = (accountId: string) => `${SCHEDULED_MAILBOX_ID}:${accountId}`;
-
-/** Splits a (possibly account-scoped) scheduled id into its parts. */
-export function parseScheduledMailboxId(mailboxId: string): { isScheduled: boolean; accountId: string | null } {
-  if (mailboxId === SCHEDULED_MAILBOX_ID) return { isScheduled: true, accountId: null };
-  if (mailboxId.startsWith(`${SCHEDULED_MAILBOX_ID}:`)) {
-    return { isScheduled: true, accountId: mailboxId.slice(SCHEDULED_MAILBOX_ID.length + 1) || null };
-  }
-  return { isScheduled: false, accountId: null };
-}
-
 // ---------------------------------------------------------------------------
 // URL assembly
 // ---------------------------------------------------------------------------
@@ -131,14 +114,10 @@ const VIRTUAL_ALIAS_BY_ID: Record<string, string> = Object.fromEntries(
 /** Mailbox roles that get a readable alias instead of their opaque JMAP id. */
 const ALIASED_ROLES = new Set(['inbox', 'sent', 'drafts', 'trash', 'archive', 'junk']);
 
-/**
- * `accountId` is the local account (AccountEntry.id). `slot` names the
- * login by its cookie slot instead - what a push notification knows.
- */
 export type MailDeepLink =
-  | { kind: 'folder'; ref: string; accountId?: string; slot?: number }
-  | { kind: 'message'; id: string; accountId?: string; slot?: number; fullscreen?: boolean }
-  | { kind: 'thread'; id: string; accountId?: string; slot?: number };
+  | { kind: 'folder'; ref: string; accountId?: string }
+  | { kind: 'message'; id: string; accountId?: string; fullscreen?: boolean }
+  | { kind: 'thread'; id: string; accountId?: string };
 
 export interface MailLinkState {
   mailboxId: string | null;
@@ -190,35 +169,6 @@ export function resolveFolderRef(ref: string, mailboxes: Mailbox[] = []): string
   return decoded || null;
 }
 
-/** The parts of the mail list's state that decide what a folder link shows. */
-export interface OpenFolderView {
-  selectedMailbox: string;
-  isUnifiedView: boolean;
-  isScheduledView: boolean;
-  selectedKeyword: string | null;
-  hasSearch: boolean;
-}
-
-/**
- * Whether a folder link names the plain folder the list already shows.
- *
- * The address bar carries the open folder (`buildMailPath`), so reloading the
- * page hands that folder back as a link once the boot fetch has loaded it.
- * Selecting it again would only fetch the same list a second time under the
- * loading overlay. Virtual views are never "already open" at boot: the boot
- * fetch does not load them.
- */
-export function isFolderLinkOpen(mailboxId: string, view: OpenFolderView): boolean {
-  if (VIRTUAL_ALIAS_BY_ID[mailboxId]) return false;
-  return (
-    mailboxId === view.selectedMailbox &&
-    !view.isUnifiedView &&
-    !view.isScheduledView &&
-    !view.selectedKeyword &&
-    !view.hasSearch
-  );
-}
-
 /**
  * The canonical path for the current mail view. Returns `/mail` for the bare
  * list so the address bar stays clean when nothing is open.
@@ -234,15 +184,6 @@ export function buildMailPath(state: MailLinkState, mailboxes: Mailbox[] = []): 
 }
 
 /**
- * Whether a real browser path (any mount or locale prefix) opens a folder
- * link, `/mail/folder/<ref>`. Read before the shell renders, when only the
- * address bar can tell a reload of a folder from a plain visit to the app.
- */
-export function pathNamesMailFolder(pathname: string): boolean {
-  return /(?:^|\/)mail\/folder\/[^/]+/.test(pathname);
-}
-
-/**
  * Parses the segments after `/mail`. Also accepts the legacy `?email=<id>`
  * query the push service worker used to emit, so notifications from an older
  * installed worker keep opening the right message.
@@ -252,9 +193,6 @@ export function parseMailPath(
   search?: URLSearchParams,
 ): MailDeepLink | null {
   const accountId = search?.get('account') ?? undefined;
-  const rawSlot = search?.get('slot');
-  const slotNumber = rawSlot != null && rawSlot !== '' ? Number(rawSlot) : NaN;
-  const slot = Number.isInteger(slotNumber) && slotNumber >= 0 ? slotNumber : undefined;
   // `?view=fullscreen` asks for the message alone, no sidebar or list - what
   // a mail dragged out into a new browser tab opens as. The Pro shell always
   // opens message links as fullscreen email tabs and ignores the flag.
@@ -264,14 +202,14 @@ export function parseMailPath(
   if (kind && value) {
     const id = decodeSegment(value);
     if (id) {
-      if (kind === 'message') return { kind: 'message', id, accountId, slot, fullscreen };
-      if (kind === 'thread') return { kind: 'thread', id, accountId, slot };
-      if (kind === 'folder') return { kind: 'folder', ref: id, accountId, slot };
+      if (kind === 'message') return { kind: 'message', id, accountId, fullscreen };
+      if (kind === 'thread') return { kind: 'thread', id, accountId };
+      if (kind === 'folder') return { kind: 'folder', ref: id, accountId };
     }
   }
 
   const legacyEmail = search?.get('email');
-  if (legacyEmail) return { kind: 'message', id: legacyEmail, accountId, slot };
+  if (legacyEmail) return { kind: 'message', id: legacyEmail, accountId };
 
   return null;
 }
@@ -283,7 +221,7 @@ export function parseMailPath(
 const CALENDAR_VIEWS: CalendarViewMode[] = ['month', 'week', 'day', 'agenda', 'tasks'];
 
 export type CalendarDeepLink =
-  | { kind: 'event'; id: string; accountId?: string; login?: string }
+  | { kind: 'event'; id: string; accountId?: string }
   | { kind: 'view'; view: CalendarViewMode; date: Date | null };
 
 export interface CalendarLinkState {
@@ -292,8 +230,6 @@ export interface CalendarLinkState {
   eventId?: string | null;
   /** JMAP account owning the event - needed for shared/secondary calendars. */
   accountId?: string | null;
-  /** Connected-account id (login) reaching the event, when not the active one (global search). */
-  login?: string | null;
 }
 
 /** `YYYY-MM-DD` in local time - the date the user sees, not a UTC shift of it. */
@@ -319,11 +255,7 @@ export function parseLinkDate(value: string): Date | null {
 export function buildCalendarPath(state: CalendarLinkState): string {
   if (state.eventId) {
     const path = `/calendar/event/${encodeSegment(state.eventId)}`;
-    const params = new URLSearchParams();
-    if (state.accountId) params.set('account', state.accountId);
-    if (state.login) params.set('login', state.login);
-    const query = params.toString();
-    return query ? `${path}?${query}` : path;
+    return state.accountId ? `${path}?account=${encodeURIComponent(state.accountId)}` : path;
   }
   if (!state.date) return `/calendar/${state.view}`;
   return `/calendar/${state.view}/${formatLinkDate(state.date)}`;
@@ -339,7 +271,7 @@ export function parseCalendarPath(
   if (first === 'event') {
     const id = second ? decodeSegment(second) : '';
     if (!id) return null;
-    return { kind: 'event', id, accountId: search?.get('account') ?? undefined, login: search?.get('login') ?? undefined };
+    return { kind: 'event', id, accountId: search?.get('account') ?? undefined };
   }
 
   if ((CALENDAR_VIEWS as string[]).includes(first)) {

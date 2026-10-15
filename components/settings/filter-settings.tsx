@@ -13,9 +13,6 @@ import { useSettingsStore } from "@/stores/settings-store";
 import { toast } from "@/stores/toast-store";
 import type { FilterRule } from "@/lib/jmap/sieve-types";
 import type { Mailbox } from "@/lib/jmap/types";
-import { forwardsAround, inRunOrder, worstCaseForwards } from "@/lib/filters/forward-limit";
-import { isPeriodBoundary, periodStatus, supportsPeriods } from "@/lib/sieve/period";
-import { formatDateTime } from "@/lib/utils";
 import { useVacationStore } from "@/stores/vacation-store";
 import { useManagedAccountStore } from "@/stores/managed-account-store";
 import {
@@ -29,40 +26,17 @@ import {
   RotateCcw,
   PalmtreeIcon,
   Lock,
-} from "@/components/icons";
+} from "lucide-react";
 
 function isReadonlyRule(r: FilterRule): boolean {
   return r.origin === "external" || r.origin === "opaque";
 }
 
-/**
- * The rule's period ("5 Oct 2026, 08:00 – …") and, for a rule that is on,
- * where now falls in it; null without a period.
- */
-function usePeriodLabel(rule: FilterRule): { range: string; status: string | null } | null {
+function RuleSummary({ rule }: { rule: FilterRule }) {
   const t = useTranslations("settings.filters");
-  const timeFormat = useSettingsStore((s) => s.timeFormat);
-  const status = periodStatus(rule);
-  if (!status) return null;
-  const format = (boundary: string | undefined) => isPeriodBoundary(boundary)
-    ? formatDateTime(boundary, timeFormat, { day: "numeric", month: "short", year: "numeric" })
-    : "…";
-  return {
-    range: `${format(rule.activeFrom)} – ${format(rule.activeUntil)}`,
-    // A rule that is off does nothing in any period; "active" next to it
-    // would say otherwise.
-    status: rule.enabled ? t(`period_status_${status}`) : null,
-  };
-}
-
-export function RuleSummary({ rule }: { rule: FilterRule }) {
-  const t = useTranslations("settings.filters");
-  const period = usePeriodLabel(rule);
 
   const conditions = rule.conditions.slice(0, 2).map((c) => {
     const field = t(`condition_fields.${c.field}`);
-    // "All messages" says it all: no comparator, no value.
-    if (c.field === "all") return field;
     const comparator = t(`comparators.${c.comparator}`);
     // has_any is a no-value test ("attachment is present"); appending
     // `""` would look broken in the summary line.
@@ -108,14 +82,12 @@ export function RuleSummary({ rule }: { rule: FilterRule }) {
           </span>
         ))}
       </span>
-      {period && <span className="ms-1">· {period.range}{period.status && ` (${period.status})`}</span>}
     </div>
   );
 }
 
-export function VisualRuleSummary({ rule }: { rule: FilterRule }) {
+function VisualRuleSummary({ rule }: { rule: FilterRule }) {
   const t = useTranslations("settings.filters");
-  const period = usePeriodLabel(rule);
 
   const joiner = rule.matchType === "all" ? t("and") : t("or");
   const matchLabel = rule.matchType === "all" ? t("match_all_conditions") : t("match_any_condition");
@@ -128,32 +100,29 @@ export function VisualRuleSummary({ rule }: { rule: FilterRule }) {
         </span>
         {rule.conditions.map((c, i) => {
           const field = t(`condition_fields.${c.field}`);
-          // "All messages" says it all: no comparator, no value.
-          const everyMessage = c.field === "all";
-          const comparator = everyMessage ? null : t(`comparators.${c.comparator}`);
+          const comparator = t(`comparators.${c.comparator}`);
           return (
             <span key={i} className="contents">
               {i > 0 && (
                 <span className="text-[10px] text-muted-foreground/70 italic">{joiner}</span>
               )}
-              <span className="inline-flex min-w-0 max-w-full items-baseline gap-1 px-1.5 py-px rounded-sm bg-muted/60 text-foreground">
-                <span className="shrink-0 font-medium text-blue-600 dark:text-blue-400">{field}</span>
-                {!everyMessage && <span className="shrink-0 text-muted-foreground">{comparator}</span>}
-                {!everyMessage && !(c.field === "attachment" && c.comparator === "has_any") && (
-                  // The values of one condition stay in its chip, where "or"
-                  // cannot be mistaken for the joiner between conditions. They
-                  // wrap between each other under the first value, the "or"
-                  // leading the next line; a single value too long for any
-                  // line breaks inside itself instead of leaving the card.
-                  <span className="flex min-w-0 flex-wrap items-baseline gap-x-1 text-foreground">
-                    {(Array.isArray(c.value) ? c.value : [c.value]).map((v, k) => (
-                      <span key={k} className="min-w-0 wrap-anywhere">
-                        {k > 0 && (
-                          <span className="text-muted-foreground/70 italic">{t("or")} </span>
-                        )}
-                        “{v}”
-                      </span>
-                    ))}
+              <span className="inline-flex items-baseline gap-1 px-1.5 py-px rounded-sm bg-muted/60 text-foreground">
+                <span className="font-medium text-blue-600 dark:text-blue-400">{field}</span>
+                <span className="text-muted-foreground">{comparator}</span>
+                {!(c.field === "attachment" && c.comparator === "has_any") && (
+                  <span className="text-foreground">
+                    {Array.isArray(c.value)
+                      ? c.value.map((v, k) => (
+                          <span key={k}>
+                            {k > 0 && (
+                              <span className="text-muted-foreground/70 italic mx-0.5">
+                                {t("or")}
+                              </span>
+                            )}
+                            “{v}”
+                          </span>
+                        ))
+                      : <>“{c.value}”</>}
                   </span>
                 )}
               </span>
@@ -174,28 +143,14 @@ export function VisualRuleSummary({ rule }: { rule: FilterRule }) {
               {i > 0 && (
                 <span className="text-muted-foreground/50">›</span>
               )}
-              <span className="inline-flex min-w-0 max-w-full items-baseline gap-1 px-1.5 py-px rounded-sm bg-muted/60 text-foreground">
-                <span className="shrink-0 font-medium text-emerald-600 dark:text-emerald-400">{action}</span>
-                {a.value && <span className="min-w-0 wrap-anywhere text-muted-foreground">“{a.value}”</span>}
+              <span className="inline-flex items-baseline gap-1 px-1.5 py-px rounded-sm bg-muted/60 text-foreground">
+                <span className="font-medium text-emerald-600 dark:text-emerald-400">{action}</span>
+                {a.value && <span className="text-muted-foreground">“{a.value}”</span>}
               </span>
             </span>
           );
         })}
       </div>
-
-      {period && (
-        <div className="flex items-baseline gap-1.5 flex-wrap">
-          <span className="text-[10px] font-semibold uppercase tracking-wider text-violet-500 dark:text-violet-400">
-            {t("period_title")}
-          </span>
-          <span className="min-w-0 max-w-full px-1.5 py-px rounded-sm bg-muted/60 text-foreground wrap-anywhere">
-            {period.range}
-          </span>
-          {period.status && (
-            <span className="text-[10px] text-muted-foreground/60 italic">({period.status})</span>
-          )}
-        </div>
-      )}
     </div>
   );
 }
@@ -215,12 +170,10 @@ export function FilterSettings() {
     isSaving,
     error,
     isSupported,
+    sieveCapabilities,
     isOpaque,
     rawScript,
     vacationSettings,
-    includeVacation,
-    vacationForward,
-    sieveCapabilities,
     selectAccount,
     saveFilters,
     addRule,
@@ -283,7 +236,7 @@ export function FilterSettings() {
   // Vacation uses a separate per-(primary)-account mechanism (RFC 9661), so the
   // "vacation active" banner only applies when editing the personal account.
   const vacationEnabled =
-    isPrimaryAccount && (vacationStoreEnabled || vacationSettings?.isEnabled || includeVacation);
+    isPrimaryAccount && (vacationStoreEnabled || vacationSettings?.isEnabled);
 
   const [editingRule, setEditingRule] = useState<FilterRule | undefined>();
   const [showRuleModal, setShowRuleModal] = useState(false);
@@ -292,23 +245,6 @@ export function FilterSettings() {
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
   const draggedIndexRef = useRef<number | null>(null);
-
-  // A message can collect only so many forwards on this server. The rules run
-  // in the order listed, behind the out of office forwarding, and one that
-  // stops ends the script for its messages, so the order counts (see
-  // lib/filters/forward-limit.ts).
-  const redirectLimit = sieveCapabilities?.maxNumberRedirects;
-  const runOrder = inRunOrder(rules, vacationForward);
-  const tooManyForwards =
-    typeof redirectLimit === "number" && redirectLimit > 0 && worstCaseForwards(runOrder) > redirectLimit;
-  // The edited rule where it is; a new one goes below Bulwark's own rules.
-  const editedIndex = editingRule ? rules.findIndex((r) => r.id === editingRule.id) : -1;
-  const forwardsOfEdited = forwardsAround(
-    runOrder,
-    runOrder.length - rules.length +
-      (editedIndex >= 0 ? editedIndex : rules.filter((r) => !isReadonlyRule(r)).length),
-    editedIndex >= 0,
-  );
 
   useEffect(() => {
     if (client && isSupported) {
@@ -475,12 +411,7 @@ export function FilterSettings() {
     );
   }
 
-  // A reload in the background (another device or tab changed the script)
-  // must not take away a dialog the user is typing in: while one is open,
-  // the page keeps what it has.
-  const editing = showRuleModal || showSieveEditor;
-
-  if (isLoading && !editing) {
+  if (isLoading) {
     return (
       <SettingsSection title={t("title")} description={t("description")}>
         <div className="flex items-center gap-2 py-4 text-sm text-muted-foreground">
@@ -491,7 +422,7 @@ export function FilterSettings() {
     );
   }
 
-  if (error && !editing) {
+  if (error) {
     return (
       <SettingsSection title={t("title")} description={t("description")}>
         <div className="text-sm text-red-600 dark:text-red-400 py-4">
@@ -581,12 +512,6 @@ export function FilterSettings() {
             <Filter className="w-10 h-10 mb-3 opacity-40" />
             <p className="text-sm">{t("no_rules")}</p>
           </div>
-        )}
-
-        {!isOpaque && tooManyForwards && (
-          <p className="text-xs text-amber-600 dark:text-amber-400">
-            {t("forward_limit", { count: redirectLimit })}
-          </p>
         )}
 
         {!isOpaque && rules.length > 0 && (
@@ -774,10 +699,7 @@ export function FilterSettings() {
         <FilterRuleModal
           rule={editingRule}
           mailboxes={mailboxes}
-          maxRedirects={sieveCapabilities?.maxNumberRedirects}
-          periodsSupported={supportsPeriods(sieveCapabilities?.sieveExtensions)}
-          forwardsBefore={forwardsOfEdited.before}
-          forwardsAfter={forwardsOfEdited.after}
+          maxNumberRedirects={sieveCapabilities?.maxNumberRedirects}
           onSave={handleSaveRule}
           onClose={() => {
             setShowRuleModal(false);

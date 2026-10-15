@@ -24,7 +24,7 @@ import {
   Store,
   Menu,
   X,
-} from '@/components/icons';
+} from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useConfig } from '@/hooks/use-config';
 import { usePolicyStore } from '@/stores/policy-store';
@@ -159,11 +159,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           return;
         }
 
-        // Carry the page that was asked for through the login, so a connector
-        // link to a panel (/connector/admin_extension?slug=x) does not dump
-        // the admin on the dashboard after signing in.
-        const next = encodeURIComponent(`${pathname}${window.location.search}`);
-        router.replace(`/admin/login?next=${next}`);
+        router.replace('/admin/login');
       } catch (err) {
         if (cancelled) return;
         setAuthError(err instanceof Error ? err.message : 'Network error during admin check');

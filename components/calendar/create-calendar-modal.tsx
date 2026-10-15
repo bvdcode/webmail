@@ -3,11 +3,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
-import { X, Loader2, Calendar as CalendarIcon } from "@/components/icons";
+import { X, Loader2, Calendar as CalendarIcon } from "lucide-react";
 import type { IJMAPClient } from "@/lib/jmap/client-interface";
 import { useCalendarStore } from "@/stores/calendar-store";
 import { CalendarColorPicker } from "@/components/settings/calendar-management-settings";
-import { CALENDAR_KIND_COMPONENTS, CalendarKindPicker, type CalendarKind } from "@/components/calendar/calendar-kind-picker";
 import { toast } from "@/stores/toast-store";
 
 interface CreateCalendarModalProps {
@@ -22,7 +21,6 @@ export function CreateCalendarModal({ client, onClose }: CreateCalendarModalProp
 
   const [name, setName] = useState("");
   const [color, setColor] = useState("#3b82f6");
-  const [kind, setKind] = useState<CalendarKind>("events");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const modalRef = useRef<HTMLDivElement>(null);
 
@@ -33,7 +31,7 @@ export function CreateCalendarModal({ client, onClose }: CreateCalendarModalProp
     if (!trimmed) return;
     setIsSubmitting(true);
     try {
-      const created = await createCalendar(client, { name: trimmed, color }, { components: CALENDAR_KIND_COMPONENTS[kind] });
+      const created = await createCalendar(client, { name: trimmed, color });
       if (created) {
         toast.success(t("calendar_created"));
         onClose();
@@ -45,7 +43,7 @@ export function CreateCalendarModal({ client, onClose }: CreateCalendarModalProp
     } finally {
       setIsSubmitting(false);
     }
-  }, [name, color, kind, client, createCalendar, onClose, t]);
+  }, [name, color, client, createCalendar, onClose, t]);
 
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
@@ -130,8 +128,6 @@ export function CreateCalendarModal({ client, onClose }: CreateCalendarModalProp
             </label>
             <CalendarColorPicker value={color} onChange={setColor} allowCustom />
           </div>
-
-          <CalendarKindPicker value={kind} onChange={setKind} disabled={isSubmitting} />
         </div>
 
         <div className="flex items-center justify-end gap-2 px-6 py-4 border-t border-border">

@@ -11,7 +11,7 @@ import {
 
 import JSZip from 'jszip';
 import { MAX_THEME_SIZE } from '@/lib/plugin-types';
-import { sanitizeThemeCSS } from '@/lib/theme-loader';
+import { sanitizeThemeCSS, validateThemeCSSSafety } from '@/lib/theme-loader';
 
 /**
  * GET /api/admin/themes - List all admin-managed themes
@@ -118,12 +118,14 @@ export async function POST(request: NextRequest) {
 
     let css = await cssFile.async('string');
 
-    // Sanitize unconditionally: the safety check is advisory, and the
-    // sanitizer is also what drops rules outside :root and .dark.
+    // Validate and sanitize CSS
     const warnings: string[] = [];
-    const sanitized = sanitizeThemeCSS(css);
-    css = sanitized.css;
-    warnings.push(...sanitized.warnings);
+    const safety = validateThemeCSSSafety(css);
+    if (!safety.valid) {
+      const sanitized = sanitizeThemeCSS(css);
+      css = sanitized.css;
+      warnings.push(...sanitized.warnings);
+    }
 
     const now = new Date().toISOString();
     const theme: ServerTheme = {

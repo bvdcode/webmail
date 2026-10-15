@@ -1,5 +1,6 @@
 import { configManager } from '@/lib/admin/config-manager';
-import { DEFAULT_OAUTH_SCOPES } from './scopes';
+
+const DEFAULT_SCOPES = 'openid email profile';
 
 /**
  * Resolve the OAuth scopes to request at authorize time.
@@ -12,7 +13,7 @@ export function getOauthScopes(): string {
   const explicit = configManager.get<string>('oauthScopes', '');
   if (explicit) return explicit;
   const extra = configManager.get<string>('oauthExtraScopes', '');
-  return extra ? `${DEFAULT_OAUTH_SCOPES} ${extra}`.trim() : DEFAULT_OAUTH_SCOPES;
+  return extra ? `${DEFAULT_SCOPES} ${extra}`.trim() : DEFAULT_SCOPES;
 }
 export const REFRESH_TOKEN_COOKIE = 'jmap_rt';
 export const REFRESH_TOKEN_SERVER_COOKIE = 'jmap_rts';

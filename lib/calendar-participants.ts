@@ -123,89 +123,22 @@ export function getUserStatus(
   return null;
 }
 
-/**
- * True when the user declined this event. An occurrence carries its override's
- * participants, so one declined instance of an accepted series counts (#1110).
- */
-export function isDeclinedByUser(event: CalendarEvent, userEmails: string[] | undefined): boolean {
-  if (!userEmails || userEmails.length === 0) return false;
-  return getUserStatus(event, userEmails) === 'declined';
-}
-
-/** When the same address appears in two participant entries, a real RSVP on
- *  either one beats a missing/"needs-action" one — the duplicate is always the
- *  entry that never replied (the needs-action side). Between two real replies
- *  the first-seen entry wins; such conflicts do not occur in practice. */
-function betterStatus(
-  current: CalendarParticipant['participationStatus'] | undefined,
-  incoming: CalendarParticipant['participationStatus'] | undefined
-): CalendarParticipant['participationStatus'] {
-  if (current === 'needs-action' && incoming && incoming !== 'needs-action') return incoming;
-  return current || 'needs-action';
-}
-
-export interface ParticipantListOptions {
-  /**
-   * Fills `ParticipantInfo.name` for participants whose event data carries no
-   * name. Stalwart drops the ORGANIZER display name on its iCalendar
-   * round-trip, so the organizer (and attendees added by bare address) render
-   * as a bare email until the contact card's name is looked up.
-   */
-  resolveName?: (email: string) => string | undefined;
-}
-
-export function getParticipantList(event: CalendarEvent, options?: ParticipantListOptions): ParticipantInfo[] {
+export function getParticipantList(event: CalendarEvent): ParticipantInfo[] {
   if (!event.participants) return [];
   // Stalwart rebuilds the ORGANIZER line into a participant that carries only
   // `calendarAddress` — no `roles` at all — so `roles.owner` alone would treat
   // the organizer as a plain attendee on every re-read (#731).
   const organizerEmails = getEventOrganizerEmails(event);
-  const resolveName = options?.resolveName;
-
-  // The same address can legitimately arrive twice: the organizer as both the
-  // ORGANIZER-derived participant and an ATTENDEE line (server-side
-  // scheduling, or events written before #731), or an attendee pasted twice.
-  // Render each address once by folding later entries into the first-seen
-  // one — otherwise every list and count shows a phantom participant.
-  const list: ParticipantInfo[] = [];
-  const byEmail = new Map<string, ParticipantInfo>();
-
-  for (const [id, p] of Object.entries(event.participants)) {
+  return Object.entries(event.participants).map(([id, p]) => {
     const email = getParticipantEmail(p);
-    const key = email.trim().toLowerCase();
-    const isOrganizer = !!p.roles?.owner || (!!key && organizerEmails.includes(key));
-
-    const existing = key ? byEmail.get(key) : undefined;
-    if (existing) {
-      if (!existing.name && p.name) existing.name = p.name;
-      if (isOrganizer) existing.isOrganizer = true;
-      existing.status = betterStatus(existing.status, p.participationStatus);
-      continue;
-    }
-
-    const entry: ParticipantInfo = {
+    return {
       id,
       name: p.name || '',
       email,
       status: p.participationStatus || 'needs-action',
-      isOrganizer,
+      isOrganizer: !!p.roles?.owner || (!!email && organizerEmails.includes(email.toLowerCase())),
     };
-    if (key) byEmail.set(key, entry);
-    list.push(entry);
-  }
-
-  for (const entry of list) {
-    if (!entry.name && entry.email && resolveName) {
-      entry.name = resolveName(entry.email) || '';
-    }
-    // The organizer owes no reply to their own invitation; a missing status
-    // must not read as "pending" next to the organizer marker. Matches
-    // getStatusCounts, which excludes the organizer from pending totals.
-    if (entry.isOrganizer && entry.status === 'needs-action') {
-      entry.status = 'accepted';
-    }
-  }
-  return list;
+  });
 }
 
 export function getStatusCounts(event: CalendarEvent): StatusCounts {
@@ -225,20 +158,7 @@ export function getStatusCounts(event: CalendarEvent): StatusCounts {
 
 export function getParticipantCount(event: CalendarEvent): number {
   if (!event.participants) return 0;
-  // Count addresses, not raw entries: an organizer the server emits twice must
-  // not inflate the participant badge on event cards and agenda rows. Entries
-  // without any address cannot be merged, so they count individually.
-  const seen = new Set<string>();
-  let count = 0;
-  for (const p of Object.values(event.participants)) {
-    const key = getParticipantEmail(p).trim().toLowerCase();
-    if (key) {
-      if (seen.has(key)) continue;
-      seen.add(key);
-    }
-    count++;
-  }
-  return count;
+  return Object.keys(event.participants).length;
 }
 
 export function buildParticipantMap(
@@ -249,17 +169,12 @@ export function buildParticipantMap(
 
   const generateId = () => generateUUID();
 
-  // An empty name is not a name: sent as "", it reaches the iCalendar stream as a
-  // bare `CN=`, and recipients see a dangling "- Organizer" or a guest listed with
-  // nothing before their address. Omitted, clients fall back to the address.
-  const named = (name: string) => (name.trim() ? { name: name.trim() } : {});
-
   // calendarAddress is the scheduling address in draft-ietf-calext-jscalendarbis
   // (implemented by Stalwart); the RFC 8984 sendTo property is retired there and
   // stored as an inert JSPROP, so it is intentionally not sent.
   participants[generateId()] = {
     '@type': 'Participant',
-    ...named(organizer.name),
+    name: organizer.name,
     email: organizer.email,
     calendarAddress: `mailto:${organizer.email}`,
     // owner only, NOT attendee: with roles.attendee set, Stalwart's server-side
@@ -284,7 +199,7 @@ export function buildParticipantMap(
 
     participants[generateId()] = {
       '@type': 'Participant',
-      ...named(a.name),
+      name: a.name,
       email,
       calendarAddress: `mailto:${email}`,
       roles: { attendee: true },

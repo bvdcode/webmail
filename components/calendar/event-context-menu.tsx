@@ -14,11 +14,10 @@ import {
   Link as LinkIcon,
   CalendarArrowUp as CalendarLinkIcon,
   Trash2,
-} from "@/components/icons";
+} from "lucide-react";
 import type { CalendarEvent } from "@/lib/jmap/types";
 import { buildCalendarPath } from "@/lib/deep-links";
 import { useCopyLink } from "@/hooks/use-copy-link";
-import { findMeetingLink } from "@/lib/event-links";
 
 interface Position {
   x: number;
@@ -61,7 +60,9 @@ export function EventContextMenu({
     onClose();
   };
 
-  const hasMeetingLink = !!findMeetingLink(event);
+  const hasMeetingLink = !!(
+    event.virtualLocations && Object.values(event.virtualLocations).some((v) => v.uri)
+  );
 
   return (
     <ContextMenu ref={menuRef} isOpen={isOpen} position={position} onClose={onClose}>

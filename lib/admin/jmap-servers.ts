@@ -2,14 +2,10 @@
  * Multi-server JMAP support: schema, parsing, lookup, and redaction helpers.
  */
 
-import { toAsciiDomain } from '@/lib/idn';
-
 export interface JmapServerOAuthConfig {
   clientId?: string;
   issuerUrl?: string;
   clientSecret?: string;
-  /** Text of this server's sign-in button, e.g. "Sign in with Google"; the generic SSO label otherwise. */
-  buttonLabel?: string;
 }
 
 export interface JmapServerEntry {
@@ -28,7 +24,6 @@ export interface PublicJmapServerEntry {
   oauth?: {
     clientId?: string;
     issuerUrl?: string;
-    buttonLabel?: string;
   };
 }
 
@@ -83,13 +78,11 @@ export function parseJmapServers(raw: unknown): JmapServerEntry[] {
       const clientId = typeof o.clientId === 'string' ? o.clientId.trim() : '';
       const issuerUrl = typeof o.issuerUrl === 'string' ? trimUrl(o.issuerUrl) : '';
       const clientSecret = typeof o.clientSecret === 'string' ? o.clientSecret : '';
-      const buttonLabel = typeof o.buttonLabel === 'string' ? o.buttonLabel.trim().slice(0, 64) : '';
       if (clientId || issuerUrl || clientSecret) {
         oauth = {};
         if (clientId) oauth.clientId = clientId;
         if (issuerUrl && isHttpUrl(issuerUrl)) oauth.issuerUrl = issuerUrl;
         if (clientSecret) oauth.clientSecret = clientSecret;
-        if (buttonLabel) oauth.buttonLabel = buttonLabel;
       }
     }
     out.push({
@@ -101,16 +94,6 @@ export function parseJmapServers(raw: unknown): JmapServerEntry[] {
     });
   }
   return out;
-}
-
-/**
- * An entry with its own OAuth client and a button label gets a sign-in button
- * of its own on the login page, even while OAuth is off globally. A client id
- * alone keeps its older meaning: the registered client that password and TOTP
- * logins use, which must not start offering OAuth on its own.
- */
-export function offersOwnOAuth(server: PublicJmapServerEntry | undefined): boolean {
-  return !!(server?.oauth?.clientId && server.oauth.buttonLabel);
 }
 
 /** Strip secrets for client-side exposure. */
@@ -125,7 +108,6 @@ export function redactJmapServers(servers: JmapServerEntry[]): PublicJmapServerE
           oauth: {
             ...(s.oauth.clientId ? { clientId: s.oauth.clientId } : {}),
             ...(s.oauth.issuerUrl ? { issuerUrl: s.oauth.issuerUrl } : {}),
-            ...(s.oauth.buttonLabel ? { buttonLabel: s.oauth.buttonLabel } : {}),
           },
         }
       : {}),
@@ -152,20 +134,12 @@ export function findServerByUrl(servers: JmapServerEntry[], url: string | null |
   return servers.find((s) => normalizeUrl(s.url) === target);
 }
 
-function domainKey(domain: string): string {
-  return toAsciiDomain(domain) ?? domain.trim().toLowerCase();
-}
-
-/**
- * Find the server whose `domains` array matches the given email's domain
- * (case-insensitive, IDN domains compared in their ASCII form).
- */
+/** Find the server whose `domains` array matches the given email's domain (case-insensitive). */
 export function findServerByEmailDomain(servers: JmapServerEntry[], email: string | null | undefined): JmapServerEntry | undefined {
   if (!email || !email.includes('@')) return undefined;
-  const domain = email.split('@')[1]?.trim();
+  const domain = email.split('@')[1]?.trim().toLowerCase();
   if (!domain) return undefined;
-  const key = domainKey(domain);
-  return servers.find((s) => (s.domains ?? []).some((d) => domainKey(d) === key));
+  return servers.find((s) => (s.domains ?? []).some((d) => d.toLowerCase() === domain));
 }
 
 /**

@@ -32,23 +32,8 @@ function openDB(): Promise<IDBDatabase> {
       }
     };
 
-    request.onsuccess = () => {
-      const db = request.result;
-      // Another tab bumping DB_VERSION needs every older connection gone
-      // before its upgrade can run; close ours instead of blocking it.
-      db.onversionchange = () => db.close();
-      resolve(db);
-    };
+    request.onsuccess = () => resolve(request.result);
     request.onerror = () => reject(request.error);
-    // Without this the open request never settles while an older tab keeps
-    // the previous version open, and every caller (attachment upload, plugin
-    // loading) hangs silently. (#840)
-    request.onblocked = () =>
-      reject(
-        new Error(
-          'Plugin storage database is blocked by another open tab. Close other Bulwark tabs and try again.',
-        ),
-      );
   });
 }
 
@@ -57,14 +42,8 @@ async function putItem(storeName: string, key: string, value: string | Blob | Fi
   return new Promise((resolve, reject) => {
     const tx = db.transaction(storeName, 'readwrite');
     tx.objectStore(storeName).put(value, key);
-    tx.oncomplete = () => {
-      db.close();
-      resolve();
-    };
-    tx.onerror = () => {
-      db.close();
-      reject(tx.error);
-    };
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
   });
 }
 
@@ -75,8 +54,6 @@ async function getItem<T = string>(storeName: string, key: string): Promise<T | 
     const request = tx.objectStore(storeName).get(key);
     request.onsuccess = () => resolve(request.result ?? null);
     request.onerror = () => reject(request.error);
-    tx.oncomplete = () => db.close();
-    tx.onerror = () => db.close();
   });
 }
 
@@ -85,30 +62,8 @@ async function deleteItem(storeName: string, key: string): Promise<void> {
   return new Promise((resolve, reject) => {
     const tx = db.transaction(storeName, 'readwrite');
     tx.objectStore(storeName).delete(key);
-    tx.oncomplete = () => {
-      db.close();
-      resolve();
-    };
-    tx.onerror = () => {
-      db.close();
-      reject(tx.error);
-    };
-  });
-}
-
-async function clearItems(storeName: string): Promise<void> {
-  const db = await openDB();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(storeName, 'readwrite');
-    tx.objectStore(storeName).clear();
-    tx.oncomplete = () => {
-      db.close();
-      resolve();
-    };
-    tx.onerror = () => {
-      db.close();
-      reject(tx.error);
-    };
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
   });
 }
 
@@ -174,9 +129,5 @@ export const fileStorage = {
   },
   async deleteFile(fileId: string): Promise<void> {
     await deleteItem(STORE_FILE_ACCESS_PLUGIN, fileId);
-  },
-  /** Drop every staged file, e.g. on sign-out. */
-  async clearFiles(): Promise<void> {
-    await clearItems(STORE_FILE_ACCESS_PLUGIN);
   },
 }

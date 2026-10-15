@@ -6,7 +6,6 @@ import type { EmailTemplate } from '@/lib/template-types';
 import type { NotificationSoundChoice } from '@/lib/notification-sound';
 import { apiFetch } from '@/lib/browser-navigation';
 import { generateAccountId } from '@/lib/account-utils';
-import { orderForMailbox, sanitizeSortLevels, type MessageListOrderScope, type SortLevel } from '@/lib/message-list-order';
 import {
   DEFAULT_SUB_ADDRESS_DELIMITER,
   isValidSubAddressDelimiter,
@@ -30,41 +29,6 @@ let syncServerUrl: string | null = null;
 let syncTimeout: ReturnType<typeof setTimeout> | null = null;
 let pendingSync: SettingsSyncJob | null = null;
 let isLoadingFromServer = false;
-// Set by loadFromServer when this browser holds templates (or deletions) the
-// server blob lacks; enableSync then pushes once instead of waiting for the
-// next unrelated settings change.
-let pushTemplatesAfterLoad = false;
-// Wired up in the window-only init block below; null during SSR.
-let requestSync: (() => void) | null = null;
-// Account whose settings could not be loaded while this browser still held
-// another account's. enableSync leaves sync off for it, or the next change
-// would push the other account's settings under its name (#1185).
-let blockedSyncAccountId: string | null = null;
-
-// settings-storage is one store for the whole browser. This key names the
-// account whose server copy it currently mirrors, so a different account
-// signing in can tell the local settings are not its own (#1185). Unset in
-// browsers that never synced, where the local settings are the user's own
-// device settings and the first sign-in adopts them.
-const SETTINGS_OWNER_KEY = 'settings-sync-owner';
-
-function readSettingsOwner(): string | null {
-  try {
-    return typeof window === 'undefined' ? null : window.localStorage.getItem(SETTINGS_OWNER_KEY);
-  } catch {
-    return null;
-  }
-}
-
-function writeSettingsOwner(accountId: string | null): void {
-  try {
-    if (typeof window === 'undefined') return;
-    if (accountId) window.localStorage.setItem(SETTINGS_OWNER_KEY, accountId);
-    else window.localStorage.removeItem(SETTINGS_OWNER_KEY);
-  } catch {
-    /* storage unavailable */
-  }
-}
 
 const SYNC_DEBOUNCE_MS = 2000;
 
@@ -104,32 +68,6 @@ export function registerTemplateSyncBridge(
   subscribe(() => onTemplateStoreChange?.());
 }
 
-/** Order-independent fingerprint of a template list plus its tombstones. */
-function templateStateKey(templates: unknown, deletedTemplateIds: unknown): string {
-  const list = Array.isArray(templates)
-    ? templates
-        .filter((t): t is { id: string; updatedAt?: unknown } =>
-          typeof t === 'object' && t !== null && typeof (t as { id?: unknown }).id === 'string')
-        .map((t) => `${t.id}@${String(t.updatedAt)}`)
-        .sort()
-    : [];
-  const tombstones = isPlainRecord(deletedTemplateIds) ? Object.keys(deletedTemplateIds).sort() : [];
-  return JSON.stringify([list, tombstones]);
-}
-
-/**
- * Whether the local template state differs from what a server blob carries,
- * so the blob needs a push. False when there is nothing local to push.
- */
-function localTemplatesAhead(serverSettings: Record<string, unknown> | null): boolean {
-  const local = templateSyncBridge?.getSyncedState();
-  if (!local) return false;
-  if (local.templates.length === 0 && Object.keys(local.deletedTemplateIds).length === 0) return false;
-  if (!serverSettings) return true;
-  return templateStateKey(local.templates, local.deletedTemplateIds) !==
-    templateStateKey(serverSettings.templates, serverSettings.deletedTemplateIds);
-}
-
 async function syncSettingsJob(job: SettingsSyncJob, retries = 1): Promise<void> {
   syncLog('Syncing settings to server for', job.username);
   const res = await apiFetch('/api/settings', {
@@ -163,7 +101,6 @@ export type ListDensity = Density;
 export type DeleteAction = 'trash' | 'trash-and-read' | 'permanent';
 export type ReplyMode = 'reply' | 'replyAll';
 export type SignaturePosition = 'above_quote' | 'below_quote';
-export type ReplyIdentityMatch = 'exact' | 'domain';
 /** How to handle an incoming Disposition-Notification-To (read-receipt) request. */
 export type ReadReceiptResponse = 'ask' | 'always' | 'never';
 export type DateFormat = 'smart' | 'relative' | 'full';
@@ -177,8 +114,6 @@ export type DateFormat = 'smart' | 'relative' | 'full';
 export type DateLocale = 'auto' | 'iso' | 'en-GB' | 'en-US';
 export type TimeFormat = '12h' | '24h';
 export type FirstDayOfWeek = 0 | 1 | 6; // 0 = Sunday, 1 = Monday, 6 = Saturday
-/** IANA zone id that overrides the browser's, or 'auto' to follow the browser (#755). */
-export type TimeZoneSetting = 'auto' | (string & {});
 export type ExternalContentPolicy = 'ask' | 'block' | 'allow';
 export type MailAttachmentAction = 'preview' | 'download';
 export type AttachmentPosition = 'beside-sender' | 'below-header';
@@ -366,26 +301,19 @@ interface SettingsState {
   fontSize: FontSize;
   density: Density;
   animationsEnabled: boolean;
-  // Message-list ordering (#718): prioritised sort levels mapped onto the JMAP
-  // Email/query sort; empty = chronological. Scope: Inbox only or every folder.
-  messageListOrder: SortLevel[];
-  messageListOrderScope: MessageListOrderScope;
 
   // Language & Region
   dateFormat: DateFormat;
   dateLocale: DateLocale;
   timeFormat: TimeFormat;
   firstDayOfWeek: FirstDayOfWeek;
-  timeZone: TimeZoneSetting;
 
   // Email Behavior
   markAsReadDelay: number; // milliseconds (0 = instant, -1 = never)
   deleteAction: DeleteAction;
   permanentlyDeleteJunk: boolean; // Permanently delete emails from junk/spam instead of moving to trash
   returnToListAfterAction: boolean; // After delete / mark-unread in an open message, return to the list instead of opening the next message
-  clearSearchOnFolderChange: boolean; // Reset the search query + advanced filters when switching folders, instead of re-running the search in the newly selected folder (#553 keeps it applied when this is off)
   showPreview: boolean;
-  showVerificationCodes: boolean; // Offer the one-time code of a sign-in mail as a copy chip in the list and the reader
   mailLayout: MailLayout;
   emailsPerPage: number;
   externalContentPolicy: ExternalContentPolicy;
@@ -406,7 +334,6 @@ interface SettingsState {
   sendConfirmation: boolean;
   defaultReplyMode: ReplyMode;
   autoSelectReplyIdentity: boolean;
-  replyIdentityMatch: ReplyIdentityMatch; // With autoSelectReplyIdentity on: 'exact' = configured identities only, 'domain' = also same-domain catch-all addresses (rewrites From) #1000
   plainTextMode: boolean; // Send plain text only (no rich text editor)
   rtlEditingSupport: boolean; // Show a per-paragraph LTR/RTL direction control in the composer (Gmail-style)
   subAddressDelimiter: string; // Character separating user from tag (e.g. "user+tag@")
@@ -431,17 +358,7 @@ interface SettingsState {
   // Calendar
   showTimeInMonthView: boolean;
   showWeekNumbers: boolean;
-  /** Scroll continuously through months/weeks/days (#759) instead of one period at a time. */
-  calendarFreeScroll: boolean;
   calendarHoverPreview: CalendarHoverPreview;
-  /** Draw only calendarDayStartHour..calendarDayEndHour in the day and week views (#1164). */
-  calendarLimitHours: boolean;
-  calendarDayStartHour: number;
-  calendarDayEndHour: number;
-  /** Leave the days missing from calendarWorkingDays out of the week view (#1164). */
-  calendarHideNonWorkingDays: boolean;
-  /** Weekdays as `Date.getDay` numbers (0 = Sunday). */
-  calendarWorkingDays: number[];
 
   // Calendar Tasks
   enableCalendarTasks: boolean;
@@ -458,16 +375,11 @@ interface SettingsState {
 
   // Contacts Display
   groupContactsByLetter: boolean;
-  // Sort (and group) the contact list by surname instead of given name so
-  // family members sit together (#963).
-  sortContactsByLastName: boolean;
 
   // Email Notifications
   emailNotificationsEnabled: boolean;
   emailNotificationSound: boolean;
   notificationSoundChoice: NotificationSoundChoice;
-  /** Web Push only fires for mail that lands in the Inbox; Sieve-filed mail stays silent. */
-  pushNotifyInboxOnly: boolean;
   /** Chosen Web Push relay URL. Empty = the admin-configured default. */
   pushRelayUrl: string;
 
@@ -482,7 +394,6 @@ interface SettingsState {
   // Layout
   toolbarPosition: ToolbarPosition;
   showToolbarLabels: boolean;
-  hideAccountSwitcher: boolean;
   showRailAccountList: boolean;
   proInterface: boolean;
 
@@ -526,7 +437,6 @@ interface SettingsState {
   // Sidebar
   colorfulSidebarIcons: boolean; // Tint folder icons by role (inbox blue, junk red, etc.)
   tintListRowsByTag: boolean; // Tint mail-list rows by the first tag color
-  tintListRowsByAccount: boolean; // In the unified view, tint rows by account colour instead of showing the account dot
   showFolderTotalCount: boolean; // Show total message count next to folders/tags (alongside unread)
   showTagsInSidebar: boolean;
 
@@ -543,9 +453,6 @@ interface SettingsState {
 
   // Ask for confirmation when sending a message with an empty subject
   emptySubjectWarningEnabled: boolean;
-
-  // "@" in the message body offers the recipients and inserts a first name
-  recipientMentionsEnabled: boolean;
 
   // Hide inline images (images referenced by cid in the HTML body) from the
   // attachment list shown above the message body.
@@ -620,12 +527,6 @@ interface SettingsState {
   flushSync: () => Promise<void>;
   disableSync: () => void;
   loadFromServer: (username: string, serverUrl: string) => Promise<boolean>;
-  /**
-   * Called on a full sign-out: drops the settings and templates this browser
-   * mirrored from an account's server copy, so the next person to sign in
-   * does not start from them (#1185). Device-only settings are kept.
-   */
-  forgetSyncedSettings: () => void;
 }
 
 const DEFAULT_SETTINGS = {
@@ -633,24 +534,19 @@ const DEFAULT_SETTINGS = {
   fontSize: 'medium' as FontSize,
   density: 'regular' as Density,
   animationsEnabled: true,
-  messageListOrder: [] as SortLevel[],
-  messageListOrderScope: 'inbox' as MessageListOrderScope,
 
   // Language & Region
   dateFormat: 'smart' as DateFormat,
   dateLocale: 'auto' as DateLocale,
   timeFormat: '24h' as TimeFormat,
   firstDayOfWeek: 1 as FirstDayOfWeek, // Monday
-  timeZone: 'auto' as TimeZoneSetting,
 
   // Email Behavior
   markAsReadDelay: 0, // Instant
   deleteAction: 'trash' as DeleteAction,
   permanentlyDeleteJunk: false,
   returnToListAfterAction: true,
-  clearSearchOnFolderChange: false,
   showPreview: true,
-  showVerificationCodes: true,
   mailLayout: 'split' as MailLayout,
   emailsPerPage: 50,
   externalContentPolicy: 'ask' as ExternalContentPolicy,
@@ -671,7 +567,6 @@ const DEFAULT_SETTINGS = {
   sendConfirmation: false,
   defaultReplyMode: 'reply' as ReplyMode,
   autoSelectReplyIdentity: false,
-  replyIdentityMatch: 'domain' as ReplyIdentityMatch,
   plainTextMode: false,
   rtlEditingSupport: false,
   subAddressDelimiter: DEFAULT_SUB_ADDRESS_DELIMITER,
@@ -692,13 +587,7 @@ const DEFAULT_SETTINGS = {
   // Calendar
   showTimeInMonthView: false,
   showWeekNumbers: false,
-  calendarFreeScroll: true,
   calendarHoverPreview: 'delay-500ms' as CalendarHoverPreview,
-  calendarLimitHours: true,
-  calendarDayStartHour: 8,
-  calendarDayEndHour: 20,
-  calendarHideNonWorkingDays: false,
-  calendarWorkingDays: [1, 2, 3, 4, 5] as number[],
 
   // Calendar Tasks
   enableCalendarTasks: false,
@@ -712,13 +601,11 @@ const DEFAULT_SETTINGS = {
 
   // Contacts Display
   groupContactsByLetter: true,
-  sortContactsByLastName: false,
 
   // Email Notifications
   emailNotificationsEnabled: true,
   emailNotificationSound: true,
   notificationSoundChoice: 'default' as NotificationSoundChoice,
-  pushNotifyInboxOnly: false,
   pushRelayUrl: '',
 
   // Protocol Handlers
@@ -732,7 +619,6 @@ const DEFAULT_SETTINGS = {
   // Layout
   toolbarPosition: 'top' as ToolbarPosition,
   showToolbarLabels: true,
-  hideAccountSwitcher: false,
   showRailAccountList: false,
   proInterface: false,
 
@@ -758,7 +644,6 @@ const DEFAULT_SETTINGS = {
   // Sidebar
   colorfulSidebarIcons: true,
   tintListRowsByTag: true,
-  tintListRowsByAccount: false,
   showFolderTotalCount: true,
   showTagsInSidebar: true,
 
@@ -801,7 +686,6 @@ const DEFAULT_SETTINGS = {
   ] as string[],
 
   emptySubjectWarningEnabled: true,
-  recipientMentionsEnabled: true,
 
   hideInlineImageAttachments: true,
   attachmentImagePreviewsEnabled: true,
@@ -841,29 +725,7 @@ const DEFAULT_SETTINGS = {
 
 export const useSettingsStore = create<SettingsState>()(
   persist(
-    (set, get) => {
-      /**
-       * Back to defaults for everything an account's server copy holds:
-       * settings (device-only ones kept) and templates. Never pushed, since
-       * sync may still point at the account the state came from.
-       */
-      const resetSyncedState = () => {
-        const defaults: Record<string, unknown> = { ...DEFAULT_SETTINGS };
-        for (const key of DEVICE_LOCAL_SETTING_KEYS) delete defaults[key];
-        const wasLoading = isLoadingFromServer;
-        isLoadingFromServer = true;
-        try {
-          set(defaults as Partial<SettingsState>);
-          templateSyncBridge?.applySyncedState([], {}, { merge: false });
-        } finally {
-          isLoadingFromServer = wasLoading;
-        }
-        applyFontSize(DEFAULT_SETTINGS.fontSize);
-        applyDensity(DEFAULT_SETTINGS.density);
-        applyAnimations(DEFAULT_SETTINGS.animationsEnabled);
-      };
-
-      return {
+    (set, get) => ({
       ...DEFAULT_SETTINGS,
 
       updateSetting: (key, value) => {
@@ -899,19 +761,14 @@ export const useSettingsStore = create<SettingsState>()(
           fontSize: state.fontSize,
           density: state.density,
           animationsEnabled: state.animationsEnabled,
-          messageListOrder: state.messageListOrder,
-          messageListOrderScope: state.messageListOrderScope,
           dateFormat: state.dateFormat,
           dateLocale: state.dateLocale,
           timeFormat: state.timeFormat,
           firstDayOfWeek: state.firstDayOfWeek,
-          timeZone: state.timeZone,
           markAsReadDelay: state.markAsReadDelay,
           deleteAction: state.deleteAction,
           returnToListAfterAction: state.returnToListAfterAction,
-          clearSearchOnFolderChange: state.clearSearchOnFolderChange,
           showPreview: state.showPreview,
-          showVerificationCodes: state.showVerificationCodes,
           mailLayout: state.mailLayout,
           emailsPerPage: state.emailsPerPage,
           externalContentPolicy: state.externalContentPolicy,
@@ -931,7 +788,6 @@ export const useSettingsStore = create<SettingsState>()(
           sendConfirmation: state.sendConfirmation,
           defaultReplyMode: state.defaultReplyMode,
           autoSelectReplyIdentity: state.autoSelectReplyIdentity,
-          replyIdentityMatch: state.replyIdentityMatch,
           plainTextMode: state.plainTextMode,
           rtlEditingSupport: state.rtlEditingSupport,
           subAddressDelimiter: state.subAddressDelimiter,
@@ -944,7 +800,6 @@ export const useSettingsStore = create<SettingsState>()(
           emailNotificationsEnabled: state.emailNotificationsEnabled,
           emailNotificationSound: state.emailNotificationSound,
           notificationSoundChoice: state.notificationSoundChoice,
-          pushNotifyInboxOnly: state.pushNotifyInboxOnly,
           pushRelayUrl: state.pushRelayUrl,
           protocolOpenMode: state.protocolOpenMode,
           calendarNotificationsEnabled: state.calendarNotificationsEnabled,
@@ -956,19 +811,11 @@ export const useSettingsStore = create<SettingsState>()(
           birthdayCalendarColor: state.birthdayCalendarColor,
           sharedCalendarColors: state.sharedCalendarColors,
           groupContactsByLetter: state.groupContactsByLetter,
-          sortContactsByLastName: state.sortContactsByLastName,
           expandedFilterView: state.expandedFilterView,
           showTimeInMonthView: state.showTimeInMonthView,
           showWeekNumbers: state.showWeekNumbers,
-          calendarFreeScroll: state.calendarFreeScroll,
           calendarHoverPreview: state.calendarHoverPreview,
-          calendarLimitHours: state.calendarLimitHours,
-          calendarDayStartHour: state.calendarDayStartHour,
-          calendarDayEndHour: state.calendarDayEndHour,
-          calendarHideNonWorkingDays: state.calendarHideNonWorkingDays,
-          calendarWorkingDays: state.calendarWorkingDays,
           toolbarPosition: state.toolbarPosition,
-          hideAccountSwitcher: state.hideAccountSwitcher,
           showRailAccountList: state.showRailAccountList,
           // proInterface is intentionally omitted - it's a per-device choice
           // (see DEVICE_LOCAL_SETTING_KEYS) and must not be synced.
@@ -985,7 +832,6 @@ export const useSettingsStore = create<SettingsState>()(
           faviconUnreadBadge: state.faviconUnreadBadge,
           colorfulSidebarIcons: state.colorfulSidebarIcons,
           tintListRowsByTag: state.tintListRowsByTag,
-          tintListRowsByAccount: state.tintListRowsByAccount,
           showFolderTotalCount: state.showFolderTotalCount,
           showTagsInSidebar: state.showTagsInSidebar,
           folderIcons: state.folderIcons,
@@ -994,7 +840,6 @@ export const useSettingsStore = create<SettingsState>()(
           attachmentReminderEnabled: state.attachmentReminderEnabled,
           attachmentReminderKeywords: state.attachmentReminderKeywords,
           emptySubjectWarningEnabled: state.emptySubjectWarningEnabled,
-          recipientMentionsEnabled: state.recipientMentionsEnabled,
           hideInlineImageAttachments: state.hideInlineImageAttachments,
           attachmentImagePreviewsEnabled: state.attachmentImagePreviewsEnabled,
           sidebarApps: state.sidebarApps,
@@ -1043,12 +888,6 @@ export const useSettingsStore = create<SettingsState>()(
                 set({ sendDelaySeconds: 0 });
                 return;
               }
-              // Validity of the zone id itself is checked at use time
-              // (lib/timezone resolveTimeZone falls back to the browser zone),
-              // so only reject non-strings here.
-              if (key === 'timeZone' && typeof settings[key] !== 'string') {
-                return;
-              }
               // Ignore a legacy global allMailFolderIds (string[] | null) or any
               // non-record value - this build keys it per account.
               if (key === 'allMailFolderIds' && !isPlainRecord(settings[key])) {
@@ -1057,16 +896,6 @@ export const useSettingsStore = create<SettingsState>()(
               // Per-account map (accountId -> identityId); ignore any legacy
               // global/non-record value rather than corrupting the map.
               if (key === 'preferredIdentityIds' && !isPlainRecord(settings[key])) {
-                return;
-              }
-              // The list order is sent to the server as a sort array, so an
-              // unknown criterion from a newer/older client must never get
-              // through (an unsupportedSort refusal empties the folder).
-              if (key === 'messageListOrder') {
-                set({ messageListOrder: sanitizeSortLevels(settings[key]) });
-                return;
-              }
-              if (key === 'messageListOrderScope' && settings[key] !== 'inbox' && settings[key] !== 'all') {
                 return;
               }
               if (DEVICE_LOCAL_SETTING_KEYS.has(key)) {
@@ -1235,20 +1064,10 @@ export const useSettingsStore = create<SettingsState>()(
 
       // Settings sync methods
       enableSync: (username: string, serverUrl: string) => {
-        const accountId = generateAccountId(username, serverUrl);
-        if (blockedSyncAccountId === accountId) {
-          syncWarn('Settings sync stays off for', username, '- its settings could not be loaded');
-          return;
-        }
-        writeSettingsOwner(accountId);
         syncUsername = username;
         syncServerUrl = serverUrl;
         syncEnabled = true;
         syncLog('Settings sync enabled for', username);
-        if (pushTemplatesAfterLoad) {
-          pushTemplatesAfterLoad = false;
-          if (!get().settingsSyncDisabled) requestSync?.();
-        }
       },
 
       flushSync: async () => {
@@ -1274,24 +1093,8 @@ export const useSettingsStore = create<SettingsState>()(
       },
 
       loadFromServer: async (username: string, serverUrl: string) => {
-        const accountId = generateAccountId(username, serverUrl);
-        const owner = readSettingsOwner();
-        const heldByOther = owner !== null && owner !== accountId;
-        // The local settings belong to another account and this one's could
-        // not be read: show defaults and keep sync off, rather than showing
-        // the other account's settings or pushing them under this name.
-        const failWithoutForeignState = () => {
-          if (heldByOther) {
-            resetSyncedState();
-            writeSettingsOwner(null);
-            blockedSyncAccountId = accountId;
-          }
-          return false;
-        };
-        blockedSyncAccountId = null;
         try {
           syncLog('Loading settings from server for', username);
-          pushTemplatesAfterLoad = false;
           const res = await apiFetch('/api/settings', {
             headers: {
               'x-settings-username': username,
@@ -1301,32 +1104,21 @@ export const useSettingsStore = create<SettingsState>()(
           if (!res.ok) {
             const body = await res.json().catch(() => ({}));
             syncLog('Settings fetch failed:', body.error || `status ${res.status}`);
-            return failWithoutForeignState();
+            return false;
           }
           const { settings } = await res.json();
           if (!settings) {
             syncLog('No server settings found yet');
-            // A new account starts from defaults, not from whatever the
-            // previous account left in this browser (#1185).
-            if (heldByOther) resetSyncedState();
-            writeSettingsOwner(accountId);
-            pushTemplatesAfterLoad = localTemplatesAhead(null);
             return false;
           }
           if (settings && typeof settings === 'object') {
-            // Importing merges templates and leaves keys the blob lacks as
-            // they are, so another account's state would carry over into
-            // this one and be pushed back to its server copy.
-            if (heldByOther) resetSyncedState();
             isLoadingFromServer = true;
             // Merge (not replace) per-account maps for the account being loaded,
             // so multi-account logins don't clobber each other by login order.
             get().importSettings(JSON.stringify(settings), {
-              serverAccountId: accountId,
+              serverAccountId: generateAccountId(username, serverUrl),
             });
             isLoadingFromServer = false;
-            writeSettingsOwner(accountId);
-            pushTemplatesAfterLoad = localTemplatesAhead(settings);
             syncLog('Settings loaded from server successfully');
             // The per-account preferred sender identity (#507) is re-applied by
             // applyPreferredIdentity() in auth-store, invoked from the
@@ -1338,19 +1130,10 @@ export const useSettingsStore = create<SettingsState>()(
         } catch (error) {
           syncError('Failed to load settings from server:', error);
           isLoadingFromServer = false;
-          return failWithoutForeignState();
+          return false;
         }
       },
-
-      forgetSyncedSettings: () => {
-        // Never synced: the local settings are this device's own and exist
-        // nowhere else. Synced but opted out: they were never uploaded either.
-        if (readSettingsOwner() === null || get().settingsSyncDisabled) return;
-        resetSyncedState();
-        writeSettingsOwner(null);
-      },
-      };
-    },
+    }),
     {
       name: 'settings-storage',
       version: 7,
@@ -1366,10 +1149,6 @@ export const useSettingsStore = create<SettingsState>()(
             }
             if (!isPlainRecord(state.preferredIdentityIds)) {
               state.preferredIdentityIds = {};
-            }
-            state.messageListOrder = sanitizeSortLevels(state.messageListOrder);
-            if (state.messageListOrderScope !== 'inbox' && state.messageListOrderScope !== 'all') {
-              state.messageListOrderScope = 'inbox';
             }
             applyFontSize(state.fontSize);
             applyDensity(state.density);
@@ -1545,8 +1324,6 @@ if (typeof window !== 'undefined') {
     }, SYNC_DEBOUNCE_MS);
   };
 
-  requestSync = triggerSync;
-
   // Auto-sync settings to server on any state change
   let prevSyncDisabled = useSettingsStore.getState().settingsSyncDisabled;
   useSettingsStore.subscribe(() => {
@@ -1572,19 +1349,6 @@ if (typeof window !== 'undefined') {
   };
   // Ensure template-store is loaded (and the bridge registered) even before
   // any UI component imports it, so the first sync push already carries the
-  // templates. Best effort: the UI imports the store itself when it needs it,
-  // and under vitest a short test file can finish (and tear its environment
-  // down) before this chain has loaded, which rejects the import.
-  import('./template-store').catch(() => {});
-}
-
-/**
- * The message-list order to request for a folder with the given role (#718):
- * the configured levels when they apply to every folder or this is the Inbox,
- * chronological otherwise. Pass null for views without a folder role (tag
- * views, search) - those only pick the order up under the "all folders" scope.
- */
-export function getMessageListOrderFor(role: string | null | undefined): SortLevel[] {
-  const { messageListOrder, messageListOrderScope } = useSettingsStore.getState();
-  return orderForMailbox(messageListOrder, messageListOrderScope, role);
+  // templates.
+  void import('./template-store');
 }

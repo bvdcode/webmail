@@ -21,8 +21,7 @@ import {
   FolderX,
   RefreshCw,
   Upload,
-  Users,
-} from "@/components/icons";
+} from "lucide-react";
 
 interface Position {
   x: number;
@@ -86,8 +85,6 @@ interface MailboxContextMenuProps {
   onCreateFolder?: (accountId?: string) => void;
   onRenameFolder?: (mailboxId: string) => void;
   onDeleteFolder?: (mailboxId: string) => void;
-  /** Share the folder with other principals (mail:share); omitted when the server lacks it. */
-  onShareFolder?: (mailboxId: string) => void;
   onImportEmail?: (mailboxId: string) => void;
   onRefresh?: () => void;
 }
@@ -107,7 +104,6 @@ export function MailboxContextMenu({
   onCreateFolder,
   onRenameFolder,
   onDeleteFolder,
-  onShareFolder,
   onImportEmail,
   onRefresh,
 }: MailboxContextMenuProps) {
@@ -162,9 +158,6 @@ export function MailboxContextMenu({
   const canSetSeen = mailbox.myRights?.maySetSeen !== false;
   const canRemoveItems = mailbox.myRights?.mayRemoveItems !== false;
   const canAddItems = mailbox.myRights?.mayAddItems !== false;
-  // Sharing needs the mail:share extension (handler present) and, on a folder
-  // someone else shared with us, their permission to re-share it.
-  const canShare = !!onShareFolder && (!mailbox.isShared || mailbox.myRights?.mayShare === true);
 
   const fullPath = getMailboxPath(mailbox, mailboxes);
 
@@ -205,15 +198,6 @@ export function MailboxContextMenu({
         disabled={!onRenameFolder || !canRename}
         testId="mailbox-rename"
       />
-      {onShareFolder && (
-        <ContextMenuItem
-          icon={Users}
-          label={t("share")}
-          onClick={() => handleAction(() => onShareFolder(mailbox.id))}
-          disabled={!canShare}
-          testId="mailbox-share"
-        />
-      )}
 
       <ContextMenuSeparator />
 

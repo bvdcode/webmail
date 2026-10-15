@@ -2,35 +2,26 @@
 
 import { Email, ThreadGroup } from "@/lib/jmap/types";
 import { ThreadListItem } from "./thread-list-item";
-import type { Attachment } from "@/lib/jmap/types";
-import type { LoadListAttachments } from "@/lib/list-attachments";
-import { listRowShowsChips } from "./attachment-chips";
-import { listVerificationCode } from "@/lib/verification-code";
-import { EmailContextMenu, type CopyTargetAccount } from "./email-context-menu";
-import { BatchTagButton } from "./batch-tag-button";
-import { cn, cleanPreview } from "@/lib/utils";
-import { Trash2, Mail, MailX, MailOpen, Loader2, SearchX, CalendarClock, ShieldCheck } from "@/components/icons";
-import { useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo } from "react";
+import { EmailContextMenu } from "./email-context-menu";
+import { cn } from "@/lib/utils";
+import { Trash2, Mail, MailX, MailOpen, Loader2, SearchX, CalendarClock, ShieldCheck } from "lucide-react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
-import { useEmailStore, ArchiveMailboxNotFoundError } from "@/stores/email-store";
+import { QuickFilterModal } from "@/components/filters/quick-filter-modal";
+import { useEmailStore } from "@/stores/email-store";
 import { useAuthStore } from "@/stores/auth-store";
-import { useAccountStore } from "@/stores/account-store";
+import { useFilterStore } from "@/stores/filter-store";
 import { useSettingsStore } from "@/stores/settings-store";
 import { useUIStore } from "@/stores/ui-store";
-import { useMessageListTabsStore } from "@/stores/message-list-tabs-store";
-import { groupEmailsByThread, sortThreadGroups, threadKeyFor, getEmailTagIds } from "@/lib/thread-utils";
+import { groupEmailsByThread, sortThreadGroups } from "@/lib/thread-utils";
 import { useContextMenu } from "@/hooks/use-context-menu";
 import { useConfirmDialog } from "@/hooks/use-confirm-dialog";
 import { useTranslations } from "next-intl";
-import { toast } from "@/stores/toast-store";
-import { runBatchEmailAction } from "@/lib/email-action-toast";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { TagDisplayContext, useMeasuredTagDisplay } from "@/hooks/use-tag-display";
 import { SearchChips } from "@/components/search/search-chips";
 import { isFilterEmpty, DEFAULT_SEARCH_FILTERS } from "@/lib/jmap/search-utils";
-import { getOwnAddresses } from "@/lib/filters/quick-rule-target";
-import { normalizeAddress } from "@/lib/filters/quick-rules";
 
 interface EmailListProps {
   emails: Email[];
@@ -55,8 +46,6 @@ interface EmailListProps {
   onMoveToMailbox?: (emailId: string, mailboxId: string) => void;
   onMarkAsSpam?: (email: Email) => void;
   onUndoSpam?: (email: Email) => void;
-  onOpenAttachment?: (email: Email, attachment: Attachment) => void;
-  loadAttachments?: LoadListAttachments;
   onEditDraft?: (email: Email) => void;
   isScheduledView?: boolean;
   onLoadMoreScheduled?: () => void;
@@ -86,8 +75,6 @@ export function EmailList({
   onSetTag,
   onMarkAsSpam,
   onUndoSpam,
-  onOpenAttachment,
-  loadAttachments,
   onMoveToMailbox,
   onEditDraft,
   isScheduledView = false,
@@ -98,15 +85,12 @@ export function EmailList({
   const t = useTranslations('email_list');
   const tContextMenu = useTranslations('context_menu');
   const tSpam = useTranslations('email_viewer.spam');
-  const tNotifications = useTranslations('notifications');
-  const tViewer = useTranslations('email_viewer');
   const { client } = useAuthStore();
   const {
     selectedEmailIds,
     selectAllEmails: _selectAllEmails,
     clearSelection,
     batchMarkAsRead,
-    batchSetTag,
     batchDelete,
     batchMoveToMailbox,
     batchArchive,
@@ -143,25 +127,11 @@ export function EmailList({
     ?? (isUnifiedView ? (unifiedRole ?? undefined) : undefined);
 
   const disableThreading = useSettingsStore((state) => state.disableThreading);
-  // The order the current folder view was fetched in (#718), so thread
-  // grouping mirrors the server order instead of re-sorting the page by date.
-  // Search results and cross-account views are always chronological.
-  const fetchedListOrder = useEmailStore((state) => state.listOrder);
-  const crossView = useEmailStore((state) => state.crossView);
-  // The row opened last stays where it was clicked while that order would
-  // move it (e.g. read in "unread first").
-  const listHold = useEmailStore((state) => state.listHold);
-  const viewingAccountId = useEmailStore((state) => state.viewingAccountId);
-  const selectedKeyword = useEmailStore((state) => state.selectedKeyword);
-  const searchMailboxId = useEmailStore((state) => state.searchMailboxId);
-  const activeAccountId = useAuthStore((state) => state.activeAccountId);
-  const activeTabId = useMessageListTabsStore((state) => state.activeTabId);
 
   const threadGroups = useMemo(() => {
-    const listOrder = searchQuery || crossView || !isFilterEmpty(searchFilters) ? [] : fetchedListOrder;
     const groups = groupEmailsByThread(emails, disableThreading || isScheduledView, threadEmailCounts);
-    return sortThreadGroups(groups, listOrder, listHold?.keywords);
-  }, [emails, disableThreading, isScheduledView, threadEmailCounts, fetchedListOrder, searchQuery, crossView, searchFilters, listHold]);
+    return sortThreadGroups(groups);
+  }, [emails, disableThreading, isScheduledView, threadEmailCounts]);
 
   const { contextMenu, openContextMenu, closeContextMenu, menuRef } = useContextMenu<Email>();
   /**
@@ -172,92 +142,38 @@ export function EmailList({
   const contextMenuEmail = contextMenu.data
     ? emails.find((email) => email.id === contextMenu.data!.id) ?? contextMenu.data
     : null;
-  /**
-   * Whose sender the menu's Rules entry uses: every selected message, or the
-   * row's own message. A thread row whose newest message is the user's own
-   * reply takes the newest one someone else sent, when the thread has it
-   * loaded; otherwise the entry offers no sender rules.
-   */
-  const ruleEmails = useMemo(() => {
-    if (!contextMenuEmail) return undefined;
-    if (selectedEmailIds.has(contextMenuEmail.id) && selectedEmailIds.size > 1) {
-      return emails.filter((email) => selectedEmailIds.has(email.id));
-    }
-    const own = getOwnAddresses();
-    const isOwn = (email: Email) =>
-      (email.from ?? []).length > 0 && (email.from ?? []).every((f) => own.has(normalizeAddress(f.email)));
-    if (!isOwn(contextMenuEmail)) return undefined;
-    const thread = threadGroups.find((group) => group.latestEmail.id === contextMenuEmail.id);
-    if (!thread) return undefined;
-    const newestOther = [...(threadEmailsCache.get(thread.threadKey) ?? []), ...thread.emails]
-      .filter((email) => !isOwn(email))
-      .sort((a, b) => Date.parse(b.receivedAt) - Date.parse(a.receivedAt))[0];
-    return newestOther ? [newestOther] : undefined;
-  }, [contextMenuEmail, selectedEmailIds, emails, threadGroups, threadEmailsCache]);
   const { dialogProps: confirmDialogProps, confirm: confirmDialog } = useConfirmDialog();
 
-  // "Copy to" lists the folders of the other connected accounts. Only with
-  // more than one account connected; the menu's own account is left out.
-  const accounts = useAccountStore((state) => state.accounts);
-  const accountMailboxes = useEmailStore((state) => state.accountMailboxes);
-  const fetchAccountMailboxes = useEmailStore((state) => state.fetchAccountMailboxes);
-  const copyEmailsToAccount = useEmailStore((state) => state.copyEmailsToAccount);
-  const copySourceLogin = contextMenuEmail
-    ? contextMenuEmail.sourceClientAccountId ?? viewingAccountId ?? activeAccountId
-    : null;
-  const copyAccounts = useMemo(() => {
-    if (!contextMenu.isOpen) return [];
-    const connected = useAuthStore.getState().getAllConnectedClients();
-    if (connected.size < 2) return [];
-    return accounts.filter((account) => account.id !== copySourceLogin && connected.has(account.id));
-  }, [contextMenu.isOpen, accounts, copySourceLogin]);
-  useEffect(() => {
-    for (const account of copyAccounts) {
-      if (accountMailboxes[account.id]) continue;
-      const accountClient = useAuthStore.getState().getClientForAccount(account.id);
-      if (accountClient) void fetchAccountMailboxes(accountClient, account.id);
-    }
-  }, [copyAccounts, accountMailboxes, fetchAccountMailboxes]);
-  const copyTargets = useMemo<CopyTargetAccount[]>(
-    () => copyAccounts
-      .filter((account) => accountMailboxes[account.id])
-      .map((account) => ({ accountId: account.id, label: account.label || account.email || account.id, mailboxes: accountMailboxes[account.id] })),
-    [copyAccounts, accountMailboxes],
-  );
-
   const [isProcessing, setIsProcessing] = useState(false);
+  // The message a quick filter is being built from; null while the dialog is closed.
+  const [filterSourceEmail, setFilterSourceEmail] = useState<Email | null>(null);
+  // A hand-edited Sieve script has no rule structure to append to, so the entry
+  // point stays hidden and Settings remains the only way in.
+  const sieveRulesEditable = useFilterStore((state) => state.isSupported && !state.isOpaque);
+  /**
+   * Rules are written into the personal account's script, so a message read out
+   * of someone else's shared folder has no matching script to file into - and
+   * its folder paths would not resolve there either.
+   */
+  const canCreateFilterFor = useCallback(
+    (email: Email | null): boolean => {
+      if (!email || !sieveRulesEditable || !client) return false;
+      return !email.sourceAccountId || email.sourceAccountId === client.getAccountId();
+    },
+    [sieveRulesEditable, client]
+  );
+  /**
+   * The folder a new rule can be applied backwards over. Aggregate and virtual
+   * views resolve to no mailbox, and another account's folder is not reachable
+   * from the personal script, so both skip that step.
+   */
+  const backfillMailboxId =
+    mailboxes.find((mailbox) => mailbox.id === selectedMailbox && !mailbox.isShared)?.id ?? "";
   const parentRef = useRef<HTMLDivElement>(null);
-  const batchToolbarRef = useRef<HTMLDivElement>(null);
-  // The batch toolbar sits above the scroll container, so as it animates
-  // open it shrinks the list and would shove every row downwards. Feed each
-  // height change back into scrollTop so the rows stay put on screen (and
-  // slide back when the toolbar collapses again).
-  //
-  // Except at the very top: there are no rows above to hold steady, so the
-  // compensation just scrolls the first message underneath the toolbar and
-  // reads as the toolbar covering the message you selected. Let the list
-  // move down there instead.
-  useEffect(() => {
-    const toolbar = batchToolbarRef.current;
-    if (!toolbar || typeof ResizeObserver === 'undefined') return;
-    let lastHeight = toolbar.getBoundingClientRect().height;
-    const observer = new ResizeObserver((entries) => {
-      const height = entries[0]?.contentRect.height ?? toolbar.getBoundingClientRect().height;
-      const delta = height - lastHeight;
-      lastHeight = height;
-      const list = parentRef.current;
-      if (!list || delta === 0) return;
-      if (delta > 0 && list.scrollTop <= 0) return;
-      list.scrollTop = Math.max(0, list.scrollTop + delta);
-    });
-    observer.observe(toolbar);
-    return () => observer.disconnect();
-  }, []);
   // One tag treatment for the whole list, measured from the scroll container.
   const tagDisplay = useMeasuredTagDisplay(parentRef);
   const density = useSettingsStore((state) => state.density);
   const showPreview = useSettingsStore((state) => state.showPreview);
-  const showVerificationCodes = useSettingsStore((state) => state.showVerificationCodes);
   const mailLayout = useSettingsStore((state) => state.mailLayout);
   const footerHasMore = hasMore ?? hasMoreEmails;
   const footerIsLoadingMore = isLoadingMoreItems ?? isLoadingMore;
@@ -265,70 +181,21 @@ export function EmailList({
   // Match the list items: focus layout collapses to multi-line on mobile, so virtualizer estimates must match.
   const isFocusedMailLayout = mailLayout === 'focus' && !isMobile;
 
-  const estimateSize = useCallback((index: number) => {
+  const estimateSize = useCallback(() => {
     if (isFocusedMailLayout) {
       return { 'extra-compact': 28, compact: 40, regular: 56, comfortable: 64 }[density];
     }
-    // Rows the list has not measured yet are placed by this guess, and each
-    // one it gets wrong shifts the list when it is measured on the way back
-    // up after a jump down (scrollbar drag, End). So guess per row.
-    const latest = threadGroups[index]?.latestEmail;
-    let size = { 'extra-compact': 32, compact: 60, regular: 84, comfortable: 104 }[density];
-    if (showPreview && density !== 'extra-compact') {
-      // A mail without a preview draws a one-line "No preview available",
-      // a line (23px) shorter than a real one.
-      const emptyPreview = !!latest && !cleanPreview(latest.preview) && !latest.searchSnippet?.preview;
-      size += emptyPreview ? 36 - 23 : 36;
-    }
-    // The chip row (attachments, verification code): a 22px chip plus 6px margin.
-    const hasCode = !!latest && showVerificationCodes && !!listVerificationCode(latest);
-    if (latest && (hasCode || (onOpenAttachment && listRowShowsChips(latest, loadAttachments)))) size += 28;
-    return size;
-  }, [density, isFocusedMailLayout, showPreview, showVerificationCodes, threadGroups, onOpenAttachment, loadAttachments]);
-
-  // Stable per list, so the virtualizer does not rebuild every row's
-  // measurement on each scroll render.
-  const getItemKey = useCallback(
-    (index: number) => threadGroups[index]?.threadKey ?? String(index),
-    [threadGroups],
-  );
+    const base = { 'extra-compact': 32, compact: 60, regular: 84, comfortable: 104 }[density];
+    return (showPreview && density !== 'extra-compact') ? base + 36 : base;
+  }, [density, isFocusedMailLayout, showPreview]);
 
   const virtualizer = useVirtualizer({
     count: threadGroups.length,
     getScrollElement: () => parentRef.current,
     estimateSize,
     overscan: 5,
-    getItemKey,
-    // Keep sub-pixel row heights. The default measurer rounds them, so a
-    // row could start up to half a pixel inside the one above it and paint
-    // over that row's divider (at 125% or 150% display scaling).
-    measureElement: (element, entry) =>
-      entry?.borderBoxSize?.[0]?.blockSize ?? element.getBoundingClientRect().height,
+    getItemKey: (index) => threadGroups[index]?.threadId ?? String(index),
   });
-
-  // Another folder, tag, account, unified view or plugin tab - or another
-  // search - opens at the top. The scroll container outlives the switch, so
-  // the new list would otherwise open wherever the last one was scrolled to.
-  // Refreshes, new mail and loading more keep the view and so the position.
-  const searching = !!searchQuery.trim() || !isFilterEmpty(searchFilters);
-  const viewKey = JSON.stringify([
-    activeAccountId,
-    viewingAccountId,
-    selectedMailbox,
-    selectedKeyword,
-    isUnifiedView && (crossView ?? unifiedRole),
-    isScheduledView,
-    activeTabId,
-    // The scope only matters while a search runs; the dropdown alone does not
-    // change the list.
-    searching && [searchQuery, searchFilters, searchMailboxId],
-  ]);
-  const shownViewKey = useRef(viewKey);
-  useLayoutEffect(() => {
-    if (shownViewKey.current === viewKey) return;
-    shownViewKey.current = viewKey;
-    virtualizer.scrollToOffset(0);
-  }, [viewKey, virtualizer]);
 
   const LoadingSkeleton = () => (
     <div className="animate-in fade-in duration-200">
@@ -362,40 +229,16 @@ export function EmailList({
     }
   };
 
-  // What the tag picker shows for the selection: a tag on every selected
-  // message is checked, one on only some of them is drawn as partial.
-  const selectionTags = useMemo(() => {
-    const selected = emails.filter((email) => selectedEmailIds.has(email.id));
-    const counts = new Map<string, number>();
-    for (const email of selected) {
-      for (const tagId of getEmailTagIds(email.keywords)) counts.set(tagId, (counts.get(tagId) ?? 0) + 1);
-    }
-    const all: string[] = [];
-    const some: string[] = [];
-    for (const [tagId, count] of counts) (count === selected.length ? all : some).push(tagId);
-    return { all, some };
-  }, [emails, selectedEmailIds]);
-
-  // A tag every selected message has comes off; any other goes onto all of
-  // them. The selection stays, so several tags can be changed in a row.
-  const handleBatchToggleTag = async (tagId: string) => {
-    if (!client) return;
-    try {
-      await batchSetTag(client, tagId, !selectionTags.all.includes(tagId));
-    } catch (error) {
-      console.error("Failed to tag emails:", error);
-      toast.error(tNotifications('error_updating'));
-    }
-  };
-
   const handleBatchUndoSpam = async () => {
     if (!client || isProcessing) return;
     setIsProcessing(true);
     try {
       const emailIds = Array.from(selectedEmailIds);
       await batchUndoSpam(client, emailIds);
+      const { toast } = await import('sonner');
       toast.success(tSpam('toast_not_spam_batch', { count: emailIds.length }));
     } catch {
+      const { toast } = await import('sonner');
       toast.error(tSpam('error_not_spam'));
     } finally {
       setTimeout(() => setIsProcessing(false), 500);
@@ -423,12 +266,16 @@ export function EmailList({
     if (!confirmed) return;
 
     setIsProcessing(true);
-    const count = selectedEmailIds.size;
     try {
-      await runBatchEmailAction(() => batchDelete(client, isInTrash), {
-        success: tNotifications('emails_deleted', { count }),
-        error: tNotifications('error_deleting'),
-      });
+      await batchDelete(client, isInTrash);
+      const storeError = useEmailStore.getState().error;
+      if (storeError) {
+        const { toast } = await import('sonner');
+        toast.error(storeError);
+      }
+    } catch (err) {
+      const { toast } = await import('sonner');
+      toast.error(err instanceof Error ? err.message : 'Failed to delete emails');
     } finally {
       setTimeout(() => setIsProcessing(false), 500);
     }
@@ -444,16 +291,16 @@ export function EmailList({
     }
   }, [client, hasMoreEmails, isLoadingMore, isLoading, isScheduledView, loadMoreEmails, onLoadMoreScheduled]);
 
-  const handleToggleThreadExpansion = useCallback(async (threadKey: string) => {
-    const isExpanded = expandedThreadIds.has(threadKey);
+  const handleToggleThreadExpansion = useCallback(async (threadId: string) => {
+    const isExpanded = expandedThreadIds.has(threadId);
 
     if (!isExpanded && client) {
-      toggleThreadExpansion(threadKey);
-      await fetchThreadEmails(client, threadKey);
+      toggleThreadExpansion(threadId);
+      await fetchThreadEmails(client, threadId);
       // Mark all unread emails in this thread as read
-      void markThreadAsRead(client, threadKey);
+      void markThreadAsRead(client, threadId);
     } else {
-      toggleThreadExpansion(threadKey);
+      toggleThreadExpansion(threadId);
     }
   }, [client, expandedThreadIds, toggleThreadExpansion, fetchThreadEmails, markThreadAsRead]);
 
@@ -503,7 +350,6 @@ export function EmailList({
     <div className={cn("flex flex-col min-h-0", className)}>
       {/* Batch Actions Toolbar */}
       <div
-        ref={batchToolbarRef}
         className={cn(
           "transition-all duration-300 ease-in-out overflow-hidden",
           hasSelection && !isScheduledView ? "max-h-16 opacity-100" : "max-h-0 opacity-0"
@@ -544,15 +390,6 @@ export function EmailList({
                 <Mail className="w-4 h-4" />
               )}
             </Button>
-            <BatchTagButton
-              key={hasSelection ? 'selection' : 'none'}
-              title={tContextMenu('tag')}
-              selectedIds={selectionTags.all}
-              partialIds={selectionTags.some}
-              onToggle={handleBatchToggleTag}
-              active={hasSelection && !isScheduledView}
-              disabled={isProcessing}
-            />
             {effectiveMailboxRole === 'junk' && (
               <Button
                 variant="ghost"
@@ -665,27 +502,26 @@ export function EmailList({
                     ref={virtualizer.measureElement}
                     style={{
                       position: 'absolute',
-                      // `top`, not translateY: layout snaps it to device
-                      // pixels, so the fractional offsets stay crisp.
-                      top: virtualItem.start,
+                      top: 0,
                       left: 0,
                       width: '100%',
+                      transform: `translateY(${virtualItem.start}px)`,
                     }}
                   >
                     <ThreadListItem
                       thread={thread}
-                      isExpanded={expandedThreadIds.has(thread.threadKey)}
+                      isExpanded={expandedThreadIds.has(thread.threadId)}
                       selectedEmailId={selectedEmailId}
-                      isLoading={isLoadingThread === thread.threadKey}
-                      expandedEmails={threadEmailsCache.get(thread.threadKey)}
-                      onToggleExpand={() => handleToggleThreadExpansion(thread.threadKey)}
+                      isLoading={isLoadingThread === thread.threadId}
+                      expandedEmails={threadEmailsCache.get(thread.threadId)}
+                      onToggleExpand={() => handleToggleThreadExpansion(thread.threadId)}
                       onCollapseAllThreads={collapseAllThreads}
                       onEmailSelect={(email) => {
                         // Collapse expanded threads when selecting an email outside the expanded thread
                         const currentExpanded = useEmailStore.getState().expandedThreadIds;
                         if (currentExpanded.size > 0) {
                           // Check if the selected email belongs to any expanded thread via its threadId
-                          if (!email.threadId || !currentExpanded.has(threadKeyFor(email))) {
+                          if (!email.threadId || !currentExpanded.has(email.threadId)) {
                             collapseAllThreads();
                           }
                         }
@@ -701,8 +537,6 @@ export function EmailList({
                       onSetTag={onSetTag}
                       onMarkAsSpam={onMarkAsSpam ? (email) => onMarkAsSpam(email) : undefined}
                       onUndoSpam={onUndoSpam ? (email) => onUndoSpam(email) : undefined}
-                      onOpenAttachment={onOpenAttachment}
-                      loadAttachments={loadAttachments}
                     />
                   </div>
                 );
@@ -739,7 +573,6 @@ export function EmailList({
           currentMailboxRole={effectiveMailboxRole}
           isMultiSelect={selectedEmailIds.has(contextMenuEmail.id)}
           selectedCount={selectedEmailIds.size}
-          ruleEmails={ruleEmails}
           onReply={() => onReply?.(contextMenuEmail!)}
           onReplyAll={() => onReplyAll?.(contextMenuEmail!)}
           onForward={() => onForward?.(contextMenuEmail!)}
@@ -750,63 +583,39 @@ export function EmailList({
           onDelete={() => onDelete?.(contextMenuEmail!)}
           onArchive={() => onArchive?.(contextMenuEmail!)}
           onSetTag={(color) => onSetTag?.(contextMenuEmail!.id, color)}
+          onCreateFilter={
+            canCreateFilterFor(contextMenuEmail)
+              ? () => setFilterSourceEmail(contextMenuEmail)
+              : undefined
+          }
           onMoveToMailbox={(mailboxId) => onMoveToMailbox?.(contextMenuEmail!.id, mailboxId)}
           onMarkAsSpam={() => onMarkAsSpam?.(contextMenuEmail!)}
           onUndoSpam={() => onUndoSpam?.(contextMenuEmail!)}
           onEditDraft={() => onEditDraft?.(contextMenuEmail!)}
           onCancelScheduledForEdit={onCancelScheduledForEdit ? () => onCancelScheduledForEdit(contextMenuEmail!) : undefined}
           onRescheduleScheduled={onRescheduleScheduled ? () => onRescheduleScheduled(contextMenuEmail!) : undefined}
-          copyTargets={copyTargets}
-          onCopyToAccount={async (accountId, mailboxId) => {
-            const ids = selectedEmailIds.has(contextMenuEmail!.id) && selectedEmailIds.size > 1
-              ? Array.from(selectedEmailIds)
-              : [contextMenuEmail!.id];
-            const target = accountMailboxes[accountId]?.find((mb) => mb.id === mailboxId);
-            await runBatchEmailAction(() => copyEmailsToAccount(ids, accountId, target?.originalId ?? mailboxId), {
-              success: tNotifications('emails_copied', { count: ids.length }),
-              error: tNotifications('copy_failed'),
-            });
-          }}
           onBatchMarkAsRead={(read) => client && batchMarkAsRead(client, read)}
-          batchTagIds={selectionTags.all}
-          batchPartialTagIds={selectionTags.some}
-          onBatchToggleTag={handleBatchToggleTag}
-          onBatchDelete={async () => {
-            if (!client) return;
-            const count = selectedEmailIds.size;
-            await runBatchEmailAction(() => batchDelete(client), {
-              success: tNotifications('emails_deleted', { count }),
-              error: tNotifications('error_deleting'),
-            });
-          }}
+          onBatchDelete={() => client && batchDelete(client)}
           onBatchArchive={async () => {
             if (!client) return;
-            const count = selectedEmailIds.size;
-            await runBatchEmailAction(() => batchArchive(client), {
-              success: tNotifications('emails_archived', { count }),
-              error: tNotifications('error_archiving'),
-              describeError: (error) => error instanceof ArchiveMailboxNotFoundError
-                ? tViewer('archive_mailbox_not_found')
-                : undefined,
-            });
+            try {
+              await batchArchive(client);
+            } catch (error) {
+              console.error('Failed to batch archive:', error);
+            }
           }}
-          onBatchMoveToMailbox={async (mailboxId) => {
-            if (!client) return;
-            const count = selectedEmailIds.size;
-            await runBatchEmailAction(() => batchMoveToMailbox(client, mailboxId), {
-              success: tNotifications('emails_moved', { count }),
-              error: tNotifications('move_failed'),
-            });
-          }}
+          onBatchMoveToMailbox={(mailboxId) => client && batchMoveToMailbox(client, mailboxId)}
           onBatchMarkAsSpam={async () => {
             if (client) {
               const emailIds = Array.from(selectedEmailIds);
               try {
                 await batchMarkAsSpam(client, emailIds);
+                const { toast } = await import('sonner');
                 toast.success(
                   tSpam('toast_batch', { count: emailIds.length })
                 );
               } catch {
+                const { toast } = await import('sonner');
                 toast.error(tSpam('error'));
               }
             }
@@ -816,14 +625,25 @@ export function EmailList({
               const emailIds = Array.from(selectedEmailIds);
               try {
                 await batchUndoSpam(client, emailIds);
+                const { toast } = await import('sonner');
                 toast.success(
                   tSpam('toast_not_spam_batch', { count: emailIds.length })
                 );
               } catch {
+                const { toast } = await import('sonner');
                 toast.error(tSpam('error_not_spam'));
               }
             }
           }}
+        />
+      )}
+
+      {filterSourceEmail && (
+        <QuickFilterModal
+          email={filterSourceEmail}
+          mailboxes={mailboxes}
+          currentMailboxId={backfillMailboxId}
+          onClose={() => setFilterSourceEmail(null)}
         />
       )}
 

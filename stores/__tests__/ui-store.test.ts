@@ -97,15 +97,15 @@ describe('ui-store', () => {
   });
 
   describe('sidebarCollapsed', () => {
-    it('should toggle collapsed state', () => {
-      expect(useUIStore.getState().sidebarCollapsed).toBe(false);
+    it('toggles the collapsed state', () => {
       useUIStore.getState().toggleSidebarCollapsed();
       expect(useUIStore.getState().sidebarCollapsed).toBe(true);
+
       useUIStore.getState().toggleSidebarCollapsed();
       expect(useUIStore.getState().sidebarCollapsed).toBe(false);
     });
 
-    it('should set collapsed directly', () => {
+    it('sets the collapsed state directly', () => {
       useUIStore.getState().setSidebarCollapsed(true);
       expect(useUIStore.getState().sidebarCollapsed).toBe(true);
     });

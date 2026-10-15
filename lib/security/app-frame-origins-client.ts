@@ -6,17 +6,9 @@
 import { getPathPrefix } from '@/lib/browser-navigation';
 import {
   APP_FRAME_ORIGINS_COOKIE,
-  APP_FRAME_ORIGINS_SECURE_COOKIE,
   parseAppFrameOrigins,
   serializeAppFrameOrigins,
 } from './app-frame-origins';
-
-/** `__Host-` over HTTPS, see APP_FRAME_ORIGINS_SECURE_COOKIE. */
-function cookieName(): string {
-  return typeof window !== 'undefined' && window.location.protocol === 'https:'
-    ? APP_FRAME_ORIGINS_SECURE_COOKIE
-    : APP_FRAME_ORIGINS_COOKIE;
-}
 
 function readRawCookie(name: string): string | null {
   if (typeof document === 'undefined') return null;
@@ -31,7 +23,7 @@ function readRawCookie(name: string): string | null {
 
 /** Origins currently advertised to the proxy, validated. */
 export function readAppFrameOrigins(): string[] {
-  return parseAppFrameOrigins(readRawCookie(cookieName()));
+  return parseAppFrameOrigins(readRawCookie(APP_FRAME_ORIGINS_COOKIE));
 }
 
 /**
@@ -42,16 +34,13 @@ export function readAppFrameOrigins(): string[] {
 export function writeAppFrameOrigins(origins: ReadonlyArray<string>): boolean {
   if (typeof document === 'undefined') return false;
   const value = serializeAppFrameOrigins(origins);
-  const name = cookieName();
-  const secure = name === APP_FRAME_ORIGINS_SECURE_COOKIE;
   const attrs = [
-    `${name}=${value}`,
-    // A __Host- cookie must be on Path=/.
-    `path=${secure ? '/' : getPathPrefix() || '/'}`,
+    `${APP_FRAME_ORIGINS_COOKIE}=${value}`,
+    `path=${getPathPrefix() || '/'}`,
     'max-age=31536000',
     'samesite=lax',
   ];
-  if (secure) attrs.push('secure');
+  if (window.location.protocol === 'https:') attrs.push('secure');
   document.cookie = attrs.join('; ');
-  return readRawCookie(name) === value;
+  return readRawCookie(APP_FRAME_ORIGINS_COOKIE) === value;
 }

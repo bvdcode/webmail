@@ -2,9 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
-import { Loader2, ExternalLink } from "@/components/icons";
+import { Loader2, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { liteMountedAssetUrl } from "@/lib/lite";
 
 // Real inline PDF preview for mobile browsers. Android Chrome / iOS WebKit have
 // no native inline PDF viewer, so the desktop <iframe src=blob:> approach
@@ -51,10 +50,10 @@ export function PdfMobileViewer({ url, blob }: { url: string; blob: Blob }) {
     (async () => {
       try {
         const pdfjs = await import("pdfjs-dist");
-        pdfjs.GlobalWorkerOptions.workerSrc = liteMountedAssetUrl(new URL(
+        pdfjs.GlobalWorkerOptions.workerSrc = new URL(
           "pdfjs-dist/build/pdf.worker.min.mjs",
           import.meta.url,
-        ).toString());
+        ).toString();
 
         // The Uint8Array is created fresh from the blob, so pdf.js taking
         // ownership of (and transferring) the buffer is fine.
