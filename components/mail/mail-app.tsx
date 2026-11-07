@@ -43,6 +43,7 @@ import { usePaneId } from "@/hooks/use-pane-context";
 import { useKeyboardShortcuts } from "@/hooks/use-keyboard-shortcuts";
 import { useRefreshGesture } from "@/hooks/use-refresh-gesture";
 import { useConfirmDialog } from "@/hooks/use-confirm-dialog";
+import { useArchiveActions } from "@/hooks/use-archive-actions";
 import { usePromptDialog } from "@/hooks/use-prompt-dialog";
 import { useBrowserNavigation, type NavSnapshot } from "@/hooks/use-browser-navigation";
 import { debug } from "@/lib/debug";
@@ -137,6 +138,7 @@ export function MailApp({ linkSegments }: MailAppProps = {}) {
   // ask before discarding unsaved text.
   const composerRequestCloseRef = useRef<((afterClose?: () => void) => void) | null>(null);
   const { dialogProps: confirmDialogProps, confirm: confirmDialog } = useConfirmDialog();
+  const { ensureArchiveMailbox, archiveSelected } = useArchiveActions(confirmDialog);
   const { dialogProps: promptDialogProps, prompt: promptDialog } = usePromptDialog();
   const { showAppsModal, inlineApp, loadedApps, handleManageApps, handleInlineApp, closeInlineApp, closeAppsModal } = useSidebarApps();
   const [initialCheckDone, setInitialCheckDone] = useState(() => useAuthStore.getState().isAuthenticated && !!useAuthStore.getState().client);
@@ -387,7 +389,6 @@ export function MailApp({ linkSegments }: MailAppProps = {}) {
     renameMailbox,
     deleteMailbox,
     batchDelete,
-    batchArchive,
     batchMarkAsRead,
     batchMarkAsSpam,
     batchUndoSpam,
@@ -669,11 +670,7 @@ export function MailApp({ linkSegments }: MailAppProps = {}) {
     onArchive: async () => {
       if (isScheduledView) return;
       if (selectedEmailIds.size > 0 && client) {
-        try {
-          await batchArchive(client);
-        } catch (error) {
-          console.error("Failed to batch archive:", error);
-        }
+        await archiveSelected();
       } else if (selectedEmail) {
         handleArchive();
       }
@@ -2135,10 +2132,11 @@ export function MailApp({ linkSegments }: MailAppProps = {}) {
         ? useEmailStore.getState().fetchAccountMailboxes(archiveClient, archiveAccountId)
         : fetchMailboxes(client);
 
+    const archiveMailbox = await ensureArchiveMailbox(emailToArchive);
+    if (!archiveMailbox) {
+      return;
+    }
     const currentMailboxes = readMailboxes();
-
-    const archiveMailbox = currentMailboxes.find(m => m.role === "archive" || m.name.toLowerCase() === "archive");
-    if (!archiveMailbox) return;
 
     const { archiveMode } = useSettingsStore.getState();
 
@@ -2183,6 +2181,8 @@ export function MailApp({ linkSegments }: MailAppProps = {}) {
       void refreshMailboxes();
     } catch (error) {
       console.error("Failed to archive email:", error);
+      const { toast } = await import('sonner');
+      toast.error(t('archive_dialog.error'));
     }
   };
 

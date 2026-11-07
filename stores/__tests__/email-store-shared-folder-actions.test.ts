@@ -142,7 +142,9 @@ describe('non-unified shared-folder batch action routing', () => {
   });
 
   it('batchArchive archives shared emails into the SHARED archive on the owner account', async () => {
-    await useEmailStore.getState().batchArchive(activeClient);
+    const requestCreation = vi.fn();
+    await useEmailStore.getState().batchArchive(activeClient, requestCreation);
+    expect(requestCreation).not.toHaveBeenCalled();
 
     // Owner archive id + owner accountId — not the user's own archive/account.
     expect(activeClient.batchArchiveEmails).toHaveBeenCalledWith(

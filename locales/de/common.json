@@ -730,6 +730,10 @@
     },
     "send_filing_warning": "Gesendet - aber das Aufräumen danach schlug fehl, evtl. bleibt ein alter Entwurf sichtbar."
   },
+  "archive_dialog": {
+    "missing_folder": "Es gibt keinen Archivordner. Möchtest du ihn erstellen und die E-Mail archivieren?",
+    "error": "Die E-Mail konnte nicht archiviert werden."
+  },
   "confirm_dialog": {
     "confirm": "Bestätigen",
     "cancel": "Abbrechen"

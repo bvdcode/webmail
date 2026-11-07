@@ -2304,12 +2304,15 @@ export class JMAPClient implements IJMAPClient {
     ]);
   }
 
-  async createMailbox(name: string, parentId?: string, accountId?: string): Promise<Mailbox> {
+  async createMailbox(name: string, parentId?: string, accountId?: string, role?: string): Promise<Mailbox> {
     const targetAccountId = accountId || this.accountId;
     const createId = `new-${Date.now()}`;
     const createData: Record<string, unknown> = { name };
     if (parentId) {
       createData.parentId = parentId;
+    }
+    if (role) {
+      createData.role = role;
     }
 
     const response = await this.request([
@@ -2338,6 +2341,7 @@ export class JMAPClient implements IJMAPClient {
     return {
       id: created.id,
       name,
+      role,
       parentId,
       sortOrder: 0,
       totalEmails: 0,

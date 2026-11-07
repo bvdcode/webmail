@@ -730,6 +730,10 @@
     },
     "send_filing_warning": "Gönderildi - ancak sonrasındaki temizleme başarısız oldu, eski bir taslak kalabilir."
   },
+  "archive_dialog": {
+    "missing_folder": "Arşiv klasörünüz yok. Oluşturup postayı arşivlemek ister misiniz?",
+    "error": "Posta arşivlenemedi."
+  },
   "confirm_dialog": {
     "confirm": "Onayla",
     "cancel": "İptal"

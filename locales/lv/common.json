@@ -730,6 +730,10 @@
     },
     "send_filing_warning": "Nosūtīts - bet pēcapstrāde neizdevās, var palikt novecojis melnraksts."
   },
+  "archive_dialog": {
+    "missing_folder": "Jums nav arhīva mapes. Vai izveidot to un arhivēt pastu?",
+    "error": "Neizdevās arhivēt pastu."
+  },
   "confirm_dialog": {
     "confirm": "Apstiprināt",
     "cancel": "Atcelt"

@@ -730,6 +730,10 @@
     },
     "send_filing_warning": "Odesláno - ale následný úklid selhal, může zůstat zastaralý koncept."
   },
+  "archive_dialog": {
+    "missing_folder": "Nemáte složku Archiv. Chcete ji vytvořit a archivovat poštu?",
+    "error": "Poštu se nepodařilo archivovat."
+  },
   "confirm_dialog": {
     "confirm": "Potvrdit",
     "cancel": "Zrušit"

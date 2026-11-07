@@ -730,6 +730,10 @@
     },
     "send_filing_warning": "Elküldve - de az utólagos rendrakás nem sikerült, egy elavult piszkozat megmaradhat."
   },
+  "archive_dialog": {
+    "missing_folder": "Nincs archívummappája. Létrehozza és archiválja a levelet?",
+    "error": "A levelet nem sikerült archiválni."
+  },
   "confirm_dialog": {
     "confirm": "Megerősítés",
     "cancel": "Mégse"

@@ -730,6 +730,10 @@
     },
     "send_filing_warning": "Enviat, però la neteja posterior a l'enviament ha fallat; és possible que quedi un esborrany obsolet."
   },
+  "archive_dialog": {
+    "missing_folder": "No tens cap carpeta d’arxiu. Vols crear-la i arxivar el correu?",
+    "error": "No s’ha pogut arxivar el correu."
+  },
   "confirm_dialog": {
     "confirm": "Confirma",
     "cancel": "Cancel·la"

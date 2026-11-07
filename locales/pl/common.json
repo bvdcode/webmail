@@ -730,6 +730,10 @@
     },
     "send_filing_warning": "Wysłano - ale późniejsze porządkowanie nie powiodło się, może pozostać nieaktualna wersja robocza."
   },
+  "archive_dialog": {
+    "missing_folder": "Nie masz folderu archiwum. Utworzyć go i zarchiwizować pocztę?",
+    "error": "Nie udało się zarchiwizować poczty."
+  },
   "confirm_dialog": {
     "confirm": "Potwierdź",
     "cancel": "Anuluj"

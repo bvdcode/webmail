@@ -730,6 +730,10 @@
     },
     "send_filing_warning": "Odoslané - ale následné upratovanie zlyhalo, môže zostať zastaraný koncept."
   },
+  "archive_dialog": {
+    "missing_folder": "Nemáte priečinok Archív. Chcete ho vytvoriť a archivovať poštu?",
+    "error": "Poštu sa nepodarilo archivovať."
+  },
   "confirm_dialog": {
     "confirm": "Potvrdiť",
     "cancel": "Zrušiť"

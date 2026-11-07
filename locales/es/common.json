@@ -730,6 +730,10 @@
     },
     "send_filing_warning": "Enviado - pero la limpieza posterior falló, puede quedar un borrador obsoleto."
   },
+  "archive_dialog": {
+    "missing_folder": "No tienes una carpeta de archivo. ¿Quieres crearla y archivar el correo?",
+    "error": "No se pudo archivar el correo."
+  },
   "confirm_dialog": {
     "confirm": "Confirmar",
     "cancel": "Cancelar"

@@ -230,7 +230,7 @@ interface EmailStore {
   batchMarkAsRead: (client: IJMAPClient, read: boolean) => Promise<void>;
   batchDelete: (client: IJMAPClient, permanent?: boolean) => Promise<void>;
   batchMoveToMailbox: (client: IJMAPClient, mailboxId: string) => Promise<void>;
-  batchArchive: (client: IJMAPClient) => Promise<void>;
+  batchArchive: (client: IJMAPClient, requestCreation: () => Promise<string | null>) => Promise<void>;
 
   // Spam operations
   // For unified-view emails the undo must hit the same account: `accountId` is the
@@ -258,6 +258,7 @@ interface EmailStore {
   markThreadAsRead: (client: IJMAPClient, threadId: string) => Promise<void>;
 
   // Mailbox management
+  ensureArchiveMailbox: (client: IJMAPClient, email: Email, requestCreation: () => Promise<string | null>) => Promise<Mailbox | null>;
   createMailbox: (client: IJMAPClient, name: string, parentId?: string, accountId?: string) => Promise<void>;
   renameMailbox: (client: IJMAPClient, mailboxId: string, name: string) => Promise<void>;
   deleteMailbox: (client: IJMAPClient, mailboxId: string) => Promise<void>;
@@ -2859,36 +2860,42 @@ export const useEmailStore = create<EmailStore>((set, get) => ({
     }
   },
 
-  batchArchive: async (client) => {
+  batchArchive: async (client, requestCreation) => {
     const { selectedEmailIds, emails } = get();
-    const mailboxes = resolveActionMailboxes();
     if (selectedEmailIds.size === 0) return;
-
-    // Scope the archive folder to the viewed shared/group account (if any) so the
-    // move lands on the owner account, not the user's own archive (which appears
-    // first in the merged list); see resolveViewAccountId. Own view is unchanged.
-    const viewAccountId = resolveViewAccountId();
-    const isArchive = (m: Mailbox) => m.role === 'archive' || m.name.toLowerCase() === 'archive';
-    const archiveMailbox = mailboxes.find(m =>
-      isArchive(m) && (viewAccountId ? m.accountId === viewAccountId : !m.isShared)
-    );
-    if (!archiveMailbox) return;
-
     const mode = useSettingsStore.getState().archiveMode;
-    const archiveId = archiveMailbox.originalId || archiveMailbox.id;
-
     const selected = emails.filter(e => selectedEmailIds.has(e.id));
     if (selected.length === 0) return;
 
-    set({ isLoading: true, error: null });
     try {
-      await resolveActionClient(client).batchArchiveEmails(
-        selected.map(e => ({ id: e.id, receivedAt: e.receivedAt })),
-        archiveId,
-        mode,
-        mailboxes,
-        archiveMailbox.accountId,
-      );
+      const groups: Array<{ client: IJMAPClient; accountId?: string; mailboxes: Mailbox[]; emails: Email[] }> = [];
+      for (const email of selected) {
+        const context = resolveEmailActionContext(email, client);
+        const group = groups.find(entry => entry.client === context.client && entry.accountId === context.accountId);
+        if (group) {
+          group.emails.push(email);
+        } else {
+          groups.push({ client: context.client, accountId: context.accountId, mailboxes: context.mailboxes, emails: [email] });
+        }
+      }
+      const targets: Array<{ group: typeof groups[number]; archive: Mailbox }> = [];
+      for (const group of groups) {
+        const archive = await get().ensureArchiveMailbox(client, group.emails[0], requestCreation);
+        if (!archive) {
+          return;
+        }
+        targets.push({ group, archive });
+      }
+      set({ isLoading: true, error: null });
+      for (const { group, archive } of targets) {
+        await group.client.batchArchiveEmails(
+          group.emails.map(email => ({ id: email.id, receivedAt: email.receivedAt })),
+          archive.originalId || archive.id,
+          mode,
+          group.mailboxes,
+          group.accountId,
+        );
+      }
 
       const remaining = emails.filter(e => !selectedEmailIds.has(e.id));
       set({ emails: remaining, selectedEmailIds: new Set(), isLoading: false });
@@ -3720,6 +3727,41 @@ export const useEmailStore = create<EmailStore>((set, get) => ({
   },
 
   // Mailbox management
+  ensureArchiveMailbox: async (client, email, requestCreation) => {
+    const { client: actionClient, mailboxes, accountId } = resolveEmailActionContext(email, client);
+    const matchesOwner = (mailbox: Mailbox) => accountId
+      ? mailbox.accountId === accountId
+      : !mailbox.isShared;
+    const existing = mailboxes.find(mailbox => matchesOwner(mailbox) && mailbox.role === 'archive')
+      ?? mailboxes.find(mailbox => matchesOwner(mailbox) && mailbox.name.toLowerCase() === 'archive');
+    if (existing) {
+      return existing;
+    }
+    const { isUnifiedView, viewingAccountId } = get();
+    const cacheKey = isUnifiedView ? email.sourceAccountId : viewingAccountId;
+    const name = await requestCreation();
+    if (name === null) {
+      return null;
+    }
+    const ownerId = accountId ?? actionClient.getAccountId();
+    const isShared = ownerId !== actionClient.getAccountId();
+    const created = await actionClient.createMailbox(name.trim(), undefined, accountId, 'archive');
+    const mailbox: Mailbox = {
+      ...created,
+      id: isShared && !cacheKey ? `${ownerId}:${created.id}` : created.id,
+      originalId: created.id,
+      accountId: ownerId,
+      isShared,
+    };
+    set((state) => cacheKey ? {
+      accountMailboxes: {
+        ...state.accountMailboxes,
+        [cacheKey]: [...(state.accountMailboxes[cacheKey] ?? []), mailbox],
+      },
+    } : { mailboxes: [...state.mailboxes, mailbox] });
+    return mailbox;
+  },
+
   createMailbox: async (client, name, parentId, accountId) => {
     try {
       // Root creation is personal unless its UI caller explicitly supplies a

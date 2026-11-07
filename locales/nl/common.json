@@ -730,6 +730,10 @@
     },
     "send_filing_warning": "Verzonden - maar het opruimen daarna is mislukt, mogelijk blijft een oud concept staan."
   },
+  "archive_dialog": {
+    "missing_folder": "Je hebt geen archiefmap. Wil je deze maken en de e-mail archiveren?",
+    "error": "De e-mail kon niet worden gearchiveerd."
+  },
   "confirm_dialog": {
     "confirm": "Bevestigen",
     "cancel": "Annuleren"

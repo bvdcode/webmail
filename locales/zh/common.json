@@ -730,6 +730,10 @@
     },
     "send_filing_warning": "已发送，但发送后的清理失败，可能会残留旧草稿。"
   },
+  "archive_dialog": {
+    "missing_folder": "您没有归档文件夹。是否创建文件夹并归档邮件？",
+    "error": "无法归档邮件。"
+  },
   "confirm_dialog": {
     "confirm": "确认",
     "cancel": "取消"

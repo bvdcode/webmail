@@ -730,6 +730,10 @@
     },
     "send_filing_warning": "Trimis - dar curățarea ulterioară a eșuat, poate rămâne o ciornă veche."
   },
+  "archive_dialog": {
+    "missing_folder": "Nu aveți un dosar de arhivă. Doriți să îl creați și să arhivați mesajele?",
+    "error": "Mesajele nu au putut fi arhivate."
+  },
   "confirm_dialog": {
     "confirm": "Confirmare",
     "cancel": "Anulează"

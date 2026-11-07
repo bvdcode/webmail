@@ -730,6 +730,10 @@
     },
     "send_filing_warning": "送信されましたが、送信後の整理に失敗しました。古い下書きが残る場合があります。"
   },
+  "archive_dialog": {
+    "missing_folder": "アーカイブフォルダーがありません。作成してメールをアーカイブしますか？",
+    "error": "メールをアーカイブできませんでした。"
+  },
   "confirm_dialog": {
     "confirm": "確認",
     "cancel": "キャンセル"

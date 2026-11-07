@@ -730,6 +730,10 @@
     },
     "send_filing_warning": "Sent - but the post-send cleanup failed, a stale draft may remain."
   },
+  "archive_dialog": {
+    "missing_folder": "You don’t have an archive folder. Create it and archive the mail?",
+    "error": "Could not archive the mail."
+  },
   "confirm_dialog": {
     "confirm": "Confirm",
     "cancel": "Cancel"

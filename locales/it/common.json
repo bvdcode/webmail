@@ -730,6 +730,10 @@
     },
     "send_filing_warning": "Inviato - ma la pulizia successiva non è riuscita, potrebbe restare una bozza obsoleta."
   },
+  "archive_dialog": {
+    "missing_folder": "Non hai una cartella archivio. Vuoi crearla e archiviare la posta?",
+    "error": "Impossibile archiviare la posta."
+  },
   "confirm_dialog": {
     "confirm": "Conferma",
     "cancel": "Annulla"

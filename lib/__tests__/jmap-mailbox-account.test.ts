@@ -65,6 +65,28 @@ describe('JMAP mailbox mutations use the requested account', () => {
     });
   });
 
+  it('creates the archive name and role in one request', async () => {
+    vi.spyOn(Date, 'now').mockReturnValue(123);
+    const client = createClient();
+    const captured = mockMailboxSet();
+    const mailbox = await client.createMailbox('Archive', undefined, 'shared-account', 'archive');
+    expect(captured).toEqual([['Mailbox/set', {
+      accountId: 'shared-account',
+      create: { 'new-123': { name: 'Archive', role: 'archive' } },
+    }, '0']]);
+    expect(mailbox.role).toBe('archive');
+  });
+
+  it('reports a refused archive creation without issuing another request', async () => {
+    vi.spyOn(Date, 'now').mockReturnValue(123);
+    const client = createClient();
+    const fetch = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({
+      methodResponses: [['Mailbox/set', { notCreated: { 'new-123': { type: 'forbidden' } } }, '0']],
+    }), { status: 200, headers: { 'content-type': 'application/json' } }));
+    await expect(client.createMailbox('Archive', undefined, undefined, 'archive')).rejects.toThrow('forbidden');
+    expect(fetch).toHaveBeenCalledOnce();
+  });
+
   it('updates a mailbox in the explicit shared account', async () => {
     const client = createClient();
     const captured = mockMailboxSet();

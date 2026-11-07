@@ -122,10 +122,11 @@ export class DemoJMAPClient implements IJMAPClient {
   async getMailboxes(_accountId?: string): Promise<Mailbox[]> { return [...this.data.mailboxes]; }
   async getAllMailboxes(): Promise<Mailbox[]> { return [...this.data.mailboxes]; }
 
-  async createMailbox(name: string, parentId?: string, _accountId?: string): Promise<Mailbox> {
+  async createMailbox(name: string, parentId?: string, _accountId?: string, role?: string): Promise<Mailbox> {
     const mb: Mailbox = {
       id: generateDemoId('mailbox'),
       name,
+      role,
       sortOrder: 100,
       totalEmails: 0,
       unreadEmails: 0,

@@ -730,6 +730,10 @@
     },
     "send_filing_warning": "Sendt - men oprydningen bagefter mislykkedes, en forældet kladde kan blive stående."
   },
+  "archive_dialog": {
+    "missing_folder": "Du har ingen arkivmappe. Vil du oprette den og arkivere mailen?",
+    "error": "Mailen kunne ikke arkiveres."
+  },
   "confirm_dialog": {
     "confirm": "Bekræft",
     "cancel": "Annuller"

@@ -17,6 +17,7 @@ import { useUIStore } from "@/stores/ui-store";
 import { groupEmailsByThread, sortThreadGroups } from "@/lib/thread-utils";
 import { useContextMenu } from "@/hooks/use-context-menu";
 import { useConfirmDialog } from "@/hooks/use-confirm-dialog";
+import { useArchiveActions } from "@/hooks/use-archive-actions";
 import { useTranslations } from "next-intl";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { TagDisplayContext, useMeasuredTagDisplay } from "@/hooks/use-tag-display";
@@ -93,7 +94,6 @@ export function EmailList({
     batchMarkAsRead,
     batchDelete,
     batchMoveToMailbox,
-    batchArchive,
     batchMarkAsSpam,
     batchUndoSpam,
     loadMoreEmails,
@@ -143,6 +143,7 @@ export function EmailList({
     ? emails.find((email) => email.id === contextMenu.data!.id) ?? contextMenu.data
     : null;
   const { dialogProps: confirmDialogProps, confirm: confirmDialog } = useConfirmDialog();
+  const { archiveSelected } = useArchiveActions(confirmDialog);
 
   const [isProcessing, setIsProcessing] = useState(false);
   // The message a quick filter is being built from; null while the dialog is closed.
@@ -596,14 +597,7 @@ export function EmailList({
           onRescheduleScheduled={onRescheduleScheduled ? () => onRescheduleScheduled(contextMenuEmail!) : undefined}
           onBatchMarkAsRead={(read) => client && batchMarkAsRead(client, read)}
           onBatchDelete={() => client && batchDelete(client)}
-          onBatchArchive={async () => {
-            if (!client) return;
-            try {
-              await batchArchive(client);
-            } catch (error) {
-              console.error('Failed to batch archive:', error);
-            }
-          }}
+          onBatchArchive={archiveSelected}
           onBatchMoveToMailbox={(mailboxId) => client && batchMoveToMailbox(client, mailboxId)}
           onBatchMarkAsSpam={async () => {
             if (client) {

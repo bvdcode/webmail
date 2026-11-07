@@ -730,6 +730,10 @@
     },
     "send_filing_warning": "Enviado - mas a limpeza posterior falhou, um rascunho antigo pode permanecer."
   },
+  "archive_dialog": {
+    "missing_folder": "Não tem uma pasta de arquivo. Quer criá-la e arquivar o correio?",
+    "error": "Não foi possível arquivar o correio."
+  },
   "confirm_dialog": {
     "confirm": "Confirmar",
     "cancel": "Cancelar"

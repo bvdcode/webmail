@@ -730,6 +730,10 @@
     },
     "send_filing_warning": "Envoyé - mais le nettoyage après envoi a échoué, un ancien brouillon peut subsister."
   },
+  "archive_dialog": {
+    "missing_folder": "Vous n’avez pas de dossier d’archives. Voulez-vous le créer et archiver le courrier ?",
+    "error": "Impossible d’archiver le courrier."
+  },
   "confirm_dialog": {
     "confirm": "Confirmer",
     "cancel": "Annuler"
