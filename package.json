@@ -104,6 +104,9 @@
     "vitest": "^4.1.11"
   },
   "overrides": {
+    "@typescript-eslint/typescript-estree": {
+      "minimatch": "^11.0.1"
+    },
     "flatted": "^3.4.2",
     "picomatch": "^4.0.4",
     "undici": "^7.24.0"
