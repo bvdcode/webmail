@@ -154,7 +154,6 @@ export function EmailContextMenu({
   const currentTagIds = getEmailTagIds(email.keywords);
   const showBatchActions = isMultiSelect && selectedCount > 1;
   const showFullSingleMessageActions = !showBatchActions && (isMobile || isTablet);
-  const showBulkOrFullActions = showBatchActions || showFullSingleMessageActions;
   const isInJunkFolder = currentMailboxRole === 'junk';
   // Marking your own outgoing mail as spam makes no sense - hide the action
   // in Sent, Drafts and Scheduled.
@@ -298,31 +297,23 @@ export function EmailContextMenu({
         </>
       )}
 
-      {showBulkOrFullActions && (
-        <>
-          <ContextMenuItem
-            icon={Archive}
-            label={t("archive")}
-            onClick={() =>
-              handleAction(showBatchActions ? onBatchArchive! : onArchive!)
-            }
-            disabled={showBatchActions ? !onBatchArchive : !onArchive}
-          />
+      <ContextMenuItem
+        icon={Archive}
+        label={t("archive")}
+        onClick={() => handleAction(showBatchActions ? onBatchArchive! : onArchive!)}
+        disabled={showBatchActions ? !onBatchArchive : !onArchive}
+      />
 
-          <ContextMenuItem
-            icon={Trash2}
-            label={t("delete")}
-            testId="ctx-delete"
-            onClick={() =>
-              handleAction(showBatchActions ? onBatchDelete! : onDelete!)
-            }
-            disabled={showBatchActions ? !onBatchDelete : !onDelete}
-            destructive
-          />
+      <ContextMenuItem
+        icon={Trash2}
+        label={t("delete")}
+        testId="ctx-delete"
+        onClick={() => handleAction(showBatchActions ? onBatchDelete! : onDelete!)}
+        disabled={showBatchActions ? !onBatchDelete : !onDelete}
+        destructive
+      />
 
-          <ContextMenuSeparator />
-        </>
-      )}
+      <ContextMenuSeparator />
 
       {/* Move to submenu */}
       {moveTree.length > 0 && (
@@ -369,7 +360,7 @@ export function EmailContextMenu({
       )}
 
       {/* Star/Unstar - only for single email */}
-      {showFullSingleMessageActions && (
+      {!showBatchActions && (
         <ContextMenuItem
           icon={Star}
           label={isStarred ? t("unstar") : t("star")}
@@ -432,24 +423,20 @@ export function EmailContextMenu({
         </>
       )}
 
-      {showBulkOrFullActions && (
-        <>
-          <ContextMenuSeparator />
+      <ContextMenuSeparator />
 
-          <ContextMenuItem
-            icon={isUnread ? MailOpen : Mail}
-            label={isUnread ? t("mark_read") : t("mark_unread")}
-            testId={isUnread ? "ctx-mark-read" : "ctx-mark-unread"}
-            onClick={() =>
-              handleAction(() =>
-                showBatchActions
-                  ? onBatchMarkAsRead?.(isUnread)
-                  : onMarkAsRead?.(isUnread)
-              )
-            }
-          />
-        </>
-      )}
+      <ContextMenuItem
+        icon={isUnread ? MailOpen : Mail}
+        label={isUnread ? t("mark_read") : t("mark_unread")}
+        testId={isUnread ? "ctx-mark-read" : "ctx-mark-unread"}
+        onClick={() =>
+          handleAction(() =>
+            showBatchActions
+              ? onBatchMarkAsRead?.(isUnread)
+              : onMarkAsRead?.(isUnread)
+          )
+        }
+      />
         </>
       )}
 

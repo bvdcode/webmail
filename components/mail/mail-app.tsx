@@ -3362,8 +3362,10 @@ export function MailApp({ linkSegments }: MailAppProps = {}) {
                 startFreshComposerSession();
                 setComposerMode('compose');
                 setShowComposer(true);
-                if (isMobile) {
+                if (isMobile || isTablet) {
                   setSidebarOpen(false);
+                }
+                if (isMobile) {
                   setActiveView('viewer');
                 }
               }}
@@ -3429,7 +3431,7 @@ export function MailApp({ linkSegments }: MailAppProps = {}) {
 
             {/* Search Bar + Inline Advanced Filters */}
             <div className="border-b border-border bg-background flex flex-col shrink-0 max-h-[70%]">
-              <div className="px-3 h-14 shrink-0 flex items-center">
+              <div className="ps-3 pe-2 h-14 shrink-0 flex items-center">
                 <div className="flex items-center gap-1.5 w-full">
                   {/* Select / Select All toggle */}
                   <button
@@ -3791,24 +3793,27 @@ export function MailApp({ linkSegments }: MailAppProps = {}) {
             </ErrorBoundary>
             </div>
 
-            {/* Floating Compose Button */}
-            <Button
-              onClick={() => {
-                startFreshComposerSession();
-                setComposerMode('compose');
-                setShowComposer(true);
-                if (isMobile) setActiveView('viewer');
-              }}
-              className={cn(
-                "absolute z-40 rounded-full shadow-lg",
-                isMobile ? "bottom-4 end-4 h-14 w-14" : "bottom-4 end-4 h-12 w-12"
-              )}
-              aria-label={t('sidebar.compose')}
-              title={t('sidebar.compose_hint')}
-              data-tour="compose-button"
-            >
-              <PenSquare className={isMobile ? "h-6 w-6" : "h-5 w-5"} />
-            </Button>
+            {(isMobile || isTablet || fullscreenReading) && (
+              <Button
+                onClick={() => {
+                  startFreshComposerSession();
+                  setComposerMode('compose');
+                  setShowComposer(true);
+                  if (isMobile) {
+                    setActiveView('viewer');
+                  }
+                }}
+                className={cn(
+                  "absolute z-40 rounded-full shadow-lg",
+                  isMobile ? "bottom-4 end-4 h-14 w-14" : "bottom-4 end-4 h-12 w-12"
+                )}
+                aria-label={t('sidebar.compose')}
+                title={t('sidebar.compose_hint')}
+                data-tour="compose-button"
+              >
+                <PenSquare className={isMobile ? "h-6 w-6" : "h-5 w-5"} />
+              </Button>
+            )}
           </div>
 
           {/* Email list resize handle (desktop only) */}

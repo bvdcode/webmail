@@ -32,6 +32,7 @@ import {
   Mails,
   MailOpen,
   MoreHorizontal,
+  PenSquare,
 } from "lucide-react";
 import { cn, buildMailboxTree, MailboxNode } from "@/lib/utils";
 import { localizeMailboxName } from "@/lib/mailbox-label";
@@ -66,6 +67,7 @@ import { buildSettingsPath } from "@/lib/deep-links";
 import { useTour } from "@/components/tour/tour-provider";
 import { useUIStore } from "@/stores/ui-store";
 import { SidebarAccountHeader } from "./sidebar-account-header";
+import { Button } from "@/components/ui/button";
 
 interface SidebarProps {
   mailboxes: Mailbox[];
@@ -393,6 +395,7 @@ function SidebarSectionHeader({
   sub,
   testId,
   onContextMenu,
+  collapsible = true,
 }: {
   label: string;
   expanded: boolean;
@@ -405,6 +408,7 @@ function SidebarSectionHeader({
   sub?: boolean;
   testId?: string;
   onContextMenu?: (event: React.MouseEvent) => void;
+  collapsible?: boolean;
 }) {
   if (isCollapsed) {
     return first ? null : <div className="h-px bg-border/50 mx-2 my-2" aria-hidden />;
@@ -415,25 +419,27 @@ function SidebarSectionHeader({
   const textClass = sub
     ? "text-xs font-semibold text-muted-foreground truncate"
     : "text-sm font-semibold text-foreground truncate";
+  const Header = collapsible ? 'button' : 'div';
 
   return (
-    <button
-      onClick={onToggle}
+    <Header
+      onClick={collapsible ? onToggle : undefined}
       onContextMenu={onContextMenu}
       data-testid={testId}
       data-section-name={label}
       data-expanded={expanded ? 'true' : 'false'}
       className={cn(
-        "group w-full flex items-center pb-1 select-none rounded-sm hover:bg-muted/40 transition-colors",
+        "group w-full flex items-center pb-1 select-none rounded-sm transition-colors",
+        collapsible && "hover:bg-muted/40",
         paddingX,
         paddingY
       )}
     >
-      {expanded ? (
+      {collapsible && (expanded ? (
         <ChevronDown className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
       ) : (
         <ChevronRight className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
-      )}
+      ))}
       {icon && <span className="ms-1.5 flex-shrink-0">{icon}</span>}
       <span className={cn(textClass, icon ? "ms-1.5" : "ms-1.5")}>
         {label}
@@ -459,7 +465,7 @@ function SidebarSectionHeader({
           <Settings className="w-3.5 h-3.5" />
         </span>
       )}
-    </button>
+    </Header>
   );
 }
 
@@ -797,7 +803,7 @@ export function Sidebar({
   selectedKeyword = null,
   onMailboxSelect,
   onTagSelect,
-  onCompose: _onCompose,
+  onCompose,
   onSidebarClose,
   onUnreadFilterClick,
   onMarkFolderRead,
@@ -978,6 +984,8 @@ export function Sidebar({
   const mailboxTree = buildMailboxTree(mailboxes);
   const ownTree = mailboxTree.filter(n => !n.id.startsWith('shared-account-') && !isServerScheduledNode(n));
   const sharedAccounts = mailboxTree.filter(n => n.id.startsWith('shared-account-'));
+  const foldersCollapsible = showUnified || showCrossUnread || showCrossStarred || showCrossAll
+    || sharedAccounts.length > 0 || (showTagsInSidebar && emailKeywords.length > 0);
 
   // With nesting off every tag is its own root, so the same rows render through
   // one path whether or not the ids describe a hierarchy.
@@ -1307,14 +1315,15 @@ export function Sidebar({
           <div onContextMenu={handleFoldersHeaderContextMenu}>
             <SidebarSectionHeader
               label={t("folders")}
-              expanded={foldersExpanded}
+              expanded={foldersExpanded || !foldersCollapsible}
+              collapsible={foldersCollapsible}
               onToggle={toggleFolders}
               onSettings={openFolderSettings}
               settingsTitle={t('settings')}
               isCollapsed={isCollapsed}
               first={!showUnified}
             />
-            {((foldersExpanded && !isCollapsed) || isCollapsed) && (
+            {(foldersExpanded || !foldersCollapsible || isCollapsed) && (
               <>
                 {mailboxes.length === 0 ? (
                   <div className="px-4 py-2 text-sm text-muted-foreground">
@@ -1436,6 +1445,22 @@ export function Sidebar({
 
         {!isCollapsed && <PluginSlot name="sidebar-widget" className="border-t border-border" />}
       </div>
+
+      {onCompose && (
+        <div className={cn("shrink-0 border-t border-border", isCollapsed ? "p-1" : "p-3")}>
+          <Button
+            onClick={onCompose}
+            className="w-full gap-2"
+            size={isCollapsed ? "icon" : "md"}
+            title={t('compose_hint')}
+            aria-label={t('compose')}
+            data-tour={isDesktop ? "compose-button" : undefined}
+          >
+            <PenSquare className="h-4 w-4 shrink-0" />
+            {!isCollapsed && <span className="truncate">{t('compose')}</span>}
+          </Button>
+        </div>
+      )}
 
       <MailboxContextMenu
         target={mailboxContextMenu.data}

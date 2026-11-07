@@ -45,6 +45,31 @@ function renderRow(email: Email) {
   );
 }
 
+describe('ThreadListItem quick actions', () => {
+  beforeEach(() => {
+    useSettingsStore.setState({
+      hoverActions: ['archive', 'markRead'], hoverActionsMode: 'inline',
+      mailLayout: 'split', showPreview: true,
+    });
+    useEmailStore.setState({ selectedEmailIds: new Set<string>(), selectedMailbox: 'inbox' });
+  });
+
+  it.each([1, 2])('keeps actions above the preview for a %s-message conversation', (count) => {
+    const emails = Array.from({ length: count }, (_, index) => makeEmail({
+      id: `email-${index}`, keywords: {}, preview: 'Message preview',
+    }));
+    const [thread] = groupEmailsByThread(emails);
+    const { container } = render(
+      <ThreadListItem thread={thread} isExpanded={false} onToggleExpand={() => {}} onEmailSelect={() => {}} />,
+    );
+    const slot = screen.getByTestId('email-quick-actions');
+    const preview = screen.getByText('Message preview');
+    expect(slot.parentElement).not.toContainElement(preview);
+    expect(slot.compareDocumentPosition(preview) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(container.querySelector('.fill-unread')).toHaveClass('fade-in', 'motion-reduce:animate-none');
+  });
+});
+
 describe('ThreadListItem tag badge', () => {
   beforeEach(() => {
     useSettingsStore.setState({

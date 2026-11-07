@@ -239,6 +239,26 @@ const SingleEmailItem = React.forwardRef<HTMLDivElement, SingleEmailItemProps>(
       }
     };
 
+    const dateActions = (
+      <EmailHoverActions
+        email={email}
+        backgroundClassName={resolvedRowTint || ((selected || isChecked) ? "bg-accent" : "bg-muted")}
+        onToggleStar={onToggleStar}
+        onMarkAsRead={onMarkAsRead}
+        onDelete={onDelete}
+        onArchive={onArchive}
+        onSetTag={onSetTag}
+        onMarkAsSpam={onMarkAsSpam}
+        onUndoSpam={onUndoSpam}
+        isInJunk={currentMailboxRole === 'junk'}
+        spamApplicable={!['sent', 'drafts', 'scheduled'].includes(currentMailboxRole || '')}
+      >
+        <span className={cn('text-xs tabular-nums', isUnread ? 'text-foreground font-semibold' : 'text-muted-foreground')}>
+          {formatDate(email.receivedAt)}
+        </span>
+      </EmailHoverActions>
+    );
+
     return (
       <div
         ref={ref}
@@ -317,7 +337,7 @@ const SingleEmailItem = React.forwardRef<HTMLDivElement, SingleEmailItemProps>(
 
           {isUnread && (
             <div className="absolute start-0.5 top-1/2 -translate-y-1/2">
-              <Circle className="w-2 h-2 fill-unread text-unread" />
+              <Circle className="w-2 h-2 fill-unread text-unread animate-in fade-in zoom-in-50 duration-[var(--transition-duration)] motion-reduce:animate-none" />
             </div>
           )}
 
@@ -392,12 +412,7 @@ const SingleEmailItem = React.forwardRef<HTMLDivElement, SingleEmailItemProps>(
                       <span className="truncate">{scheduledSendLabel}</span>
                     </span>
                   ) : (
-                    <span className={cn(
-                      'text-xs tabular-nums',
-                      isUnread ? 'text-foreground font-semibold' : 'text-muted-foreground'
-                    )}>
-                      {formatDate(email.receivedAt)}
-                    </span>
+                    dateActions
                   )}
                 </div>
               </div>
@@ -462,14 +477,7 @@ const SingleEmailItem = React.forwardRef<HTMLDivElement, SingleEmailItemProps>(
                         <span className="truncate">{scheduledSendLabel}</span>
                       </span>
                     ) : (
-                      <span className={cn(
-                        "text-xs tabular-nums",
-                        isUnread
-                          ? "text-foreground font-semibold"
-                          : "text-muted-foreground"
-                      )}>
-                        {formatDate(email.receivedAt)}
-                      </span>
+                      dateActions
                     )}
                   </div>
                 </div>
@@ -507,22 +515,6 @@ const SingleEmailItem = React.forwardRef<HTMLDivElement, SingleEmailItemProps>(
           </div>
         </div>
 
-        {/* Hover Quick Actions */}
-        {!email.isScheduled && (
-          <EmailHoverActions
-            email={email}
-            backgroundClassName={resolvedRowTint ? resolvedRowTint : ((selected || isChecked) ? "bg-accent" : "bg-muted")}
-            onToggleStar={onToggleStar}
-            onMarkAsRead={onMarkAsRead}
-            onDelete={onDelete}
-            onArchive={onArchive}
-            onSetTag={onSetTag}
-            onMarkAsSpam={onMarkAsSpam}
-            onUndoSpam={onUndoSpam}
-            isInJunk={currentMailboxRole === 'junk'}
-            spamApplicable={!['sent', 'drafts', 'scheduled'].includes(currentMailboxRole || '')}
-          />
-        )}
       </div>
     );
   }
@@ -696,6 +688,26 @@ export const ThreadListItem = React.forwardRef<HTMLDivElement, ThreadListItemPro
       onContextMenu?.(e, latestEmail);
     };
 
+    const dateActions = (
+      <EmailHoverActions
+        email={latestEmail}
+        backgroundClassName={rowTint || ((isSelected || isChecked) ? "bg-accent" : "bg-muted")}
+        onToggleStar={onToggleStar ? () => onToggleStar(latestEmail) : undefined}
+        onMarkAsRead={onMarkAsRead ? (read) => onMarkAsRead(latestEmail, read) : undefined}
+        onDelete={onDelete ? () => onDelete(latestEmail) : undefined}
+        onArchive={onArchive ? () => onArchive(latestEmail) : undefined}
+        onSetTag={onSetTag ? (color) => onSetTag(latestEmail.id, color) : undefined}
+        onMarkAsSpam={onMarkAsSpam ? () => onMarkAsSpam(latestEmail) : undefined}
+        onUndoSpam={onUndoSpam ? () => onUndoSpam(latestEmail) : undefined}
+        isInJunk={currentMailboxRole === 'junk'}
+        spamApplicable={!['sent', 'drafts', 'scheduled'].includes(currentMailboxRole || '')}
+      >
+        <span className={cn('text-xs tabular-nums', hasUnread ? 'text-foreground font-semibold' : 'text-muted-foreground')}>
+          {formatDate(latestEmail.receivedAt)}
+        </span>
+      </EmailHoverActions>
+    );
+
     return (
       <div ref={ref} className={cn("border-b border-border", isThreadDragging && "opacity-50 scale-[0.98] ring-2 ring-primary/30")}>
         <div
@@ -756,7 +768,7 @@ export const ThreadListItem = React.forwardRef<HTMLDivElement, ThreadListItemPro
 
             {hasUnread && (
               <div className="absolute start-0.5 top-1/2 -translate-y-1/2">
-                <Circle className="w-2 h-2 fill-unread text-unread" />
+                <Circle className="w-2 h-2 fill-unread text-unread animate-in fade-in zoom-in-50 duration-[var(--transition-duration)] motion-reduce:animate-none" />
               </div>
             )}
 
@@ -866,12 +878,7 @@ export const ThreadListItem = React.forwardRef<HTMLDivElement, ThreadListItemPro
                         <span className="truncate">{scheduledSendLabel}</span>
                       </span>
                     ) : (
-                      <span className={cn(
-                        'text-xs tabular-nums',
-                        hasUnread ? 'text-foreground font-semibold' : 'text-muted-foreground'
-                      )}>
-                        {formatDate(latestEmail.receivedAt)}
-                      </span>
+                      dateActions
                     )}
                   </div>
                 </div>
@@ -939,14 +946,7 @@ export const ThreadListItem = React.forwardRef<HTMLDivElement, ThreadListItemPro
                           <span className="truncate">{scheduledSendLabel}</span>
                         </span>
                       ) : (
-                        <span className={cn(
-                          "text-xs tabular-nums",
-                          hasUnread
-                            ? "text-foreground font-semibold"
-                            : "text-muted-foreground"
-                        )}>
-                          {formatDate(latestEmail.receivedAt)}
-                        </span>
+                        dateActions
                       )}
                     </div>
                   </div>
@@ -984,22 +984,6 @@ export const ThreadListItem = React.forwardRef<HTMLDivElement, ThreadListItemPro
             </div>
           </div>
 
-          {/* Hover Quick Actions for thread header */}
-          {!latestEmail.isScheduled && (
-            <EmailHoverActions
-              email={latestEmail}
-              backgroundClassName={rowTint ? rowTint : ((isSelected || isChecked) ? "bg-accent" : "bg-muted")}
-              onToggleStar={onToggleStar ? () => onToggleStar(latestEmail) : undefined}
-              onMarkAsRead={onMarkAsRead ? (read) => onMarkAsRead(latestEmail, read) : undefined}
-              onDelete={onDelete ? () => onDelete(latestEmail) : undefined}
-              onArchive={onArchive ? () => onArchive(latestEmail) : undefined}
-              onSetTag={onSetTag ? (color) => onSetTag(latestEmail.id, color) : undefined}
-              onMarkAsSpam={onMarkAsSpam ? () => onMarkAsSpam(latestEmail) : undefined}
-              onUndoSpam={onUndoSpam ? () => onUndoSpam(latestEmail) : undefined}
-              isInJunk={currentMailboxRole === 'junk'}
-              spamApplicable={!['sent', 'drafts', 'scheduled'].includes(currentMailboxRole || '')}
-            />
-          )}
         </div>
 
         {isExpanded && !isMobile && (

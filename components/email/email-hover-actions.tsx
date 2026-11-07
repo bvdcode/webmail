@@ -7,9 +7,11 @@ import { cn } from "@/lib/utils";
 import { Trash2, Star, Mail, MailOpen, Archive, Tag, ShieldAlert, ShieldCheck } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useIsMobile } from "@/hooks/use-media-query";
+import type { ReactNode } from "react";
 
 interface EmailHoverActionsProps {
   email: Email;
+  children?: ReactNode;
   backgroundClassName?: string;
   onToggleStar?: () => void;
   onMarkAsRead?: (read: boolean) => void;
@@ -71,6 +73,7 @@ const CORNER_CLASSES = {
 
 export function EmailHoverActions({
   email,
+  children,
   backgroundClassName = "bg-muted",
   onToggleStar,
   onMarkAsRead,
@@ -86,14 +89,16 @@ export function EmailHoverActions({
   const hoverActionsMode = useSettingsStore((state) => state.hoverActionsMode);
   const hoverActionsCorner = useSettingsStore((state) => state.hoverActionsCorner);
   const t = useTranslations("settings.email_behavior.hover_actions");
+  const tActions = useTranslations("context_menu");
   const isMobile = useIsMobile();
 
   const isUnread = !email.keywords?.$seen;
   const isStarred = email.keywords?.$flagged;
   const hoverBackgroundClassName = backgroundClassName;
 
-  if (isMobile) return null;
-  if (hoverActions.length === 0) return null;
+  if (isMobile || email.isScheduled || hoverActions.length === 0) {
+    return children;
+  }
 
   const handleAction = (e: React.MouseEvent, action: HoverAction) => {
     e.stopPropagation();
@@ -136,7 +141,9 @@ export function EmailHoverActions({
         : isNotSpam
           ? ShieldCheck
           : Icon;
-    const title = isNotSpam ? t("not_spam") : t(config.titleKey);
+    const title = actionId === "markRead"
+      ? tActions(isUnread ? "mark_read" : "mark_unread")
+      : isNotSpam ? t("not_spam") : t(config.titleKey);
     const className = isNotSpam
       ? "hover:text-green-600 dark:hover:text-green-400"
       : config.className;
@@ -146,6 +153,7 @@ export function EmailHoverActions({
         key={actionId}
         onClick={(e) => handleAction(e, actionId)}
         title={title}
+        aria-label={title}
         className={cn(
           "p-1.5 rounded-md transition-colors duration-100 text-muted-foreground hover:bg-black/5 dark:hover:bg-white/10",
           className,
@@ -163,40 +171,32 @@ export function EmailHoverActions({
 
   if (hoverActionsMode === 'floating') {
     return (
-      <div
-        className={cn(
-          "absolute z-10 hidden group-hover:flex items-center",
-          CORNER_CLASSES[hoverActionsCorner],
-        )}
-      >
-        <div className="relative flex items-center rounded-lg shadow-md border border-border overflow-hidden bg-background">
-          <div className={cn("absolute inset-0", hoverBackgroundClassName)} />
-          <div className="relative flex items-center gap-0.5 px-1.5 py-0.5">
-            {actionButtons}
+      <>
+        {children}
+        <div
+          className={cn(
+            "absolute z-10 flex items-center opacity-0 pointer-events-none group-hover:opacity-100 group-focus-within:opacity-100 group-hover:pointer-events-auto group-focus-within:pointer-events-auto transition-opacity duration-[var(--transition-duration)] motion-reduce:transition-none",
+            CORNER_CLASSES[hoverActionsCorner],
+          )}
+        >
+          <div className="relative flex items-center rounded-lg shadow-md border border-border overflow-hidden bg-background">
+            <div className={cn("absolute inset-0", hoverBackgroundClassName)} />
+            <div className="relative flex items-center gap-0.5 px-1.5 py-0.5">
+              {actionButtons}
+            </div>
           </div>
         </div>
-      </div>
+      </>
     );
   }
 
   return (
-    <div
-      className="absolute end-0 top-0 bottom-0 z-10 hidden group-hover:flex items-center"
-    >
-      <div
-        className={cn(
-          "relative w-8 h-full bg-background",
-          "[mask-image:linear-gradient(to_right,transparent,black)] [-webkit-mask-image:linear-gradient(to_right,transparent,black)]",
-          "rtl:[mask-image:linear-gradient(to_left,transparent,black)] rtl:[-webkit-mask-image:linear-gradient(to_left,transparent,black)]",
-        )}
-      >
-        <div className={cn("absolute inset-0", hoverBackgroundClassName)} />
+    <div className="grid shrink-0 items-center justify-items-end" data-testid="email-quick-actions">
+      <div className="col-start-1 row-start-1 group-hover:opacity-0 group-focus-within:opacity-0 transition-opacity duration-[var(--transition-duration)] motion-reduce:transition-none">
+        {children}
       </div>
-      <div className="relative flex items-center h-full bg-background">
-        <div className={cn("absolute inset-0", hoverBackgroundClassName)} />
-        <div className="relative flex items-center gap-0.5 h-full pe-3 ps-0.5">
-          {actionButtons}
-        </div>
+      <div className="col-start-1 row-start-1 flex items-center gap-0.5 opacity-0 pointer-events-none group-hover:opacity-100 group-focus-within:opacity-100 group-hover:pointer-events-auto group-focus-within:pointer-events-auto transition-opacity duration-[var(--transition-duration)] motion-reduce:transition-none">
+        {actionButtons}
       </div>
     </div>
   );

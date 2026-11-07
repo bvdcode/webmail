@@ -1,5 +1,5 @@
 import { createRef } from 'react';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Email, Mailbox } from '@/lib/jmap/types';
 import { useUIStore } from '@/stores/ui-store';
@@ -100,7 +100,7 @@ describe('EmailContextMenu', () => {
     vi.clearAllMocks();
   });
 
-  it('keeps the desktop single-message menu focused on unique actions', () => {
+  it('keeps essential desktop actions available without hover', () => {
     renderMenu();
 
     expect(screen.getByText('reply')).toBeInTheDocument();
@@ -113,12 +113,28 @@ describe('EmailContextMenu', () => {
     expect(screen.queryByText('forward_as_attachment')).not.toBeInTheDocument();
     expect(screen.queryByText('copy_message')).not.toBeInTheDocument();
     expect(screen.queryByText('copy_conversation')).not.toBeInTheDocument();
-    expect(screen.queryByText('archive')).not.toBeInTheDocument();
-    expect(screen.queryByText('delete')).not.toBeInTheDocument();
-    expect(screen.queryByText('star')).not.toBeInTheDocument();
+    expect(screen.getByText('archive')).toBeInTheDocument();
+    expect(screen.getByText('delete')).toBeInTheDocument();
+    expect(screen.getByText('star')).toBeInTheDocument();
     expect(screen.queryByText('pin')).not.toBeInTheDocument();
     expect(screen.queryByText('tag')).not.toBeInTheDocument();
-    expect(screen.queryByText('mark_read')).not.toBeInTheDocument();
+    expect(screen.getByText('mark_read')).toBeInTheDocument();
+  });
+
+  it.each([
+    ['archive', ACTIONS.onArchive],
+    ['delete', ACTIONS.onDelete],
+    ['star', ACTIONS.onToggleStar],
+  ])('dispatches the desktop %s action', (label, callback) => {
+    renderMenu();
+    fireEvent.click(screen.getByText(label));
+    expect(callback).toHaveBeenCalledOnce();
+  });
+
+  it.each([false, true])('toggles the read state from the desktop menu (seen=%s)', (seen) => {
+    renderMenu({ email: { ...EMAIL, keywords: { $seen: seen } } });
+    fireEvent.click(screen.getByText(seen ? 'mark_unread' : 'mark_read'));
+    expect(ACTIONS.onMarkAsRead).toHaveBeenCalledWith(!seen);
   });
 
   it('keeps the full single-message action set on mobile', () => {
