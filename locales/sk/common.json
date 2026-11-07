@@ -3128,6 +3128,7 @@
     }
   },
   "advanced_search": {
+    "unread_only": "Iba neprečítané",
     "title": "Pokročilé hľadanie",
     "from": "Od",
     "from_placeholder": "E-mail alebo meno odosielateľa",

@@ -3128,6 +3128,7 @@
     }
   },
   "advanced_search": {
+    "unread_only": "Yalnızca okunmamışlar",
     "title": "Gelişmiş Arama",
     "from": "Kimden",
     "from_placeholder": "Gönderici e-posta veya adı",

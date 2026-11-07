@@ -3128,6 +3128,7 @@
     }
   },
   "advanced_search": {
+    "unread_only": "Doar necitite",
     "title": "Căutare avansată",
     "from": "De la",
     "from_placeholder": "Adresa de e-mail sau numele expeditorului",

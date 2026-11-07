@@ -81,7 +81,7 @@ import { EML_IMPORT_ACCEPT, expandImportableEmails } from "@/lib/eml-import";
 import { findDraftIdentityId, resolveComposeAccountEmail, resolveReplyFrom, type ReplyFromResolution } from "@/lib/reply-identity";
 import { buildReplyRecipients, isSelfSent } from "@/lib/reply-recipients";
 import { useProMultiAccountIdentities } from "@/hooks/use-pro-multi-account-identities";
-import { Search, Filter, ChevronDown, X, Paperclip, Star, Mail, MailOpen, RotateCcw, PenSquare, PenLine, CheckSquare, Square, AlertTriangle } from "lucide-react";
+import { Search, SlidersHorizontal, X, Paperclip, Star, Mail, MailOpen, RotateCcw, PenSquare, PenLine, CheckSquare, Square, AlertTriangle } from "lucide-react";
 import { ResizeHandle } from "@/components/layout/resize-handle";
 import { Button } from "@/components/ui/button";
 import { useConfig } from "@/hooks/use-config";
@@ -141,7 +141,6 @@ export function MailApp({ linkSegments }: MailAppProps = {}) {
   const { showAppsModal, inlineApp, loadedApps, handleManageApps, handleInlineApp, closeInlineApp, closeAppsModal } = useSidebarApps();
   const [initialCheckDone, setInitialCheckDone] = useState(() => useAuthStore.getState().isAuthenticated && !!useAuthStore.getState().client);
   const [showShortcutsModal, setShowShortcutsModal] = useState(false);
-  const [showAdvancedFields, setShowAdvancedFields] = useState(false);
   // Column resize state (disable transitions during drag)
   const [isResizing, setIsResizing] = useState(false);
   const dragStartWidth = useRef(0);
@@ -800,25 +799,25 @@ export function MailApp({ linkSegments }: MailAppProps = {}) {
   });
 
   // Shared mail refresh: re-fetch mailboxes (unread counts) + the active list
-  // via JMAP. Used by both the browser refresh gestures and the toolbar button.
-  const [isManualRefreshing, setIsManualRefreshing] = useState(false);
+  // via JMAP. Used by browser refresh gestures.
   const handleManualRefresh = useCallback(async () => {
-    if (!client) return;
-    setIsManualRefreshing(true);
-    try {
-      const state = useEmailStore.getState();
-      if (state.isScheduledView || state.selectedMailbox === SCHEDULED_MAILBOX_ID) {
-        await Promise.all([
-          state.fetchMailboxes(client),
-          state.fetchScheduledEmails(client),
-        ]);
+    if (!client) {
+      return;
+    }
+    const state = useEmailStore.getState();
+    if (state.isScheduledView || state.selectedMailbox === SCHEDULED_MAILBOX_ID) {
+      await Promise.all([
+        state.fetchMailboxes(client),
+        state.fetchScheduledEmails(client),
+      ]);
+    } else {
+      await state.fetchMailboxes(client);
+      await state.refreshScheduledMetadata(client);
+      if (state.searchQuery || !isFilterEmpty(state.searchFilters)) {
+        await state.advancedSearch(client);
       } else {
-        await state.fetchMailboxes(client);
-        await state.refreshScheduledMetadata(client);
-        await (state.selectedMailbox ? state.fetchEmails(client, state.selectedMailbox) : state.fetchEmails(client));
+        await state.fetchEmails(client, state.selectedMailbox);
       }
-    } finally {
-      setIsManualRefreshing(false);
     }
   }, [client]);
 
@@ -2529,6 +2528,7 @@ export function MailApp({ linkSegments }: MailAppProps = {}) {
       // Enable unread filter
       clearSearchFilters();
       setSearchFilters({ isUnread: true });
+      setSearchMailboxId(mailboxId);
       if (client) {
         await advancedSearch(client);
       }
@@ -3428,8 +3428,8 @@ export function MailApp({ linkSegments }: MailAppProps = {}) {
             />
 
             {/* Search Bar + Inline Advanced Filters */}
-            <div className="border-b border-border bg-background">
-              <div className="px-3 h-14 flex items-center">
+            <div className="border-b border-border bg-background flex flex-col shrink-0 max-h-[70%]">
+              <div className="px-3 h-14 shrink-0 flex items-center">
                 <div className="flex items-center gap-1.5 w-full">
                   {/* Select / Select All toggle */}
                   <button
@@ -3464,7 +3464,7 @@ export function MailApp({ linkSegments }: MailAppProps = {}) {
                       <Square className="w-4 h-4" />
                     )}
                   </button>
-                  <form onSubmit={(e) => { e.preventDefault(); if (searchQuery.trim()) handleSearch(searchQuery); }} className="relative flex-1">
+                  <form onSubmit={(e) => { e.preventDefault(); if (searchQuery.trim()) handleSearch(searchQuery); }} className="relative flex-1 min-w-0">
                     <Search className="absolute start-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                     <Input
                       type="text"
@@ -3488,48 +3488,60 @@ export function MailApp({ linkSegments }: MailAppProps = {}) {
                       </button>
                     )}
                   </form>
-                  <button
+                  <Button
                     type="button"
+                    variant="ghost"
+                    size="icon"
                     onClick={toggleAdvancedSearch}
                     disabled={isScheduledView}
                     className={cn(
-                      "relative flex-shrink-0 p-2 rounded-md transition-colors",
-                      isScheduledView && "opacity-50 cursor-not-allowed",
+                      "relative shrink-0 h-9 w-9",
                       isAdvancedSearchOpen || activeFilterCount(searchFilters) > 0
                         ? "bg-primary/10 text-primary"
                         : "text-muted-foreground hover:text-foreground hover:bg-muted"
                     )}
-                    title={isScheduledView ? t('email_viewer.scheduled_actions_only') : t("advanced_search.toggle_filters")}
+                    title={t("advanced_search.title")}
+                    aria-label={t("advanced_search.title")}
+                    aria-expanded={isAdvancedSearchOpen}
+                    aria-controls="advanced-search-fields"
+                    data-testid="advanced-search-toggle"
                   >
-                    <Filter className="w-4 h-4" />
+                    <SlidersHorizontal className="w-4 h-4" />
                     {!isAdvancedSearchOpen && activeFilterCount(searchFilters) > 0 && (
                       <span className="absolute -top-1 -right-1 flex items-center justify-center w-4 h-4 text-[10px] font-bold rounded-full bg-primary text-primary-foreground">
                         {activeFilterCount(searchFilters)}
                       </span>
                     )}
-                  </button>
-                  <button
+                  </Button>
+                  <Button
                     type="button"
-                    onClick={handleManualRefresh}
-                    disabled={!client || isManualRefreshing}
+                    variant={searchFilters.isUnread === true ? "default" : "ghost"}
+                    size="icon"
+                    onClick={() => {
+                      if (client) {
+                        void useEmailStore.getState().toggleUnreadFilter(client);
+                      }
+                    }}
+                    disabled={!client || isScheduledView}
                     className={cn(
-                      "flex-shrink-0 p-2 rounded-md transition-colors",
-                      "text-muted-foreground hover:text-foreground hover:bg-muted",
-                      (!client || isManualRefreshing) && "opacity-50 cursor-not-allowed"
+                      "shrink-0 h-9 w-9",
+                      searchFilters.isUnread !== true && "text-muted-foreground"
                     )}
-                    title={tCommon("refresh")}
-                    aria-label={tCommon("refresh")}
+                    title={t("advanced_search.unread_only")}
+                    aria-label={t("advanced_search.unread_only")}
+                    aria-pressed={searchFilters.isUnread === true}
+                    data-testid="unread-filter-toggle"
                   >
-                    <RotateCcw className={cn("w-4 h-4", isManualRefreshing && "animate-spin")} />
-                  </button>
+                    <Mail className="w-4 h-4" />
+                  </Button>
                 </div>
               </div>
 
               {/* Filter Area */}
               {isAdvancedSearchOpen && (
-                <div className="px-3 pb-3 space-y-2.5 animate-in slide-in-from-top-1 fade-in duration-150">
+                <div id="advanced-search-fields" className="px-3 pb-3 space-y-2.5 min-h-0 overflow-y-auto animate-in slide-in-from-top-1 fade-in duration-150">
                   {/* Quick toggle filters + clear */}
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between flex-wrap gap-2">
                     <div className="flex items-center gap-2 flex-wrap">
                       <ToggleChip
                         icon={<Paperclip className="w-3.5 h-3.5" />}
@@ -3551,25 +3563,14 @@ export function MailApp({ linkSegments }: MailAppProps = {}) {
                       />
                     </div>
                     <div className="flex items-center gap-1">
-                      <Button variant="ghost" size="sm" onClick={() => { clearSearchFilters(); setShowAdvancedFields(false); if (client) advancedSearch(client); }} className="h-7 px-2 text-xs text-muted-foreground">
+                      <Button variant="ghost" size="sm" onClick={() => { clearSearchFilters(); if (client) advancedSearch(client); }} className="h-7 px-2 text-xs text-muted-foreground">
                         <RotateCcw className="w-3 h-3 me-1" />
                         {t("advanced_search.clear")}
                       </Button>
                     </div>
                   </div>
 
-                  {/* "More" expand for advanced fields */}
-                  <button
-                    type="button"
-                    onClick={() => setShowAdvancedFields(!showAdvancedFields)}
-                    className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
-                  >
-                    <ChevronDown className={cn("w-3.5 h-3.5 transition-transform", showAdvancedFields && "rotate-180")} />
-                    <span>{t("advanced_search.title")}</span>
-                  </button>
-
                   {/* Advanced fields */}
-                  {showAdvancedFields && (
                     <div className="space-y-2.5 animate-in slide-in-from-top-1 fade-in duration-150">
                       <div className="grid grid-cols-2 gap-2">
                         <div>
@@ -3661,7 +3662,6 @@ export function MailApp({ linkSegments }: MailAppProps = {}) {
                         </div>
                       </div>
                     </div>
-                  )}
                 </div>
               )}
             </div>

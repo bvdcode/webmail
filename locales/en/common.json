@@ -3128,6 +3128,7 @@
     }
   },
   "advanced_search": {
+    "unread_only": "Unread only",
     "title": "Advanced Search",
     "from": "From",
     "from_placeholder": "Sender email or name",

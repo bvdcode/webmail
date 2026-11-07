@@ -169,6 +169,15 @@ export class DemoJMAPClient implements IJMAPClient {
     }
     if (typeof filter.hasKeyword === 'string' && !e.keywords[filter.hasKeyword]) return false;
     if (typeof filter.notKeyword === 'string' && e.keywords[filter.notKeyword]) return false;
+    if (typeof filter.inMailbox === 'string' && !e.mailboxIds[filter.inMailbox]) {
+      return false;
+    }
+    if (typeof filter.text === 'string') {
+      const text = [e.subject, e.preview].filter(Boolean).join(' ').toLowerCase();
+      if (!text.includes(filter.text.toLowerCase())) {
+        return false;
+      }
+    }
     if (typeof filter.from === 'string') {
       const q = filter.from.toLowerCase();
       const match = (e.from || []).some(f =>
@@ -294,13 +303,7 @@ export class DemoJMAPClient implements IJMAPClient {
   }
 
   async advancedSearchEmails(filter: Record<string, unknown>, _accountId?: string, limit: number = 50, position: number = 0): Promise<{ emails: Email[]; hasMore: boolean; total: number }> {
-    // Simplified: just return all emails for any advanced filter
-    let filtered = [...this.data.emails];
-    if (filter.inMailbox) filtered = filtered.filter(e => e.mailboxIds[filter.inMailbox as string]);
-    if (filter.text) {
-      const q = (filter.text as string).toLowerCase();
-      filtered = filtered.filter(e => [e.subject, e.preview].filter(Boolean).join(' ').toLowerCase().includes(q));
-    }
+    const filtered = this.data.emails.filter(email => this.matchesFilter(email, filter));
     filtered.sort((a, b) => new Date(b.receivedAt).getTime() - new Date(a.receivedAt).getTime());
     const total = filtered.length;
     const emails = filtered.slice(position, position + limit);

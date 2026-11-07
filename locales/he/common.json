@@ -3033,6 +3033,7 @@
     }
   },
   "advanced_search": {
+    "unread_only": "לא נקראו בלבד",
     "title": "חיפוש מתקדם",
     "from": "מ",
     "from_placeholder": "אימייל או שם השולח",

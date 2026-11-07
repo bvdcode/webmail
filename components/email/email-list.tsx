@@ -438,7 +438,7 @@ export function EmailList({
       {/* Advanced Search Filter Chips */}
       {!isFilterEmpty(searchFilters) && (
         <SearchChips
-          filters={searchFilters}
+          filters={{ ...searchFilters, isUnread: searchFilters.isUnread === true ? null : searchFilters.isUnread }}
           onRemoveFilter={(key) => {
             const resetValue = DEFAULT_SEARCH_FILTERS[key];
             setSearchFilters({ [key]: resetValue });

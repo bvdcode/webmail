@@ -3128,6 +3128,7 @@
     }
   },
   "advanced_search": {
+    "unread_only": "فقط خوانده‌نشده‌ها",
     "title": "جستجوی پیشرفته",
     "from": "از",
     "from_placeholder": "ایمیل یا نام فرستنده",

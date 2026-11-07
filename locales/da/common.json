@@ -3128,6 +3128,7 @@
     }
   },
   "advanced_search": {
+    "unread_only": "Kun ulæste",
     "title": "Avanceret søgning",
     "from": "Fra",
     "from_placeholder": "Afsenders e-mail eller navn",

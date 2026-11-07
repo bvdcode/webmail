@@ -3128,6 +3128,7 @@
     }
   },
   "advanced_search": {
+    "unread_only": "Només no llegits",
     "title": "Cerca avançada",
     "from": "De",
     "from_placeholder": "Nom o correu del remitent",

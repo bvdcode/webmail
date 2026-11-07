@@ -3128,6 +3128,7 @@
     }
   },
   "advanced_search": {
+    "unread_only": "غير المقروءة فقط",
     "title": "بحث متقدم",
     "from": "من",
     "from_placeholder": "بريد المرسل أو اسمه",

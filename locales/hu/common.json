@@ -3128,6 +3128,7 @@
     }
   },
   "advanced_search": {
+    "unread_only": "Csak olvasatlanok",
     "title": "Speciális keresés",
     "from": "Feladó",
     "from_placeholder": "Feladó e-mail vagy név",
