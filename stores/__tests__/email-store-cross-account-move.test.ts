@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useEmailStore } from '../email-store';
+import { useAuthStore } from '../auth-store';
 import type { Email, Mailbox } from '@/lib/jmap/types';
 import type { IJMAPClient } from '@/lib/jmap/client-interface';
 
@@ -42,9 +43,10 @@ const sharedTeamA = makeMailbox({ id: 'jmap-B:srv-teamA', name: 'TeamA', account
 describe('email-store moveToMailboxCrossAware', () => {
   let crossSpy: ReturnType<typeof vi.fn>;
   let moveSpy: ReturnType<typeof vi.fn>;
-  const client = {} as IJMAPClient;
+  const client = { getAccountId: () => 'jmap-A' } as IJMAPClient;
 
   beforeEach(() => {
+    useAuthStore.setState({ activeAccountId: 'local-A', getClientForAccount: id => id === 'local-A' ? client as never : undefined });
     const email = makeEmail('e1', 'srv-inbox-A');
     email.accountId = 'local-A';
     crossSpy = vi.fn().mockResolvedValue(undefined);
@@ -55,7 +57,7 @@ describe('email-store moveToMailboxCrossAware', () => {
       selectedMailbox: 'inbox-A',
       viewingAccountId: 'local-A',
       isUnifiedView: false,
-      accountMailboxes: {},
+      accountMailboxes: { 'local-A': [ownInbox, ownArchive, sharedTeamA] },
       crossAccountMoveEmails: crossSpy as unknown as Store['crossAccountMoveEmails'],
       moveToMailbox: moveSpy as unknown as Store['moveToMailbox'],
     });

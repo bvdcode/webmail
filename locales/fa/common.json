@@ -262,6 +262,7 @@
     "reschedule_prompt": "تاریخ/زمان جدید را وارد کنید"
   },
   "email_viewer": {
+    "download_all_partial": "{count, plural, one {# پیوست از فایل ZIP حذف شد.} other {# پیوست از فایل ZIP حذف شد.}}",
     "read_receipt": {
       "prompt": "فرستنده درخواست تأیید خواندن کرده است:",
       "send": "ارسال تأیید",
@@ -574,6 +575,14 @@
     },
     "send_now": "ارسال فوری"
   },
+  "attachment_rename": {
+    "rename": "تغییر نام",
+    "rename_named": "تغییر نام {name}",
+    "rename_menu": "تغییر نام…",
+    "rename_title": "تغییر نام پیوست",
+    "rename_invalid_chars": "نام فایل نمی‌تواند / یا \\ یا نویسه‌های کنترلی داشته باشد",
+    "rename_too_long": "این نام خیلی طولانی است"
+  },
   "email_composer": {
     "read_receipt_on": "درخواست تأیید خواندن فعال (کلیک برای غیرفعال کردن)",
     "read_receipt_off": "درخواست تأیید خواندن",
@@ -766,6 +775,7 @@
     "refreshing": "در حال تازه‌سازی…"
   },
   "notifications": {
+    "not_connected": "این حساب متصل نیست. دوباره وارد شوید.",
     "email_sent": "ایمیل با موفقیت ارسال شد",
     "email_deleted": "ایمیل حذف شد",
     "email_archived": "ایمیل بایگانی شد",
@@ -1189,6 +1199,12 @@
       }
     },
     "email_behavior": {
+      "reading_width": {
+        "label": "عرض خواندن",
+        "full": "عرض کامل",
+        "comfortable": "حدود ۸۰ نویسه"
+      },
+      "fit_wide_mail": "جا دادن پیام‌های پهن در پنجره",
       "request_read_receipt": {
         "label": "درخواست تأیید خواندن",
         "description": "پیش‌فعال کردن تأیید خواندن"

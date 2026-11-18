@@ -30,7 +30,7 @@ import { useAccountStore } from "@/stores/account-store";
 import { usePolicyStore } from "@/stores/policy-store";
 import type { UnifiedAccountClient } from "@/lib/unified-mailbox";
 import { KeyboardShortcutsModal } from "@/components/keyboard-shortcuts-modal";
-import { useEmailStore, buildUnifiedAccountClients } from "@/stores/email-store";
+import { useEmailStore, buildUnifiedAccountClients, resolveEmailActionContext } from "@/stores/email-store";
 import { toast } from "@/stores/toast-store";
 import { useAuthStore, redirectToLogin, saveRedirectAfterLogin } from '@/stores/auth-store';
 import { useSettingsStore } from "@/stores/settings-store";
@@ -403,7 +403,7 @@ export function MailApp({ linkSegments }: MailAppProps = {}) {
   // action-mailbox resolution so a lookup by `selectedMailbox` hits the same
   // list the email fetch used.
   const viewMailboxes = useMemo(
-    () => (viewingAccountId ? (accountMailboxes[viewingAccountId] ?? mailboxes) : mailboxes),
+    () => (viewingAccountId ? (accountMailboxes[viewingAccountId] ?? []) : mailboxes),
     [viewingAccountId, accountMailboxes, mailboxes],
   );
 
@@ -1591,7 +1591,7 @@ export function MailApp({ linkSegments }: MailAppProps = {}) {
     // active account's primary identity - which then signs the message with
     // the wrong DKIM key (#461). The draft was saved against the same account.
     const sendClient = data.localAccountId
-      ? (useAuthStore.getState().getClientForAccount(data.localAccountId) ?? client)
+      ? useAuthStore.getState().getClientForAccount(data.localAccountId)
       : client;
 
     // Separates "the submission failed" from "a follow-up step failed". Only the
@@ -1601,6 +1601,9 @@ export function MailApp({ linkSegments }: MailAppProps = {}) {
     let submitted = false;
 
     try {
+      if (!sendClient) {
+        throw new Error('Account is not connected');
+      }
       const effectiveMode = pendingDraft?.mode ?? composerMode;
       const originalEmailId = selectedEmail?.id;
 
@@ -1660,8 +1663,11 @@ export function MailApp({ linkSegments }: MailAppProps = {}) {
               selectedMailbox: emailState.selectedMailbox,
             });
             const threadClient = route.clientAccountId
-              ? (useAuthStore.getState().getClientForAccount(route.clientAccountId) ?? client)
+              ? useAuthStore.getState().getClientForAccount(route.clientAccountId)
               : client;
+            if (!threadClient) {
+              throw new Error('Account is not connected');
+            }
             const fullEmails = await threadClient.getThreadEmails(
               repliedEmail.threadId,
               route.accountId ?? client.getAccountId(),
@@ -1864,8 +1870,11 @@ export function MailApp({ linkSegments }: MailAppProps = {}) {
     // The submission lives on the account that owns the sending identity,
     // which is not always the active one in the multi-account shell (#461).
     const undoClient = pending.localAccountId
-      ? (useAuthStore.getState().getClientForAccount(pending.localAccountId) ?? client)
+      ? useAuthStore.getState().getClientForAccount(pending.localAccountId)
       : client;
+    if (!undoClient) {
+      return;
+    }
     const undoDurationMs = Math.max(sendDelaySeconds, 8) * 1000;
 
     toast.success(t('email_viewer.scheduled_send_created'), {
@@ -2046,10 +2055,13 @@ export function MailApp({ linkSegments }: MailAppProps = {}) {
     // In unified view the trash destination and current-folder check must come
     // from the email's own account, not the active one. The owning account's
     // mailbox list is cached under its JMAP id (`sourceAccountId`). (#281)
-    const actionMailboxes =
-      isUnifiedView && emailToDelete.sourceAccountId
-        ? (accountMailboxes[emailToDelete.sourceAccountId] ?? mailboxes)
-        : mailboxes;
+    let actionMailboxes: Mailbox[];
+    try {
+      actionMailboxes = resolveEmailActionContext(emailToDelete, client).mailboxes;
+    } catch {
+      toast.error(t('notifications.not_connected'));
+      return;
+    }
 
     // Check if we're currently in the trash or junk folder. In unified view the
     // "current folder" is the unified role within the email's account.
@@ -2114,28 +2126,23 @@ export function MailApp({ linkSegments }: MailAppProps = {}) {
     // is reachable via (`sourceClientAccountId`) and routed to its owning JMAP
     // account (`sourceAccountId`). For personal sources these resolve to the
     // account itself, so behavior is unchanged. (#281)
-    const archiveClientId = isUnifiedView ? emailToArchive.sourceClientAccountId : undefined;
-    const archiveAccountId = isUnifiedView ? emailToArchive.sourceAccountId : undefined;
-    const archiveClient = archiveClientId
-      ? (useAuthStore.getState().getClientForAccount(archiveClientId) ?? client)
-      : client;
-    // Read fresh mailboxes from the store – batch archive calls this in a loop,
-    // and each iteration needs to see folders created by prior iterations.
-    const readMailboxes = () => {
-      const s = useEmailStore.getState();
-      return archiveAccountId
-        ? (s.accountMailboxes[archiveAccountId] ?? s.mailboxes)
-        : s.mailboxes;
-    };
-    const refreshMailboxes = () =>
-      archiveAccountId
-        ? useEmailStore.getState().fetchAccountMailboxes(archiveClient, archiveAccountId)
-        : fetchMailboxes(client);
-
     const archiveMailbox = await ensureArchiveMailbox(emailToArchive);
     if (!archiveMailbox) {
       return;
     }
+    const archiveContext = resolveEmailActionContext(emailToArchive, client);
+    const archiveClientId = emailToArchive.sourceClientAccountId || viewingAccountId;
+    const archiveAccountId = archiveContext.accountId;
+    const archiveClient = archiveContext.client;
+    // Read fresh mailboxes from the store – batch archive calls this in a loop,
+    // and each iteration needs to see folders created by prior iterations.
+    const readMailboxes = () => {
+      return resolveEmailActionContext(emailToArchive, client).mailboxes;
+    };
+    const refreshMailboxes = () =>
+      archiveAccountId || archiveClientId
+        ? useEmailStore.getState().fetchAccountMailboxes(archiveClient, archiveAccountId || archiveClientId || '')
+        : fetchMailboxes(client);
     const currentMailboxes = readMailboxes();
 
     const { archiveMode } = useSettingsStore.getState();
@@ -2332,7 +2339,7 @@ export function MailApp({ linkSegments }: MailAppProps = {}) {
   // override that fetches via that account's JMAP client.
   const handleAccountMailboxSelect = async (accountId: string | null, mailboxId: string) => {
     const viewingClient = accountId
-      ? useAuthStore.getState().getClientForAccount(accountId) ?? client
+      ? useAuthStore.getState().getClientForAccount(accountId)
       : client;
     selectAccountMailbox(accountId, mailboxId);
     selectEmail(null);
@@ -2832,17 +2839,21 @@ export function MailApp({ linkSegments }: MailAppProps = {}) {
   // messages can be viewed/downloaded instead of 404ing against the active
   // account.
   const resolveBlobSource = useCallback((email: typeof selectedEmail) => {
-    const clientAccountId = isUnifiedView ? email?.sourceClientAccountId : undefined;
+    const clientAccountId = email?.sourceClientAccountId || viewingAccountId || undefined;
     const blobClient = clientAccountId
-      ? (useAuthStore.getState().getClientForAccount(clientAccountId) ?? client)
+      ? useAuthStore.getState().getClientForAccount(clientAccountId)
       : client;
-    const accountId = isUnifiedView ? email?.sourceAccountId : undefined;
+    const sourceMailbox = viewMailboxes.find(mailbox => mailbox.id === selectedMailbox);
+    const accountId = email?.sourceAccountId || (sourceMailbox?.isShared ? sourceMailbox.accountId : undefined);
     return { blobClient, accountId, clientAccountId };
-  }, [isUnifiedView, client]);
+  }, [viewingAccountId, client, viewMailboxes, selectedMailbox]);
 
   const handleDownloadAttachment = async (blobId: string, name: string, type?: string, forceDownload?: boolean) => {
     const { blobClient, accountId, clientAccountId } = resolveBlobSource(selectedEmail);
-    if (!blobClient) return;
+    if (!blobClient) {
+      toast.error(t('notifications.not_connected'));
+      return;
+    }
 
     try {
       const { mailAttachmentAction } = useSettingsStore.getState();
@@ -2853,14 +2864,14 @@ export function MailApp({ linkSegments }: MailAppProps = {}) {
       }
 
       await blobClient.downloadBlob(blobId, name, type, accountId);
-    } catch (error) {
-      console.error("Failed to download attachment:", error);
+    } catch {
+      toast.error(t('files.download_error'));
     }
   };
 
   const previewBlobClient = useCallback(() => {
     const id = previewAttachment?.clientAccountId;
-    return id ? (useAuthStore.getState().getClientForAccount(id) ?? client) : client;
+    return id ? useAuthStore.getState().getClientForAccount(id) : client;
   }, [previewAttachment, client]);
 
   const handlePreviewAttachmentDownload = useCallback(async () => {
@@ -3019,8 +3030,11 @@ export function MailApp({ linkSegments }: MailAppProps = {}) {
         selectedMailbox: emailState.selectedMailbox,
       });
       const threadClient = route.clientAccountId
-        ? (useAuthStore.getState().getClientForAccount(route.clientAccountId) ?? client)
+        ? useAuthStore.getState().getClientForAccount(route.clientAccountId)
         : client;
+      if (!threadClient) {
+        throw new Error('Account is not connected');
+      }
       const fullEmails = await threadClient.getThreadEmails(
         repliedEmail.threadId,
         route.accountId ?? client.getAccountId(),
@@ -3184,8 +3198,11 @@ export function MailApp({ linkSegments }: MailAppProps = {}) {
       const ref = thread.emails?.[0];
       const route = resolveThreadRoute({ isUnifiedView, ref, mailboxes: viewMailboxes, selectedMailbox });
       const threadClient = route.clientAccountId
-        ? (useAuthStore.getState().getClientForAccount(route.clientAccountId) ?? client)
+        ? useAuthStore.getState().getClientForAccount(route.clientAccountId)
         : client;
+      if (!threadClient) {
+        throw new Error('Account is not connected');
+      }
       const emails = await threadClient.getThreadEmails(thread.threadId, route.accountId);
       // Re-stamp the source reference so conversation actions (reply/move/…)
       // resolve to the right account; the fetched objects don't carry it.

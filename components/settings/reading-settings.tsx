@@ -39,6 +39,8 @@ export function ReadingSettings() {
     attachmentImagePreviewsEnabled,
     messageSpacing,
     plainTextFont,
+    readingWidth,
+    mailFitWidth,
     updateSetting,
   } = useSettingsStore();
 
@@ -144,6 +146,31 @@ export function ReadingSettings() {
           ]}
         />
       </SettingItem>
+      )}
+
+      {!isSettingHidden('readingWidth') && (
+        <SettingItem label={t('reading_width.label')} locked={isSettingLocked('readingWidth')}>
+          <Select
+            value={readingWidth}
+            onChange={(value) => {
+              switch (value) {
+                case 'full':
+                case 'comfortable':
+                  updateSetting('readingWidth', value);
+                  break;
+              }
+            }}
+            options={[
+              { value: 'full', label: t('reading_width.full') },
+              { value: 'comfortable', label: t('reading_width.comfortable') },
+            ]}
+          />
+        </SettingItem>
+      )}
+      {!isSettingHidden('mailFitWidth') && (
+        <SettingItem label={t('fit_wide_mail')} locked={isSettingLocked('mailFitWidth')}>
+          <ToggleSwitch checked={mailFitWidth} onChange={(checked) => updateSetting('mailFitWidth', checked)} />
+        </SettingItem>
       )}
 
       {!isSettingHidden('deleteAction') && (

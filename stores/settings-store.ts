@@ -4,6 +4,7 @@ import { useThemeStore } from './theme-store';
 import { useLocaleStore } from './locale-store';
 import type { EmailTemplate } from '@/lib/template-types';
 import type { NotificationSoundChoice } from '@/lib/notification-sound';
+import type { ReadingWidth } from '@/lib/mail-reading';
 import { apiFetch } from '@/lib/browser-navigation';
 import { generateAccountId } from '@/lib/account-utils';
 import {
@@ -319,6 +320,8 @@ interface SettingsState {
   externalContentPolicy: ExternalContentPolicy;
   messageSpacing: MessageSpacing; // Gutter around the message body in the reader
   plainTextFont: PlainTextFont; // Font for text/plain email bodies in the reader
+  readingWidth: ReadingWidth;
+  mailFitWidth: boolean;
   mailAttachmentAction: MailAttachmentAction;
   attachmentPosition: AttachmentPosition;
   emailAlwaysLightMode: boolean; // Always render email content in light mode
@@ -552,6 +555,8 @@ const DEFAULT_SETTINGS = {
   externalContentPolicy: 'ask' as ExternalContentPolicy,
   messageSpacing: 'auto' as MessageSpacing,
   plainTextFont: 'sans' as PlainTextFont,
+  readingWidth: 'full' as ReadingWidth,
+  mailFitWidth: false,
   mailAttachmentAction: 'preview' as MailAttachmentAction,
   attachmentPosition: 'beside-sender' as AttachmentPosition,
   emailAlwaysLightMode: false,
@@ -774,6 +779,8 @@ export const useSettingsStore = create<SettingsState>()(
           externalContentPolicy: state.externalContentPolicy,
           messageSpacing: state.messageSpacing,
           plainTextFont: state.plainTextFont,
+          readingWidth: state.readingWidth,
+          mailFitWidth: state.mailFitWidth,
           mailAttachmentAction: state.mailAttachmentAction,
           attachmentPosition: state.attachmentPosition,
           archiveMode: state.archiveMode,

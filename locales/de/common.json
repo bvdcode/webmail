@@ -262,6 +262,7 @@
     "reschedule_prompt": "Neues Datum/Uhrzeit eingeben, z. B. 2026-05-04T15:30"
   },
   "email_viewer": {
+    "download_all_partial": "{count, plural, one {# Anhang wurde im ZIP-Archiv ausgelassen.} other {# Anhänge wurden im ZIP-Archiv ausgelassen.}}",
     "read_receipt": {
       "prompt": "Der Absender bittet um eine Lesebestätigung:",
       "send": "Bestätigung senden",
@@ -574,6 +575,14 @@
     },
     "send_now": "Jetzt senden"
   },
+  "attachment_rename": {
+    "rename": "Umbenennen",
+    "rename_named": "{name} umbenennen",
+    "rename_menu": "Umbenennen…",
+    "rename_title": "Anhang umbenennen",
+    "rename_invalid_chars": "Dateinamen dürfen kein / oder \\ und keine Steuerzeichen enthalten",
+    "rename_too_long": "Dieser Name ist zu lang"
+  },
   "email_composer": {
     "read_receipt_on": "Lesebestätigung angefordert (klicken zum Deaktivieren)",
     "read_receipt_off": "Lesebestätigung anfordern",
@@ -766,6 +775,7 @@
     "refreshing": "Wird aktualisiert…"
   },
   "notifications": {
+    "not_connected": "Dieses Konto ist nicht verbunden. Melden Sie sich erneut an.",
     "email_sent": "E-Mail erfolgreich gesendet",
     "email_deleted": "E-Mail gelöscht",
     "email_archived": "E-Mail archiviert",
@@ -1186,6 +1196,12 @@
       }
     },
     "email_behavior": {
+      "reading_width": {
+        "label": "Lesebreite",
+        "full": "Volle Breite",
+        "comfortable": "Etwa 80 Zeichen"
+      },
+      "fit_wide_mail": "Breite Nachrichten einpassen",
       "request_read_receipt": {
         "label": "Lesebestätigung standardmäßig anfordern",
         "description": "Beim Verfassen einer neuen Nachricht die Anforderung einer Lesebestätigung vorab aktivieren."

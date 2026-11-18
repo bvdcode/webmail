@@ -49,8 +49,9 @@ function makeEmail(overrides: Partial<Email> = {}): Email {
   } as Email;
 }
 
-function makeClient() {
+function makeClient(accountId: string) {
   return {
+    getAccountId: () => accountId,
     markAsRead: vi.fn().mockResolvedValue(undefined),
     toggleStar: vi.fn().mockResolvedValue(undefined),
     moveEmail: vi.fn().mockResolvedValue(undefined),
@@ -65,8 +66,8 @@ describe('unified-view single-email action routing (#281)', () => {
   let accountBClient: IJMAPClient;
 
   beforeEach(() => {
-    activeClient = makeClient();
-    accountBClient = makeClient();
+    activeClient = makeClient('account-a');
+    accountBClient = makeClient('account-b');
 
     // Route each login by its AccountEntry.id (the `sourceClientAccountId` key).
     // account-a is the active login; account-b is a second direct login; the
@@ -91,7 +92,7 @@ describe('unified-view single-email action routing (#281)', () => {
           makeMailbox({ id: 'b-archive', name: 'Archive', role: 'archive' }),
         ],
         // Shared owner reached through account-a's client.
-        'owner-x': [
+        '["account-a","owner-x"]': [
           makeMailbox({ id: 'owner-x:x-inbox', originalId: 'x-inbox', role: 'inbox', isShared: true, accountId: 'owner-x' }),
           makeMailbox({ id: 'owner-x:x-trash', originalId: 'x-trash', name: 'Trash', role: 'trash', isShared: true, accountId: 'owner-x' }),
         ],

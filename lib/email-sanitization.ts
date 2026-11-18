@@ -1,5 +1,12 @@
 import DOMPurify from 'dompurify';
 
+export function emailIframeCsp(blockExternal: boolean): string {
+  if (blockExternal) {
+    return "default-src 'none'; img-src data: blob:; style-src 'unsafe-inline'; font-src data:; media-src data: blob:; base-uri 'none'; form-action 'none'; frame-src 'none'";
+  }
+  return "default-src 'none'; img-src data: blob: http: https:; style-src 'unsafe-inline'; font-src data: http: https:; media-src data: blob: http: https:; base-uri 'none'; form-action 'none'; frame-src 'none'";
+}
+
 /**
  * Unified DOMPurify configuration for email content
  * Blocks all script execution vectors while preserving formatting

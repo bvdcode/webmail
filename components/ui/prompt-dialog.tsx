@@ -16,6 +16,8 @@ interface PromptDialogProps {
   defaultValue?: string;
   confirmText?: string;
   cancelText?: string;
+  suffix?: string;
+  validate?: (value: string) => string | null;
 }
 
 export function PromptDialog({
@@ -28,6 +30,8 @@ export function PromptDialog({
   defaultValue = "",
   confirmText,
   cancelText,
+  suffix = "",
+  validate,
 }: PromptDialogProps) {
   const t = useTranslations("confirm_dialog");
   const id = useId();
@@ -52,7 +56,9 @@ export function PromptDialog({
   }, [isOpen, defaultValue]);
 
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen) {
+      return;
+    }
 
     const handleBackdropClick = (e: MouseEvent) => {
       if (dialogRef.current && !dialogRef.current.contains(e.target as Node)) {
@@ -64,16 +70,21 @@ export function PromptDialog({
     return () => document.removeEventListener("mousedown", handleBackdropClick);
   }, [isOpen, onClose, dialogRef]);
 
-  if (!isOpen) return null;
+  if (!isOpen) {
+    return null;
+  }
 
   const resolvedConfirmText = confirmText || t("confirm");
   const resolvedCancelText = cancelText || t("cancel");
   const trimmed = value.trim();
-  const canSubmit = trimmed.length > 0;
+  const error = trimmed.length > 0 && validate ? validate(trimmed + suffix) : null;
+  const canSubmit = trimmed.length > 0 && !error;
 
   const handleSubmit = (e?: React.FormEvent) => {
     e?.preventDefault();
-    if (!canSubmit) return;
+    if (!canSubmit) {
+      return;
+    }
     try {
       onSubmit(trimmed);
     } finally {
@@ -101,14 +112,21 @@ export function PromptDialog({
             {message && (
               <p className="mt-2 text-sm text-muted-foreground">{message}</p>
             )}
-            <Input
-              ref={inputRef}
-              type="text"
-              value={value}
-              onChange={(e) => setValue(e.target.value)}
-              placeholder={placeholder}
-              className="mt-4"
-            />
+            <div className="mt-4 flex items-center gap-2">
+              <Input
+                ref={inputRef}
+                aria-label={title}
+                aria-invalid={error ? true : undefined}
+                aria-describedby={error ? `${id}-error` : undefined}
+                type="text"
+                value={value}
+                onChange={(e) => setValue(e.target.value)}
+                placeholder={placeholder}
+                className="min-w-0 flex-1"
+              />
+              {suffix && <span className="max-w-[50%] truncate text-sm text-muted-foreground" dir="auto">{suffix}</span>}
+            </div>
+            {error && <p id={`${id}-error`} role="alert" className="mt-1.5 text-xs text-destructive">{error}</p>}
           </div>
 
           <div className="flex items-center justify-end gap-3 px-6 pb-6">

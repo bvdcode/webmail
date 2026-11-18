@@ -53,6 +53,7 @@ const makeEmail = (id: string, keywords: Record<string, boolean>): Email =>
 
 function makeClient() {
   return {
+    getAccountId: () => 'account-a',
     markAsRead: vi.fn().mockResolvedValue(undefined),
     toggleStar: vi.fn().mockResolvedValue(undefined),
   } as unknown as IJMAPClient;

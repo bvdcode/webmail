@@ -1,5 +1,8 @@
 "use client";
 
+import { fitEmailBodyWidth } from "@/lib/email-fit-width";
+import { mailReadingClass, mailReadingCss } from "@/lib/mail-reading";
+
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import DOMPurify from "dompurify";
 import { Email, ThreadGroup } from "@/lib/jmap/types";
@@ -241,6 +244,8 @@ function EmailCard({
   const hideInlineImageAttachments = useSettingsStore((state) => state.hideInlineImageAttachments);
   const emailAlwaysLightMode = useSettingsStore((state) => state.emailAlwaysLightMode);
   const plainTextFont = useSettingsStore((state) => state.plainTextFont);
+  const readingWidth = useSettingsStore((state) => state.readingWidth);
+  const mailFitWidth = useSettingsStore((state) => state.mailFitWidth);
   const sender = email.from?.[0];
   const isUnread = !email.keywords?.$seen;
   const isStarred = email.keywords?.$flagged;
@@ -472,8 +477,9 @@ function EmailCard({
   table { max-width: 100% !important; table-layout: auto; overflow-wrap: break-word; }
   td, th { word-break: break-word; padding: 0.5rem; }
   pre { white-space: pre-wrap; word-wrap: break-word; }
-</style></head><body>${emailContent.html}</body></html>`;
-  }, [emailContent.isHtml, emailContent.html]);
+  ${mailReadingCss(readingWidth)}
+</style></head><body data-fit-width="${mailFitWidth}">${emailContent.html}</body></html>`;
+  }, [emailContent.isHtml, emailContent.html, readingWidth, mailFitWidth]);
 
   const handleIframeLoad = useCallback(() => {
     const iframe = iframeRef.current;
@@ -488,11 +494,15 @@ function EmailCard({
         hide: t('email_viewer.hide_quoted_text'),
       });
       const resize = () => {
-        iframe.style.height = doc.documentElement.scrollHeight + 'px';
+        const scale = fitEmailBodyWidth(doc, { enabled: mailFitWidth, viewportMax: Infinity });
+        iframe.style.height = Math.ceil(Math.max(doc.documentElement.scrollHeight, doc.body.scrollHeight) * scale) + 'px';
       };
       resize();
       const ro = new ResizeObserver(resize);
       ro.observe(doc.body);
+      if (iframe.parentElement) {
+        ro.observe(iframe.parentElement);
+      }
       doc.querySelectorAll('a').forEach((a) => {
         a.setAttribute('target', '_blank');
         a.setAttribute('rel', 'noopener noreferrer');
@@ -500,7 +510,7 @@ function EmailCard({
     } catch {
       // contentDocument may be inaccessible under stricter sandboxes; ignore.
     }
-  }, [t]);
+  }, [t, mailFitWidth]);
 
   return (
     <div className={cn(
@@ -611,6 +621,7 @@ function EmailCard({
               <div
                 className={cn(
                   "prose prose-sm max-w-none",
+                  mailReadingClass(readingWidth),
                   !emailAlwaysLightMode && "dark:prose-invert",
                   "prose-p:my-2 prose-headings:my-3",
                   "prose-a:text-primary prose-a:no-underline hover:prose-a:underline",

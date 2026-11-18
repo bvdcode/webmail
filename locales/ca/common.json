@@ -262,6 +262,7 @@
     "reschedule_prompt": "Introduïu una data i hora noves, p. ex. 2026-05-04T15:30"
   },
   "email_viewer": {
+    "download_all_partial": "{count, plural, one {S’ha omès # fitxer adjunt del ZIP.} other {S’han omès # fitxers adjunts del ZIP.}}",
     "read_receipt": {
       "prompt": "El remitent ha demanat rebre una notificació quan obriu aquest missatge.",
       "send": "Envia la confirmació",
@@ -574,6 +575,14 @@
     },
     "send_now": "Envia ara"
   },
+  "attachment_rename": {
+    "rename": "Canvia el nom",
+    "rename_named": "Canvia el nom de {name}",
+    "rename_menu": "Canvia el nom…",
+    "rename_title": "Canvia el nom de l'adjunt",
+    "rename_invalid_chars": "Els noms de fitxer no poden contenir / ni \\ ni caràcters de control",
+    "rename_too_long": "Aquest nom és massa llarg"
+  },
   "email_composer": {
     "read_receipt_on": "Confirmació de lectura sol·licitada (feu clic per desactivar-la)",
     "read_receipt_off": "Sol·licita una confirmació de lectura",
@@ -766,6 +775,7 @@
     "refreshing": "S'està actualitzant…"
   },
   "notifications": {
+    "not_connected": "Aquest compte no està connectat. Torna a iniciar la sessió.",
     "email_sent": "Correu enviat correctament",
     "email_deleted": "Correu suprimit",
     "email_archived": "Correu arxivat",
@@ -1189,6 +1199,12 @@
       }
     },
     "email_behavior": {
+      "reading_width": {
+        "label": "Amplada de lectura",
+        "full": "Amplada completa",
+        "comfortable": "Uns 80 caràcters"
+      },
+      "fit_wide_mail": "Ajusta els missatges amples a la finestra",
       "request_read_receipt": {
         "label": "Sol·licita confirmacions de lectura per defecte",
         "description": "Activa per defecte la sol·licitud de confirmació de lectura en redactar un missatge nou."

@@ -262,6 +262,7 @@
     "reschedule_prompt": "Wprowadź nową datę/godzinę, np. 2026-05-04T15:30"
   },
   "email_viewer": {
+    "download_all_partial": "{count, plural, one {Pominięto # załącznik w archiwum ZIP.} few {Pominięto # załączniki w archiwum ZIP.} many {Pominięto # załączników w archiwum ZIP.} other {Pominięto # załącznika w archiwum ZIP.}}",
     "read_receipt": {
       "prompt": "Nadawca prosi o potwierdzenie przeczytania:",
       "send": "Wyślij potwierdzenie",
@@ -574,6 +575,14 @@
     },
     "send_now": "Wyślij teraz"
   },
+  "attachment_rename": {
+    "rename": "Zmień nazwę",
+    "rename_named": "Zmień nazwę {name}",
+    "rename_menu": "Zmień nazwę…",
+    "rename_title": "Zmień nazwę załącznika",
+    "rename_invalid_chars": "Nazwy plików nie mogą zawierać / ani \\ ani znaków sterujących",
+    "rename_too_long": "Ta nazwa jest za długa"
+  },
   "email_composer": {
     "read_receipt_on": "Zażądano potwierdzenia przeczytania (kliknij, aby wyłączyć)",
     "read_receipt_off": "Zażądaj potwierdzenia przeczytania",
@@ -766,6 +775,7 @@
     "refreshing": "Odświeżanie…"
   },
   "notifications": {
+    "not_connected": "To konto nie jest połączone. Zaloguj się ponownie.",
     "email_sent": "Wiadomość wysłana pomyślnie",
     "email_deleted": "Wiadomość usunięta",
     "email_archived": "Wiadomość zarchiwizowana",
@@ -1186,6 +1196,12 @@
       }
     },
     "email_behavior": {
+      "reading_width": {
+        "label": "Szerokość czytania",
+        "full": "Pełna szerokość",
+        "comfortable": "Około 80 znaków"
+      },
+      "fit_wide_mail": "Dopasuj szerokie wiadomości do okna",
       "request_read_receipt": {
         "label": "Domyślnie żądaj potwierdzeń przeczytania",
         "description": "Włącz wcześniej żądanie potwierdzenia przeczytania podczas tworzenia nowej wiadomości."

@@ -111,11 +111,11 @@ describe('missing archive confirmation', () => {
   it('routes a unified shared source through its reaching client', async () => {
     const login = makeLoginClient();
     useAuthStore.setState({ getClientForAccount: id => id === 'login' ? login : undefined });
-    useEmailStore.setState({ isUnifiedView: true, accountMailboxes: { shared: [{ ...inbox, accountId: 'shared', isShared: true }] } });
+    useEmailStore.setState({ isUnifiedView: true, accountMailboxes: { '["login","shared"]': [{ ...inbox, accountId: 'shared', isShared: true }] } });
     const source = { ...email, sourceClientAccountId: 'login', sourceAccountId: 'shared' };
     await useEmailStore.getState().ensureArchiveMailbox(client, source, async () => 'Archive');
     expect(login.createMailbox).toHaveBeenCalledWith('Archive', undefined, 'shared', 'archive');
-    expect(useEmailStore.getState().accountMailboxes.shared.some(mailbox => mailbox.role === 'archive')).toBe(true);
+    expect(useEmailStore.getState().accountMailboxes['["login","shared"]'].some(mailbox => mailbox.role === 'archive')).toBe(true);
     expect(useEmailStore.getState().mailboxes).toEqual([inbox]);
   });
 });

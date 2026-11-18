@@ -262,6 +262,7 @@
     "reschedule_prompt": "Enter a new date/time, e.g. 2026-05-04T15:30"
   },
   "email_viewer": {
+    "download_all_partial": "{count, plural, one {# attachment was omitted from the ZIP.} other {# attachments were omitted from the ZIP.}}",
     "read_receipt": {
       "prompt": "The sender asked to be notified when you open this message.",
       "send": "Send receipt",
@@ -574,6 +575,14 @@
     },
     "send_now": "Send now"
   },
+  "attachment_rename": {
+    "rename": "Rename",
+    "rename_named": "Rename {name}",
+    "rename_menu": "Rename…",
+    "rename_title": "Rename attachment",
+    "rename_invalid_chars": "File names can't contain / or \\ or control characters",
+    "rename_too_long": "This name is too long"
+  },
   "email_composer": {
     "read_receipt_on": "Read receipt requested (click to disable)",
     "read_receipt_off": "Request a read receipt",
@@ -766,6 +775,7 @@
     "refreshing": "Refreshing…"
   },
   "notifications": {
+    "not_connected": "This account isn't connected. Sign in again.",
     "email_sent": "Email sent successfully",
     "email_deleted": "Email deleted",
     "email_archived": "Email archived",
@@ -1189,6 +1199,12 @@
       }
     },
     "email_behavior": {
+      "reading_width": {
+        "label": "Reading width",
+        "full": "Full width",
+        "comfortable": "About 80 characters"
+      },
+      "fit_wide_mail": "Fit wide messages to the window",
       "request_read_receipt": {
         "label": "Request read receipts by default",
         "description": "Pre-enable the read-receipt request when composing a new message."

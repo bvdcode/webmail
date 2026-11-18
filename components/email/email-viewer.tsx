@@ -4,7 +4,12 @@ import { useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback, use
 import { Email, ContactCard, Mailbox } from "@/lib/jmap/types";
 import { emailExportFilename, attachmentDownloadFilename, attachmentsBundleFilename, DEFAULT_EMAIL_TEMPLATE, DEFAULT_ATTACHMENT_TEMPLATE } from "@/lib/download-filename";
 import { EML_IMPORT_ACCEPT, expandImportableEmails } from "@/lib/eml-import";
-import { applyNewTabToAnchor, escapeHtml, plainTextToSafeHtml, sanitizeEmailBodyForIframe, sanitizeEmailHtml, sanitizePlainTextRenderedHtml } from "@/lib/email-sanitization";
+import { fitEmailBodyWidth } from "@/lib/email-fit-width";
+import { mailReadingClass, mailReadingCss } from "@/lib/mail-reading";
+import { PromptDialog } from "@/components/ui/prompt-dialog";
+import { useAttachmentRename } from "@/hooks/use-attachment-rename";
+import { FilePenLine } from "lucide-react";
+import { applyNewTabToAnchor, emailIframeCsp, escapeHtml, plainTextToSafeHtml, sanitizeEmailBodyForIframe, sanitizeEmailHtml, sanitizePlainTextRenderedHtml } from "@/lib/email-sanitization";
 import { hasMeaningfulHtmlBody } from "@/lib/signature-utils";
 import { collapsePlainTextQuotes, setupQuoteCollapse } from "@/lib/quote-collapse";
 import { withBasePath } from "@/lib/browser-navigation";
@@ -673,6 +678,8 @@ export function EmailViewer({
   const externalContentPolicy = useSettingsStore((state) => state.externalContentPolicy);
   const messageSpacing = useSettingsStore((state) => state.messageSpacing);
   const plainTextFont = useSettingsStore((state) => state.plainTextFont);
+  const readingWidth = useSettingsStore((state) => state.readingWidth);
+  const mailFitWidth = useSettingsStore((state) => state.mailFitWidth);
   const mailAttachmentAction = useSettingsStore((state) => state.mailAttachmentAction);
   const attachmentPosition = useSettingsStore((state) => state.attachmentPosition);
   const addTrustedSender = useSettingsStore((state) => state.addTrustedSender);
@@ -742,12 +749,12 @@ export function EmailViewer({
   // shared account (same client, owner accountId in the URL). Resolve both from
   // the message's source so cross-account blob fetches don't 404 against the
   // active account.
-  const isUnifiedView = useEmailStore((s) => s.isUnifiedView);
+  const viewingAccountId = useEmailStore((s) => s.viewingAccountId);
   const blobClient = useMemo(() => {
-    const scid = isUnifiedView ? email?.sourceClientAccountId : undefined;
-    return (scid ? useAuthStore.getState().getClientForAccount(scid) : null) ?? client;
-  }, [isUnifiedView, email?.sourceClientAccountId, client]);
-  const blobAccountId = isUnifiedView ? email?.sourceAccountId : undefined;
+    const scid = email?.sourceClientAccountId || viewingAccountId;
+    return scid ? useAuthStore.getState().getClientForAccount(scid) ?? null : client;
+  }, [viewingAccountId, email?.sourceClientAccountId, client]);
+  const blobAccountId = email?.sourceAccountId;
 
   // List-Unsubscribe mailto: send the message ourselves - this is a webmail
   // client, handing a mailto: URL to the OS mail handler goes nowhere for
@@ -756,9 +763,9 @@ export function EmailViewer({
   // subscriber; sendEmail resolves the identity (with its own fallback to
   // the account default) from the address we pass.
   const handleSendMailtoUnsubscribe = async (fields: { to: string[]; subject?: string; body?: string }) => {
-    const sendClient = (email?.sourceClientAccountId
+    const sendClient = email?.sourceClientAccountId
       ? useAuthStore.getState().getClientForAccount(email.sourceClientAccountId)
-      : undefined) ?? client;
+      : client;
     if (!sendClient) throw new Error('Not connected');
 
     const recipientAddresses = [...(email?.to ?? []), ...(email?.cc ?? [])].map(r => r.email?.toLowerCase());
@@ -1884,13 +1891,31 @@ export function EmailViewer({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cidBlobUrls, emailContent, shouldBlockExternal, pluginRenderedHtml, pluginRenderedText, tnefHtml, tnefText, embeddedEmailHtml, embeddedEmailText, t]);
 
+  const renameOwner = JSON.stringify([email?.sourceClientAccountId, email?.sourceAccountId, email?.id]);
+  const [renamedAttachments, setRenamedAttachments] = useState<{ owner: string; names: Record<string, string> }>({ owner: '', names: {} });
+  const attachmentNames = useMemo(() => renamedAttachments.owner === renameOwner ? renamedAttachments.names : {}, [renamedAttachments, renameOwner]);
+  const attachmentRename = useAttachmentRename<EffectiveAttachment>((attachment, name) => {
+    setRenamedAttachments(previous => ({ owner: renameOwner, names: { ...(previous.owner === renameOwner ? previous.names : {}), [attachment.id]: name } }));
+  });
+  const displayAttachmentName = useCallback((attachment: EffectiveAttachment) => attachmentNames[attachment.id] || getAttachmentDisplayName(attachment.name, attachment.type), [attachmentNames]);
+  const renameAttachmentButton = (attachment: EffectiveAttachment) => (
+    <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0"
+      aria-label={attachmentRename.label(displayAttachmentName(attachment))} title={attachmentRename.label(displayAttachmentName(attachment))}
+      onClick={(event) => { event.stopPropagation(); attachmentRename.rename(attachment, displayAttachmentName(attachment)); }}>
+      <FilePenLine className="w-3 h-3" />
+    </Button>
+  );
+
   const resolveAttachmentName = useCallback(
     (attachment: EffectiveAttachment) => {
+      if (attachmentNames[attachment.id]) {
+        return attachmentNames[attachment.id];
+      }
       const fallback = attachment.name || 'download';
       if (!email) return fallback;
       return attachmentDownloadFilename(email, { name: attachment.name, type: attachment.type }, attachmentFilenameOptions) || fallback;
     },
-    [email, attachmentFilenameOptions],
+    [email, attachmentFilenameOptions, attachmentNames],
   );
 
   const handleEffectiveAttachmentOpen = useCallback(async (attachment: EffectiveAttachment) => {
@@ -2048,7 +2073,7 @@ export function EmailViewer({
 
       let added = 0;
       for (const attachment of effectiveAttachments) {
-        const entryName = uniqueName(getAttachmentDisplayName(attachment.name, attachment.type));
+        const entryName = uniqueName(displayAttachmentName(attachment));
         try {
           if (attachment.blobId && blobClient) {
             const blob = await blobClient.fetchBlob(attachment.blobId, attachment.name || entryName, attachment.type, blobAccountId);
@@ -2069,7 +2094,10 @@ export function EmailViewer({
         }
       }
 
-      if (added === 0) return;
+      if (added === 0) {
+        toast.error(tFiles('download_error'));
+        return;
+      }
 
       const zipBlob = await zip.generateAsync({ type: 'blob', mimeType: 'application/zip' });
       const objectUrl = URL.createObjectURL(zipBlob);
@@ -2080,10 +2108,16 @@ export function EmailViewer({
       anchor.click();
       anchor.remove();
       setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
+      const omitted = effectiveAttachments.length - added;
+      if (omitted > 0) {
+        toast.warning(t('download_all_partial', { count: omitted }));
+      }
+    } catch {
+      toast.error(tFiles('download_error'));
     } finally {
       setIsDownloadingAll(false);
     }
-  }, [isDownloadingAll, effectiveAttachments, blobClient, blobAccountId, email]);
+  }, [isDownloadingAll, effectiveAttachments, blobClient, blobAccountId, email, t, tFiles, displayAttachmentName]);
 
   // Shared "Download all" chip, shown only when bundling is worthwhile (2+).
   const downloadAllButton = effectiveAttachments.length > 1 ? (
@@ -2261,9 +2295,7 @@ export function EmailViewer({
     // srcDoc is rebuilt (see emailContent) with the permissive variant so real
     // images, web fonts and media load. cid:/inline images are pre-rewritten to
     // blob: URLs, so they survive the strict variant.
-    const iframeCsp = effectiveEmailContent.externalBlocked
-      ? "default-src 'none'; img-src data: blob:; style-src 'unsafe-inline'; font-src data:; media-src data: blob:; base-uri 'none'; form-action 'none'; frame-src 'none'"
-      : "default-src 'none'; img-src data: blob: http: https:; style-src 'unsafe-inline'; font-src data: http: https:; media-src data: blob: http: https:; base-uri 'none'; form-action 'none'; frame-src 'none'";
+    const iframeCsp = emailIframeCsp(effectiveEmailContent.externalBlocked);
 
     return `<!DOCTYPE html>
 <html style="color-scheme: ${colorScheme};"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
@@ -2300,9 +2332,10 @@ export function EmailViewer({
   td, th { overflow-wrap: break-word; }
   pre { white-space: pre-wrap; word-wrap: break-word; }
   ${wordHtmlCSS}
+  ${mailReadingCss(readingWidth)}
   ${darkModeCSS}
-</style></head><body>${effectiveEmailContent.html}<style>html,body{height:auto!important;min-height:0!important;max-height:none!important}</style></body></html>`;
-  }, [effectiveEmailContent.html, effectiveEmailContent.isHtml, effectiveEmailContent.hasStyleTag, effectiveEmailContent.externalBlocked, isDark, emailHasNativeDarkMode, messageSpacing]);
+</style></head><body data-fit-width="${mailFitWidth}">${effectiveEmailContent.html}<style>html,body{height:auto!important;min-height:0!important;max-height:none!important}</style></body></html>`;
+  }, [effectiveEmailContent.html, effectiveEmailContent.isHtml, effectiveEmailContent.hasStyleTag, effectiveEmailContent.externalBlocked, isDark, emailHasNativeDarkMode, messageSpacing, readingWidth, mailFitWidth]);
 
   // Unblocking external content is handled by rebuilding the iframe srcDoc:
   // toggling allowExternalContent (both "Load images" and "Trust sender" set
@@ -2367,12 +2400,16 @@ export function EmailViewer({
         // documentElement.scrollHeight short while the real content lives in body.
         const applyHeight = () => {
           if (iframe.contentDocument !== doc) return; // navigated away; stale
-          const height = Math.max(doc.documentElement.scrollHeight, doc.body.scrollHeight);
+          const scale = fitEmailBodyWidth(doc, { enabled: mailFitWidth, viewportMax: Infinity });
+          const height = Math.ceil(Math.max(doc.documentElement.scrollHeight, doc.body.scrollHeight) * scale);
           iframe.style.height = height + 'px';
           lastBodyHeightRef.current = height;
         };
         const resizeObserver = new ResizeObserver(applyHeight);
         resizeObserver.observe(doc.body);
+        if (iframe.parentElement) {
+          resizeObserver.observe(iframe.parentElement);
+        }
         applyHeight();
         // The ResizeObserver only fires on body's border box; a content overflow
         // that grows scrollHeight without resizing that box (e.g. a height:100%
@@ -2533,7 +2570,7 @@ export function EmailViewer({
     } catch {
       // Cross-origin restrictions - iframe will still display content
     }
-  }, [isDark, emailHasNativeDarkMode, email?.id, t]);
+  }, [isDark, emailHasNativeDarkMode, email?.id, t, mailFitWidth]);
 
   // Wire up the iframe as soon as its sandboxed document has parsed, rather than
   // waiting for the iframe 'load' event. 'load' also waits on every subresource,
@@ -3962,7 +3999,7 @@ export function EmailViewer({
                             ? "inline-flex flex-col w-40"
                             : "inline-flex items-center gap-1.5 px-2 py-1",
                         )}
-                        title={`${opensPreview ? tFiles('preview') : t('download')} ${getAttachmentDisplayName(attachment.name, attachment.type)}`}
+                        title={`${opensPreview ? tFiles('preview') : t('download')} ${displayAttachmentName(attachment)}`}
                         onClick={() => handleEffectiveAttachmentOpen(attachment)}
                         data-testid="attachment"
                         data-attachment-name={attachment.name}
@@ -3985,7 +4022,7 @@ export function EmailViewer({
                             "text-xs text-foreground truncate",
                             thumbUrl ? "flex-1 min-w-0" : "max-w-[140px]",
                           )}>
-                            {getAttachmentDisplayName(attachment.name, attachment.type)}
+                            {displayAttachmentName(attachment)}
                           </span>
                           <span className="text-[10px] text-muted-foreground flex-shrink-0">
                             {formatFileSize(attachment.size)}
@@ -4002,6 +4039,7 @@ export function EmailViewer({
                           >
                             <Download className="w-3.5 h-3.5 text-foreground" />
                           </button>
+                          {renameAttachmentButton(attachment)}
                           {opensPreview && (
                             <button
                               className="p-1 hover:bg-accent rounded transition-colors"
@@ -4040,7 +4078,7 @@ export function EmailViewer({
                               {(dragProps) => (
                             <div
                               className="flex items-center gap-1.5 px-2 py-1 rounded-md hover:bg-muted/60 group relative cursor-pointer w-full"
-                              title={`${opensPreview ? tFiles('preview') : t('download')} ${getAttachmentDisplayName(attachment.name, attachment.type)}`}
+                              title={`${opensPreview ? tFiles('preview') : t('download')} ${displayAttachmentName(attachment)}`}
                               onClick={() => { handleEffectiveAttachmentOpen(attachment); setShowAllBesideAttachments(false); }}
                               draggable={dragProps.draggable}
                               onPointerEnter={dragProps.onPointerEnter}
@@ -4049,7 +4087,7 @@ export function EmailViewer({
                             >
                               <FileIcon className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
                               <span className="text-xs text-foreground truncate max-w-[180px]">
-                                {getAttachmentDisplayName(attachment.name, attachment.type)}
+                                {displayAttachmentName(attachment)}
                               </span>
                               <span className="text-[10px] text-muted-foreground ms-auto flex-shrink-0">
                                 {formatFileSize(attachment.size)}
@@ -4062,6 +4100,7 @@ export function EmailViewer({
                                 >
                                   <Download className="w-3.5 h-3.5 text-foreground" />
                                 </button>
+                                {renameAttachmentButton(attachment)}
                                 {opensPreview && (
                                   <button
                                     className="p-1 hover:bg-accent rounded transition-colors"
@@ -4722,7 +4761,7 @@ export function EmailViewer({
                   >
                     <FileIcon className="w-4 h-4" />
                     <span className="text-sm truncate max-w-[200px]">
-                      {getAttachmentDisplayName(attachment.name, attachment.type)}
+                      {displayAttachmentName(attachment)}
                     </span>
                     <span className="text-xs">
                       {formatFileSize(attachment.size)}
@@ -4748,7 +4787,7 @@ export function EmailViewer({
                       ? "inline-flex flex-col w-44"
                       : "inline-flex items-center gap-1.5 px-2.5 py-1.5",
                   )}
-                  title={`${opensPreview ? tFiles('preview') : t('download')} ${getAttachmentDisplayName(attachment.name, attachment.type)}`}
+                  title={`${opensPreview ? tFiles('preview') : t('download')} ${displayAttachmentName(attachment)}`}
                   onClick={() => handleEffectiveAttachmentOpen(attachment)}
                   data-testid="attachment"
                   data-attachment-name={attachment.name}
@@ -4776,7 +4815,7 @@ export function EmailViewer({
                       "text-sm text-foreground truncate",
                       thumbUrl ? "flex-1 min-w-0" : "max-w-[200px]",
                     )}>
-                      {getAttachmentDisplayName(attachment.name, attachment.type)}
+                      {displayAttachmentName(attachment)}
                     </span>
                     <span className="text-xs text-muted-foreground flex-shrink-0">
                       {formatFileSize(attachment.size)}
@@ -4793,6 +4832,7 @@ export function EmailViewer({
                     >
                       <Download className="w-4 h-4 text-foreground" />
                     </button>
+                    {renameAttachmentButton(attachment)}
                     {opensPreview && (
                       <button
                         className="p-1 hover:bg-accent rounded transition-colors"
@@ -4831,7 +4871,7 @@ export function EmailViewer({
                         {(dragProps) => (
                       <div
                         className="flex items-center gap-1.5 px-2 py-1 rounded-md hover:bg-muted/60 group relative cursor-pointer w-full"
-                        title={`${opensPreview ? tFiles('preview') : t('download')} ${getAttachmentDisplayName(attachment.name, attachment.type)}`}
+                        title={`${opensPreview ? tFiles('preview') : t('download')} ${displayAttachmentName(attachment)}`}
                         onClick={() => { handleEffectiveAttachmentOpen(attachment); setShowAllBelowHeaderAttachments(false); }}
                         draggable={dragProps.draggable}
                         onPointerEnter={dragProps.onPointerEnter}
@@ -4840,7 +4880,7 @@ export function EmailViewer({
                       >
                         <FileIcon className="w-4 h-4 text-muted-foreground flex-shrink-0" />
                         <span className="text-sm text-foreground truncate max-w-[220px]">
-                          {getAttachmentDisplayName(attachment.name, attachment.type)}
+                          {displayAttachmentName(attachment)}
                         </span>
                         <span className="text-xs text-muted-foreground ms-auto flex-shrink-0">
                           {formatFileSize(attachment.size)}
@@ -4853,6 +4893,7 @@ export function EmailViewer({
                           >
                             <Download className="w-4 h-4 text-foreground" />
                           </button>
+                          {renameAttachmentButton(attachment)}
                           {opensPreview && (
                             <button
                               className="p-1 hover:bg-accent rounded transition-colors"
@@ -4894,7 +4935,7 @@ export function EmailViewer({
                         ? "inline-flex flex-col w-44"
                         : "inline-flex items-center gap-1.5 px-2.5 py-1.5",
                     )}
-                    title={`${opensPreview ? tFiles('preview') : t('download')} ${getAttachmentDisplayName(attachment.name, attachment.type)}`}
+                    title={`${opensPreview ? tFiles('preview') : t('download')} ${displayAttachmentName(attachment)}`}
                     onClick={() => handleEffectiveAttachmentOpen(attachment)}
                     data-testid="attachment"
                     data-attachment-name={attachment.name}
@@ -4917,7 +4958,7 @@ export function EmailViewer({
                         "text-sm text-foreground truncate",
                         thumbUrl ? "flex-1 min-w-0" : "max-w-[200px]",
                       )}>
-                        {getAttachmentDisplayName(attachment.name, attachment.type)}
+                        {displayAttachmentName(attachment)}
                       </span>
                       <span className="text-xs text-muted-foreground flex-shrink-0">
                         {formatFileSize(attachment.size)}
@@ -4934,6 +4975,7 @@ export function EmailViewer({
                       >
                         <Download className="w-4 h-4 text-foreground" />
                       </button>
+                      {renameAttachmentButton(attachment)}
                       {opensPreview && (
                         <button
                           className="p-1 hover:bg-accent rounded transition-colors"
@@ -4971,7 +5013,7 @@ export function EmailViewer({
                           {(dragProps) => (
                         <div
                           className="flex items-center gap-1.5 px-2 py-1 rounded-md hover:bg-muted/60 group relative cursor-pointer w-full"
-                          title={`${opensPreview ? tFiles('preview') : t('download')} ${getAttachmentDisplayName(attachment.name, attachment.type)}`}
+                          title={`${opensPreview ? tFiles('preview') : t('download')} ${displayAttachmentName(attachment)}`}
                           onClick={() => { handleEffectiveAttachmentOpen(attachment); setShowAllMobileAttachments(false); }}
                           draggable={dragProps.draggable}
                           onPointerEnter={dragProps.onPointerEnter}
@@ -4980,7 +5022,7 @@ export function EmailViewer({
                         >
                           <FileIcon className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
                           <span className="text-xs text-foreground truncate max-w-[180px]">
-                            {getAttachmentDisplayName(attachment.name, attachment.type)}
+                            {displayAttachmentName(attachment)}
                           </span>
                           <span className="text-[10px] text-muted-foreground ms-auto flex-shrink-0">
                             {formatFileSize(attachment.size)}
@@ -4993,6 +5035,7 @@ export function EmailViewer({
                             >
                               <Download className="w-3.5 h-3.5 text-foreground" />
                             </button>
+                            {renameAttachmentButton(attachment)}
                             {opensPreview && (
                               <button
                                 className="p-1 hover:bg-accent rounded transition-colors"
@@ -5047,7 +5090,7 @@ export function EmailViewer({
               />
             ) : (
               <div
-                className="email-content-text text-foreground"
+                className={cn("email-content-text text-foreground", mailReadingClass(readingWidth))}
                 dangerouslySetInnerHTML={{ __html: sanitizePlainTextRenderedHtml(effectiveEmailContent.html) }}
                 style={{
                   ...(plainTextFont === 'mono' && { fontFamily: 'ui-monospace, "SF Mono", Consolas, monospace' }),
@@ -5060,6 +5103,7 @@ export function EmailViewer({
             )}
           </div>
 
+          <PromptDialog {...attachmentRename.dialogProps} />
           <PluginSlot name="email-footer" />
 
           {/* Quick Reply Section - hidden for drafts and while loading a new email */}

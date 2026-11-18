@@ -117,6 +117,7 @@ describe('useEmailStore multi-account state', () => {
   it('fetchAccountMailboxes caches the result keyed by accountId', async () => {
     const mailboxes = [makeMailbox({ id: 'a-inbox' }), makeMailbox({ id: 'a-sent', name: 'Sent' })];
     const client = {
+      getAccountId: () => 'account-a',
       getMailboxes: vi.fn().mockResolvedValue(mailboxes),
     } as unknown as IJMAPClient;
 

@@ -262,6 +262,7 @@
     "reschedule_prompt": "Introduce una nueva fecha/hora, p. ej. 2026-05-04T15:30"
   },
   "email_viewer": {
+    "download_all_partial": "{count, plural, one {Se ha omitido # archivo adjunto del ZIP.} other {Se han omitido # archivos adjuntos del ZIP.}}",
     "read_receipt": {
       "prompt": "El remitente solicita una confirmación de lectura:",
       "send": "Enviar confirmación",
@@ -574,6 +575,14 @@
     },
     "send_now": "Enviar ahora"
   },
+  "attachment_rename": {
+    "rename": "Cambiar nombre",
+    "rename_named": "Cambiar el nombre de {name}",
+    "rename_menu": "Cambiar nombre…",
+    "rename_title": "Cambiar el nombre del adjunto",
+    "rename_invalid_chars": "Los nombres de archivo no pueden contener / ni \\ ni caracteres de control",
+    "rename_too_long": "Este nombre es demasiado largo"
+  },
   "email_composer": {
     "read_receipt_on": "Confirmación de lectura solicitada (haz clic para desactivar)",
     "read_receipt_off": "Solicitar confirmación de lectura",
@@ -766,6 +775,7 @@
     "refreshing": "Actualizando…"
   },
   "notifications": {
+    "not_connected": "Esta cuenta no está conectada. Vuelve a iniciar sesión.",
     "email_sent": "Correo enviado exitosamente",
     "email_deleted": "Correo eliminado",
     "email_archived": "Correo archivado",
@@ -1186,6 +1196,12 @@
       }
     },
     "email_behavior": {
+      "reading_width": {
+        "label": "Ancho de lectura",
+        "full": "Ancho completo",
+        "comfortable": "Unos 80 caracteres"
+      },
+      "fit_wide_mail": "Ajustar los mensajes anchos a la ventana",
       "request_read_receipt": {
         "label": "Solicitar confirmaciones de lectura de forma predeterminada",
         "description": "Activar previamente la solicitud de confirmación de lectura al redactar un mensaje nuevo."

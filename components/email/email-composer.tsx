@@ -5,7 +5,9 @@ import { useFocusTrap } from "@/hooks/use-focus-trap";
 import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { X, Paperclip, Send, Save, Check, Loader2, AlertCircle, FileText, BookmarkPlus, CalendarClock, ChevronDown, MailCheck, Search, Users } from "lucide-react";
+import { PromptDialog } from "@/components/ui/prompt-dialog";
+import { useAttachmentRename } from "@/hooks/use-attachment-rename";
+import { X, Paperclip, Send, Save, Check, Loader2, AlertCircle, FileText, FilePenLine, BookmarkPlus, CalendarClock, ChevronDown, MailCheck, Search, Users } from "lucide-react";
 import { cn, formatFileSize, formatDateTime, generateUUID } from "@/lib/utils";
 import { debug } from "@/lib/debug";
 import { toast } from "@/stores/toast-store";
@@ -669,7 +671,7 @@ export function EmailComposer({
     ? stripCrossAccountIdentityPrefix(currentIdentity.id)
     : { localAccountId: null, rawId: undefined };
   const composerClient = currentIdentityParts.localAccountId
-    ? (useAuthStore.getState().getClientForAccount(currentIdentityParts.localAccountId) ?? client)
+    ? useAuthStore.getState().getClientForAccount(currentIdentityParts.localAccountId)
     : client;
   const currentIdentityRawId = currentIdentityParts.rawId ?? currentIdentity?.id;
   // Alias identities often lack a configured signature - fall back to the primary
@@ -1041,13 +1043,14 @@ export function EmailComposer({
   }, [focusFromOverride]);
 
   // Track initial values for dirty detection (captured once on first render)
-  const initialValuesRef = useRef({ to: toStr, cc: ccStr, bcc: bccStr, subject, body, attachmentCount: attachments.length });
+  const attachmentMetadata = JSON.stringify(attachments.map(({ name, type, size, cid }) => ({ name, type, size, cid })));
+  const initialValuesRef = useRef({ to: toStr, cc: ccStr, bcc: bccStr, subject, body, attachments: attachmentMetadata });
   const isDirtyRef = useRef(false);
   isDirtyRef.current = toStr !== initialValuesRef.current.to || ccStr !== initialValuesRef.current.cc ||
     bccStr !== initialValuesRef.current.bcc || subject !== initialValuesRef.current.subject ||
     // `!==`, not `>`: a re-opened draft starts with hydrated attachments, and
     // removing one must count as dirty or the removal never reaches the server.
-    body !== initialValuesRef.current.body || attachments.length !== initialValuesRef.current.attachmentCount;
+    body !== initialValuesRef.current.body || attachmentMetadata !== initialValuesRef.current.attachments;
 
   // Ref to latest saveDraft for use in event handlers with stale closures
   const saveDraftRef = useRef<() => Promise<string | null>>(() => Promise.resolve(null));
@@ -1603,6 +1606,10 @@ export function EmailComposer({
     setAttachments(prev => prev.filter((_, i) => i !== index));
   };
 
+  const attachmentRename = useAttachmentRename<ComposerAttachment>((target, name) => {
+    setAttachments(current => current.map(attachment => attachment === target ? { ...attachment, name } : attachment));
+  });
+
   // Inline preview for composer attachments, reusing the message viewer's
   // FilePreviewModal (so previewability and the open-in-new-tab safety gate are
   // handled there). Prefer the local File - no network - and fall back to the
@@ -2001,6 +2008,10 @@ export function EmailComposer({
     delayedUntil?: string;
   } = {}) => {
     if (isSendingRef.current) return;
+    if (currentIdentityParts.localAccountId && !composerClient) {
+      toast.error(t('send_failed'));
+      return;
+    }
 
     if (attachmentsRef.current.some(att => att.uploading)) {
       isSendingRef.current = true;
@@ -2079,31 +2090,22 @@ export function EmailComposer({
     isSendingRef.current = true;
     setIsSending(true);
 
-    // Resolve the freshest draftId we can. Two cases:
-    //   1. An autosave is currently in flight - wait for it; don't issue a
-    //      parallel destroy/create that would race with it on the same id.
-    //   2. A debounced save is scheduled (timer set) - cancel it and flush
-    //      now so the latest body content lands on the server.
-    // Use draftIdRef (not the React state) because state updates from
-    // the in-flight save may not have rendered yet when we read here.
+    // Cancel the debounce before awaiting: it must not replace the draft
+    // while Send is waiting for an earlier save. saveDraft queues the flush.
     let finalDraftId = draftIdRef.current;
-    if (inflightSaveRef.current) {
-      try {
-        const savedId = await inflightSaveRef.current;
-        if (savedId) finalDraftId = savedId;
-      } catch (err) {
-        debug.error('In-flight draft save failed before send:', err);
-      }
-    }
+    let pendingSave = inflightSaveRef.current;
     if (saveTimeoutRef.current) {
       clearTimeout(saveTimeoutRef.current);
       saveTimeoutRef.current = null;
+      pendingSave = saveDraft();
+    }
+    if (pendingSave) {
       try {
-        const savedId = await saveDraft();
-        if (savedId) finalDraftId = savedId;
+        await pendingSave;
       } catch (err) {
         debug.error('Failed to save draft before send:', err);
       }
+      finalDraftId = draftIdRef.current;
     }
 
     // Registering the typed address as an identity is the user asking the
@@ -3018,6 +3020,13 @@ export function EmailComposer({
                     ) : (
                       <div className="flex items-center gap-2 min-w-0">{label}</div>
                     )}
+                    {!att.uploading && !att.error && (
+                      <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0"
+                        aria-label={attachmentRename.label(att.name)} title={attachmentRename.label(att.name)}
+                        onClick={() => attachmentRename.rename(att, att.name)}>
+                        <FilePenLine className="w-3 h-3" />
+                      </Button>
+                    )}
                     <button
                       onClick={() => removeAttachment(index)}
                       className="ms-1 hover:text-red-500 min-w-[20px] min-h-[20px] flex items-center justify-center"
@@ -3339,6 +3348,7 @@ export function EmailComposer({
         </div>
       )}
 
+      <PromptDialog {...attachmentRename.dialogProps} />
       {previewAttachment && (
         <FilePreviewModal
           name={previewAttachment.name}

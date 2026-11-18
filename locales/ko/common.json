@@ -262,6 +262,7 @@
     "reschedule_prompt": "새 날짜/시간을 입력하세요. 예: 2026-05-04T15:30"
   },
   "email_viewer": {
+    "download_all_partial": "ZIP에 첨부파일 {count}개가 포함되지 않았습니다.",
     "read_receipt": {
       "prompt": "보낸 사람이 읽음 확인을 요청합니다:",
       "send": "확인 보내기",
@@ -574,6 +575,14 @@
     },
     "send_now": "지금 보내기"
   },
+  "attachment_rename": {
+    "rename": "이름 바꾸기",
+    "rename_named": "{name} 이름 바꾸기",
+    "rename_menu": "이름 바꾸기…",
+    "rename_title": "첨부 파일 이름 바꾸기",
+    "rename_invalid_chars": "파일 이름에는 / 나 \\ 또는 제어 문자를 쓸 수 없습니다",
+    "rename_too_long": "이름이 너무 깁니다"
+  },
   "email_composer": {
     "read_receipt_on": "읽음 확인 요청됨 (클릭하여 해제)",
     "read_receipt_off": "읽음 확인 요청",
@@ -766,6 +775,7 @@
     "refreshing": "새로고침 중…"
   },
   "notifications": {
+    "not_connected": "이 계정이 연결되어 있지 않아요. 다시 로그인하세요.",
     "email_sent": "메일이 전송되었어요",
     "email_deleted": "메일이 삭제되었어요",
     "email_archived": "메일이 보관되었어요",
@@ -1186,6 +1196,12 @@
       }
     },
     "email_behavior": {
+      "reading_width": {
+        "label": "읽기 너비",
+        "full": "전체 너비",
+        "comfortable": "약 80자"
+      },
+      "fit_wide_mail": "넓은 메시지를 창 크기에 맞추기",
       "request_read_receipt": {
         "label": "기본적으로 읽음 확인 요청",
         "description": "새 메시지를 작성할 때 읽음 확인 요청을 미리 켭니다."

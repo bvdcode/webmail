@@ -262,6 +262,7 @@
     "reschedule_prompt": "输入新的日期/时间，例如 2026-05-04T15:30"
   },
   "email_viewer": {
+    "download_all_partial": "有 {count} 个附件未包含在 ZIP 中。",
     "read_receipt": {
       "prompt": "发件人请求已读回执：",
       "send": "发送回执",
@@ -574,6 +575,14 @@
     },
     "send_now": "立即发送"
   },
+  "attachment_rename": {
+    "rename": "重命名",
+    "rename_named": "重命名 {name}",
+    "rename_menu": "重命名…",
+    "rename_title": "重命名附件",
+    "rename_invalid_chars": "文件名不能包含 / 或 \\ 或控制字符",
+    "rename_too_long": "名称太长"
+  },
   "email_composer": {
     "read_receipt_on": "已请求已读回执（点击以关闭）",
     "read_receipt_off": "请求已读回执",
@@ -766,6 +775,7 @@
     "refreshing": "正在刷新…"
   },
   "notifications": {
+    "not_connected": "此账户未连接。请重新登录。",
     "email_sent": "邮件发送成功",
     "email_deleted": "邮件已删除",
     "email_archived": "邮件已归档",
@@ -1186,6 +1196,12 @@
       }
     },
     "email_behavior": {
+      "reading_width": {
+        "label": "阅读宽度",
+        "full": "全宽",
+        "comfortable": "约 80 个字符"
+      },
+      "fit_wide_mail": "让宽邮件适应窗口",
       "request_read_receipt": {
         "label": "默认请求已读回执",
         "description": "撰写新邮件时预先启用已读回执请求。"

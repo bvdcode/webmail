@@ -262,6 +262,7 @@
     "reschedule_prompt": "Indtast en ny dato/tid, f.eks. 2026-05-04T15:30"
   },
   "email_viewer": {
+    "download_all_partial": "{count, plural, one {# vedhæftet fil blev udeladt fra ZIP-filen.} other {# vedhæftede filer blev udeladt fra ZIP-filen.}}",
     "read_receipt": {
       "prompt": "Afsenderen anmoder om en læsekvittering:",
       "send": "Send kvittering",
@@ -574,6 +575,14 @@
     },
     "send_now": "Send nu"
   },
+  "attachment_rename": {
+    "rename": "Omdøb",
+    "rename_named": "Omdøb {name}",
+    "rename_menu": "Omdøb…",
+    "rename_title": "Omdøb vedhæftet fil",
+    "rename_invalid_chars": "Filnavne må ikke indeholde / eller \\ eller kontroltegn",
+    "rename_too_long": "Navnet er for langt"
+  },
   "email_composer": {
     "read_receipt_on": "Læsekvittering anmodet (klik for at deaktivere)",
     "read_receipt_off": "Anmod om læsekvittering",
@@ -766,6 +775,7 @@
     "refreshing": "Opdaterer…"
   },
   "notifications": {
+    "not_connected": "Kontoen er ikke forbundet. Log ind igen.",
     "email_sent": "E-mail sendt succesfuldt",
     "email_deleted": "E-mail slettet",
     "email_archived": "E-mail arkiveret",
@@ -1189,6 +1199,12 @@
       }
     },
     "email_behavior": {
+      "reading_width": {
+        "label": "Læsebredde",
+        "full": "Fuld bredde",
+        "comfortable": "Omkring 80 tegn"
+      },
+      "fit_wide_mail": "Tilpas brede beskeder til vinduet",
       "request_read_receipt": {
         "label": "Anmod om læsekvittering som standard",
         "description": "Aktivér anmodningen om læsekvittering på forhånd, når du skriver en ny besked."

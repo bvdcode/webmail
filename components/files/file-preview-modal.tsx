@@ -7,6 +7,8 @@ import { Button } from "@/components/ui/button";
 import { getFilePreviewKind, isMimeTypeSafeForInlinePreview } from "@/lib/file-preview";
 import dynamic from "next/dynamic";
 import { EmlPreview, type ParsedEml } from "@/components/files/eml-preview";
+import { htmlAttachmentDocument } from "@/lib/html-attachment";
+import { useSettingsStore } from "@/stores/settings-store";
 
 // pdf.js-based inline viewer for mobile (no native inline PDF viewer). Loaded
 // only on the mobile PDF path so pdfjs-dist + its worker never reach the
@@ -160,6 +162,8 @@ export function FilePreviewModal({ name, onClose, onDownload, getFileContent }: 
   // connect-src (#871). The URL is still what the <iframe> and the
   // open-in-new-tab fallback use.
   const [pdfBlob, setPdfBlob] = useState<Blob | null>(null);
+  const [htmlDoc, setHtmlDoc] = useState<string | null>(null);
+  const blockRemote = useSettingsStore((state) => state.externalContentPolicy) !== "allow";
 
   // Decide whether to render the PDF in a plain <iframe> (desktop) or with the
   // pdf.js canvas viewer (mobile). navigator.pdfViewerEnabled is the standard
@@ -214,6 +218,7 @@ export function FilePreviewModal({ name, onClose, onDownload, getFileContent }: 
     setCanOpenInNewTab(false);
     setEmlContent(null);
     setPdfBlob(null);
+    setHtmlDoc(null);
     setLoading(true);
     setError(false);
     setResolvedFileType(getFilePreviewKind(name));
@@ -225,11 +230,16 @@ export function FilePreviewModal({ name, onClose, onDownload, getFileContent }: 
         if (cancelled) return;
 
         const previewType = getFilePreviewKind(name, contentType || blob.type);
-  setResolvedFileType(previewType);
+        setResolvedFileType(previewType);
 
         if (previewType === "text" || previewType === "markdown") {
           const text = await blob.text();
           if (!cancelled) setContent(text);
+        } else if (previewType === "html") {
+          const text = await blob.text();
+          if (!cancelled) {
+            setHtmlDoc(htmlAttachmentDocument(text, blockRemote));
+          }
         } else if (previewType === "eml") {
           // Parse the embedded message (postal-mime, dynamic-imported so it
           // stays off the bundle) and render it like an email via EmlPreview.
@@ -277,7 +287,7 @@ export function FilePreviewModal({ name, onClose, onDownload, getFileContent }: 
         URL.revokeObjectURL(revokeUrl);
       }
     };
-  }, [getFileContent, name]);
+  }, [getFileContent, name, blockRemote]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -359,9 +369,9 @@ export function FilePreviewModal({ name, onClose, onDownload, getFileContent }: 
           />
         )}
 
-        {!loading && !error && fileType === "html" && objectUrl && (
+        {!loading && !error && fileType === "html" && htmlDoc && (
           <iframe
-            src={objectUrl}
+            srcDoc={htmlDoc}
             sandbox=""
             className="w-full max-w-5xl h-full rounded-lg bg-white"
             title={name}

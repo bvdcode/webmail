@@ -227,6 +227,7 @@
     "reschedule_prompt": "הזן תאריך/שעה חדש, למשל 2026-05-04T15:30"
   },
   "email_viewer": {
+    "download_all_partial": "{count, plural, one {# קובץ מצורף הושמט מקובץ ה-ZIP.} two {# קבצים מצורפים הושמטו מקובץ ה-ZIP.} other {# קבצים מצורפים הושמטו מקובץ ה-ZIP.}}",
     "no_email_selected": "לא נבחר אימייל",
     "no_email_description": "בחר אימייל מהרשימה כדי להציג אותו כאן",
     "no_conversation_selected": "לא נבחרה שיחה",
@@ -539,6 +540,14 @@
     },
     "send_now": "שלח עכשיו"
   },
+  "attachment_rename": {
+    "rename": "שנה שם",
+    "rename_named": "שנה את השם של {name}",
+    "rename_menu": "שנה שם…",
+    "rename_title": "שנה את שם הקובץ המצורף",
+    "rename_invalid_chars": "שמות קבצים לא יכולים להכיל / או \\ או תווי בקרה",
+    "rename_too_long": "השם הזה ארוך מדי"
+  },
   "email_composer": {
     "new_message": "הודעה חדשה",
     "signature_edit_hint": "לחץ לחיצה כפולה לעריכת החתימה",
@@ -731,6 +740,7 @@
     "refreshing": "מרענן…"
   },
   "notifications": {
+    "not_connected": "החשבון לא מחובר. התחברו שוב.",
     "email_sent": "האימייל נשלח בהצלחה",
     "email_deleted": "האימייל נמחק",
     "email_archived": "האימייל הועבר לארכיון",
@@ -1151,6 +1161,12 @@
       }
     },
     "email_behavior": {
+      "reading_width": {
+        "label": "רוחב קריאה",
+        "full": "רוחב מלא",
+        "comfortable": "כ-80 תווים"
+      },
+      "fit_wide_mail": "התאמת הודעות רחבות לחלון",
       "title": "התנהגות אימייל",
       "description": "קבע את אופן הטיפול בהודעות דוא\"ל",
       "mark_read": {

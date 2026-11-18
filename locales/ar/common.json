@@ -262,6 +262,7 @@
     "reschedule_prompt": "أدخل تاريخًا/وقتًا جديدًا، مثل 2026-05-04T15:30"
   },
   "email_viewer": {
+    "download_all_partial": "{count, plural, zero {لم تُحذف أي مرفقات من ملف ZIP.} one {حُذف مرفق واحد من ملف ZIP.} two {حُذف مرفقان من ملف ZIP.} few {حُذفت # مرفقات من ملف ZIP.} many {حُذف # مرفقًا من ملف ZIP.} other {حُذف # مرفق من ملف ZIP.}}",
     "read_receipt": {
       "prompt": "طلب المُرسل إشعاره عند فتح هذه الرسالة.",
       "send": "إرسال إيصال",
@@ -574,6 +575,14 @@
     },
     "send_now": "إرسال الآن"
   },
+  "attachment_rename": {
+    "rename": "إعادة التسمية",
+    "rename_named": "إعادة تسمية {name}",
+    "rename_menu": "إعادة التسمية…",
+    "rename_title": "إعادة تسمية المرفق",
+    "rename_invalid_chars": "لا يمكن أن تحتوي أسماء الملفات على / أو \\ أو على أحرف تحكم",
+    "rename_too_long": "هذا الاسم طويل جدًا"
+  },
   "email_composer": {
     "read_receipt_on": "إيصال القراءة مطلوب (انقر للتعطيل)",
     "read_receipt_off": "طلب إيصال قراءة",
@@ -766,6 +775,7 @@
     "refreshing": "جارٍ التحديث…"
   },
   "notifications": {
+    "not_connected": "هذا الحساب غير متصل. سجّل الدخول مرة أخرى.",
     "email_sent": "تم إرسال الرسالة بنجاح",
     "email_deleted": "تم حذف الرسالة",
     "email_archived": "تمت أرشفة الرسالة",
@@ -1189,6 +1199,12 @@
       }
     },
     "email_behavior": {
+      "reading_width": {
+        "label": "عرض القراءة",
+        "full": "العرض الكامل",
+        "comfortable": "نحو 80 حرفًا"
+      },
+      "fit_wide_mail": "ملاءمة الرسائل العريضة للنافذة",
       "request_read_receipt": {
         "label": "طلب إيصالات القراءة افتراضيًا",
         "description": "تفعيل طلب إيصال القراءة مسبقًا عند إنشاء رسالة جديدة."

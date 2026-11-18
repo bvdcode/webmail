@@ -262,6 +262,7 @@
     "reschedule_prompt": "Yeni tarih/saat girin, ör. 2026-05-04T15:30"
   },
   "email_viewer": {
+    "download_all_partial": "ZIP dosyasına {count} ek dahil edilemedi.",
     "read_receipt": {
       "prompt": "Gönderen bir okundu bilgisi istiyor:",
       "send": "Bilgi gönder",
@@ -574,6 +575,14 @@
     },
     "send_now": "Şimdi gönder"
   },
+  "attachment_rename": {
+    "rename": "Yeniden adlandır",
+    "rename_named": "{name} dosyasını yeniden adlandır",
+    "rename_menu": "Yeniden adlandır…",
+    "rename_title": "Eki yeniden adlandır",
+    "rename_invalid_chars": "Dosya adları / veya \\ ya da denetim karakterleri içeremez",
+    "rename_too_long": "Bu ad çok uzun"
+  },
   "email_composer": {
     "read_receipt_on": "Okundu bilgisi istendi (devre dışı bırakmak için tıklayın)",
     "read_receipt_off": "Okundu bilgisi iste",
@@ -766,6 +775,7 @@
     "refreshing": "Yenileniyor…"
   },
   "notifications": {
+    "not_connected": "Bu hesap bağlı değil. Yeniden oturum açın.",
     "email_sent": "E-posta başarıyla gönderildi",
     "email_deleted": "E-posta silindi",
     "email_archived": "E-posta arşivlendi",
@@ -1186,6 +1196,12 @@
       }
     },
     "email_behavior": {
+      "reading_width": {
+        "label": "Okuma genişliği",
+        "full": "Tam genişlik",
+        "comfortable": "Yaklaşık 80 karakter"
+      },
+      "fit_wide_mail": "Geniş iletileri pencereye sığdır",
       "request_read_receipt": {
         "label": "Varsayılan olarak okundu bilgisi iste",
         "description": "Yeni bir ileti yazarken okundu bilgisi isteğini önceden etkinleştir."

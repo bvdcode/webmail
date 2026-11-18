@@ -262,6 +262,7 @@
     "reschedule_prompt": "Zadajte nový dátum/čas, napr. 2026-05-04T15:30"
   },
   "email_viewer": {
+    "download_all_partial": "{count, plural, one {Zo ZIPu bola vynechaná # príloha.} few {Zo ZIPu boli vynechané # prílohy.} many {Zo ZIPu bolo vynechaných # prílohy.} other {Zo ZIPu bolo vynechaných # príloh.}}",
     "read_receipt": {
       "prompt": "Odosielateľ požiadal o potvrdenie o prečítaní:",
       "send": "Odoslať potvrdenie",
@@ -574,6 +575,14 @@
     },
     "send_now": "Odoslať teraz"
   },
+  "attachment_rename": {
+    "rename": "Premenovať",
+    "rename_named": "Premenovať {name}",
+    "rename_menu": "Premenovať…",
+    "rename_title": "Premenovať prílohu",
+    "rename_invalid_chars": "Názvy súborov nesmú obsahovať / ani \\ ani riadiace znaky",
+    "rename_too_long": "Tento názov je príliš dlhý"
+  },
   "email_composer": {
     "read_receipt_on": "Potvrdenie o prečítaní požiadané (kliknutím vypnete)",
     "read_receipt_off": "Požiadať o potvrdenie o prečítaní",
@@ -766,6 +775,7 @@
     "refreshing": "Obnovuje sa…"
   },
   "notifications": {
+    "not_connected": "Tento účet nie je pripojený. Prihláste sa znova.",
     "email_sent": "E-mail bol úspešne odoslaný",
     "email_deleted": "E-mail bol odstránený",
     "email_archived": "E-mail bol archivovaný",
@@ -1189,6 +1199,12 @@
       }
     },
     "email_behavior": {
+      "reading_width": {
+        "label": "Šírka čítania",
+        "full": "Plná šírka",
+        "comfortable": "Približne 80 znakov"
+      },
+      "fit_wide_mail": "Prispôsobiť široké správy oknu",
       "title": "Správanie e-mailov",
       "description": "Nakonfigurujte spôsob spracovania e-mailov",
       "request_read_receipt": {

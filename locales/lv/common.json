@@ -262,6 +262,7 @@
     "reschedule_prompt": "Ievadiet jaunu datumu/laiku, piem. 2026-05-04T15:30"
   },
   "email_viewer": {
+    "download_all_partial": "{count, plural, zero {# pielikumi netika iekļauti ZIP failā.} one {# pielikums netika iekļauts ZIP failā.} other {# pielikumi netika iekļauti ZIP failā.}}",
     "read_receipt": {
       "prompt": "Sūtītājs pieprasa lasīšanas apstiprinājumu:",
       "send": "Sūtīt apstiprinājumu",
@@ -574,6 +575,14 @@
     },
     "send_now": "Sūtīt tagad"
   },
+  "attachment_rename": {
+    "rename": "Pārdēvēt",
+    "rename_named": "Pārdēvēt {name}",
+    "rename_menu": "Pārdēvēt…",
+    "rename_title": "Pārdēvēt pielikumu",
+    "rename_invalid_chars": "Faila nosaukumā nedrīkst būt / vai \\ vai vadības rakstzīmes",
+    "rename_too_long": "Šis nosaukums ir pārāk garš"
+  },
   "email_composer": {
     "read_receipt_on": "Pieprasīts lasīšanas apstiprinājums (noklikšķiniet, lai atspējotu)",
     "read_receipt_off": "Pieprasīt lasīšanas apstiprinājumu",
@@ -766,6 +775,7 @@
     "refreshing": "Atsvaidzina…"
   },
   "notifications": {
+    "not_connected": "Šis konts nav savienots. Piesakieties vēlreiz.",
     "email_sent": "Vēstule veiksmīgi nosūtīta",
     "email_deleted": "Vēstule izdzēsta",
     "email_archived": "Vēstule arhivēta",
@@ -1186,6 +1196,12 @@
       }
     },
     "email_behavior": {
+      "reading_width": {
+        "label": "Lasīšanas platums",
+        "full": "Pilns platums",
+        "comfortable": "Aptuveni 80 rakstzīmes"
+      },
+      "fit_wide_mail": "Pielāgot platas ziņas logam",
       "request_read_receipt": {
         "label": "Pēc noklusējuma pieprasīt lasīšanas apstiprinājumus",
         "description": "Sastādot jaunu ziņojumu, iepriekš ieslēgt lasīšanas apstiprinājuma pieprasījumu."

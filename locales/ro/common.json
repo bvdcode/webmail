@@ -262,6 +262,7 @@
     "reschedule_prompt": "Introduceți o nouă dată/oră, de exemplu 2026-05-04T15:30"
   },
   "email_viewer": {
+    "download_all_partial": "{count, plural, one {# atașament a fost omis din ZIP.} few {# atașamente au fost omise din ZIP.} other {# de atașamente au fost omise din ZIP.}}",
     "read_receipt": {
       "prompt": "Expeditorul a solicitat o confirmare de citire:",
       "send": "Trimite confirmare de primire",
@@ -574,6 +575,14 @@
     },
     "send_now": "Trimite acum"
   },
+  "attachment_rename": {
+    "rename": "Redenumește",
+    "rename_named": "Redenumește {name}",
+    "rename_menu": "Redenumește…",
+    "rename_title": "Redenumește atașamentul",
+    "rename_invalid_chars": "Numele fișierelor nu pot conține / sau \\ sau caractere de control",
+    "rename_too_long": "Acest nume este prea lung"
+  },
   "email_composer": {
     "read_receipt_on": "Solicitare confirmare de citire (faceți clic pentru a dezactiva)",
     "read_receipt_off": "Solicitați o confirmare de citire",
@@ -766,6 +775,7 @@
     "refreshing": "Se reîmprospătează…"
   },
   "notifications": {
+    "not_connected": "Acest cont nu este conectat. Autentifică-te din nou.",
     "email_sent": "E-mailul a fost trimis cu succes",
     "email_deleted": "E-mail șters",
     "email_archived": "E-mail arhivat",
@@ -1189,6 +1199,12 @@
       }
     },
     "email_behavior": {
+      "reading_width": {
+        "label": "Lățimea de citire",
+        "full": "Lățime completă",
+        "comfortable": "Aproximativ 80 de caractere"
+      },
+      "fit_wide_mail": "Potrivește mesajele late la fereastră",
       "request_read_receipt": {
         "label": "Solicitați confirmări de citire în mod implicit",
         "description": "Activați în prealabil solicitarea de confirmare de citire atunci când redactați un mesaj nou."

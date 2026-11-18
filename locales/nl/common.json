@@ -262,6 +262,7 @@
     "reschedule_prompt": "Voer een nieuwe datum/tijd in, bijv. 2026-05-04T15:30"
   },
   "email_viewer": {
+    "download_all_partial": "{count, plural, one {# bijlage is weggelaten uit het ZIP-bestand.} other {# bijlagen zijn weggelaten uit het ZIP-bestand.}}",
     "read_receipt": {
       "prompt": "De afzender vraagt om een leesbevestiging:",
       "send": "Bevestiging verzenden",
@@ -574,6 +575,14 @@
     },
     "send_now": "Nu verzenden"
   },
+  "attachment_rename": {
+    "rename": "Naam wijzigen",
+    "rename_named": "Naam van {name} wijzigen",
+    "rename_menu": "Naam wijzigen…",
+    "rename_title": "Naam van bijlage wijzigen",
+    "rename_invalid_chars": "Bestandsnamen mogen geen / of \\ of stuurtekens bevatten",
+    "rename_too_long": "Deze naam is te lang"
+  },
   "email_composer": {
     "read_receipt_on": "Leesbevestiging aangevraagd (klik om uit te schakelen)",
     "read_receipt_off": "Leesbevestiging aanvragen",
@@ -766,6 +775,7 @@
     "refreshing": "Vernieuwen…"
   },
   "notifications": {
+    "not_connected": "Dit account is niet verbonden. Meld je opnieuw aan.",
     "email_sent": "E-mail succesvol verzonden",
     "email_deleted": "E-mail verwijderd",
     "email_archived": "E-mail gearchiveerd",
@@ -1186,6 +1196,12 @@
       }
     },
     "email_behavior": {
+      "reading_width": {
+        "label": "Leesbreedte",
+        "full": "Volledige breedte",
+        "comfortable": "Ongeveer 80 tekens"
+      },
+      "fit_wide_mail": "Brede berichten in het venster passen",
       "request_read_receipt": {
         "label": "Standaard om leesbevestiging vragen",
         "description": "De aanvraag voor een leesbevestiging vooraf inschakelen bij het opstellen van een nieuw bericht."

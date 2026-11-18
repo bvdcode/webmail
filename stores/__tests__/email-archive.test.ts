@@ -71,6 +71,10 @@ describe('email-store archive thread behavior', () => {
   it('archives the full thread and removes cached thread state', async () => {
     const client = {
       getThread: vi.fn().mockResolvedValue({ id: 'thread-1', emailIds: ['email-1', 'email-2'] }),
+      getSomeEmails: vi.fn().mockResolvedValue([
+        { id: 'email-1', mailboxIds: { 'server-inbox': true } },
+        { id: 'email-2', mailboxIds: { 'server-inbox': true } },
+      ]),
       batchMoveEmails: vi.fn().mockResolvedValue(undefined),
     } as unknown as IJMAPClient;
 
@@ -85,5 +89,21 @@ describe('email-store archive thread behavior', () => {
     expect(Array.from(state.selectedEmailIds)).toEqual([]);
     expect(state.expandedThreadIds.has('thread-1')).toBe(false);
     expect(state.threadEmailsCache.has('thread-1')).toBe(false);
+  });
+
+  it('keeps sent messages and drafts out of a conversation archive', async () => {
+    const client = {
+      getThread: vi.fn().mockResolvedValue({ id: 'thread-1', emailIds: ['email-1', 'email-2', 'sent-copy', 'draft'] }),
+      getSomeEmails: vi.fn().mockResolvedValue([
+        { id: 'email-1', mailboxIds: { 'server-inbox': true } },
+        { id: 'email-2', mailboxIds: { 'server-inbox': true } },
+        { id: 'sent-copy', mailboxIds: { sent: true } },
+        { id: 'draft', mailboxIds: { drafts: true } },
+      ]),
+      batchMoveEmails: vi.fn().mockResolvedValue(undefined),
+    };
+    await useEmailStore.getState().moveThreadToMailbox(client as never, 'email-1', 'archive-local');
+    expect(client.getSomeEmails).toHaveBeenCalledWith(['email-1', 'email-2', 'sent-copy', 'draft'], 'shared-account');
+    expect(client.batchMoveEmails).toHaveBeenCalledWith(['email-1', 'email-2'], 'server-archive', 'shared-account');
   });
 });

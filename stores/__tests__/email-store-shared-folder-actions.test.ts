@@ -58,6 +58,7 @@ function makeEmail(overrides: Partial<Email> = {}): Email {
 
 function makeClient() {
   return {
+    getAccountId: () => 'account-a',
     markAsRead: vi.fn().mockResolvedValue(undefined),
     toggleStar: vi.fn().mockResolvedValue(undefined),
     moveEmail: vi.fn().mockResolvedValue(undefined),

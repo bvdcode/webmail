@@ -262,6 +262,7 @@
     "reschedule_prompt": "Inserisci una nuova data/ora, ad es. 2026-05-04T15:30"
   },
   "email_viewer": {
+    "download_all_partial": "{count, plural, one {# allegato è stato omesso dallo ZIP.} other {# allegati sono stati omessi dallo ZIP.}}",
     "read_receipt": {
       "prompt": "Il mittente richiede una conferma di lettura:",
       "send": "Invia conferma",
@@ -574,6 +575,14 @@
     },
     "send_now": "Invia ora"
   },
+  "attachment_rename": {
+    "rename": "Rinomina",
+    "rename_named": "Rinomina {name}",
+    "rename_menu": "Rinomina…",
+    "rename_title": "Rinomina allegato",
+    "rename_invalid_chars": "I nomi dei file non possono contenere / o \\ o caratteri di controllo",
+    "rename_too_long": "Questo nome è troppo lungo"
+  },
   "email_composer": {
     "read_receipt_on": "Conferma di lettura richiesta (clicca per disattivare)",
     "read_receipt_off": "Richiedi una conferma di lettura",
@@ -766,6 +775,7 @@
     "refreshing": "Aggiornamento…"
   },
   "notifications": {
+    "not_connected": "Questo account non è connesso. Accedi di nuovo.",
     "email_sent": "Messaggio inviato con successo",
     "email_deleted": "Messaggio eliminato",
     "email_archived": "Messaggio archiviato",
@@ -1186,6 +1196,12 @@
       }
     },
     "email_behavior": {
+      "reading_width": {
+        "label": "Larghezza di lettura",
+        "full": "Larghezza intera",
+        "comfortable": "Circa 80 caratteri"
+      },
+      "fit_wide_mail": "Adatta i messaggi larghi alla finestra",
       "request_read_receipt": {
         "label": "Richiedi conferme di lettura per impostazione predefinita",
         "description": "Attiva in anticipo la richiesta di conferma di lettura durante la composizione di un nuovo messaggio."

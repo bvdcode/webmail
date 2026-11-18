@@ -262,6 +262,7 @@
     "reschedule_prompt": "Saisissez une nouvelle date/heure, p. ex. 2026-05-04T15:30"
   },
   "email_viewer": {
+    "download_all_partial": "{count, plural, one {# pièce jointe a été omise du ZIP.} other {# pièces jointes ont été omises du ZIP.}}",
     "read_receipt": {
       "prompt": "L''expéditeur demande un accusé de lecture :",
       "send": "Envoyer l''accusé",
@@ -574,6 +575,14 @@
     },
     "send_now": "Envoyer maintenant"
   },
+  "attachment_rename": {
+    "rename": "Renommer",
+    "rename_named": "Renommer {name}",
+    "rename_menu": "Renommer…",
+    "rename_title": "Renommer la pièce jointe",
+    "rename_invalid_chars": "Les noms de fichier ne peuvent pas contenir / ni \\ ni de caractères de contrôle",
+    "rename_too_long": "Ce nom est trop long"
+  },
   "email_composer": {
     "read_receipt_on": "Accusé de lecture demandé (cliquez pour désactiver)",
     "read_receipt_off": "Demander un accusé de lecture",
@@ -766,6 +775,7 @@
     "refreshing": "Actualisation…"
   },
   "notifications": {
+    "not_connected": "Ce compte n'est pas connecté. Reconnectez-vous.",
     "email_sent": "Email envoyé avec succès",
     "email_deleted": "Email supprimé",
     "email_archived": "Email archivé",
@@ -1186,6 +1196,12 @@
       }
     },
     "email_behavior": {
+      "reading_width": {
+        "label": "Largeur de lecture",
+        "full": "Pleine largeur",
+        "comfortable": "Environ 80 caractères"
+      },
+      "fit_wide_mail": "Adapter les messages larges à la fenêtre",
       "request_read_receipt": {
         "label": "Demander un accusé de lecture par défaut",
         "description": "Activer au préalable la demande d''accusé de lecture lors de la rédaction d''un nouveau message."

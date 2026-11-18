@@ -262,6 +262,7 @@
     "reschedule_prompt": "Adj meg egy új dátumot/időpontot, pl. 2026-05-04T15:30"
   },
   "email_viewer": {
+    "download_all_partial": "{count, plural, one {# melléklet kimaradt a ZIP-fájlból.} other {# melléklet kimaradt a ZIP-fájlból.}}",
     "read_receipt": {
       "prompt": "A feladó olvasási visszaigazolást kért:",
       "send": "Visszaigazolás küldése",
@@ -574,6 +575,14 @@
     },
     "send_now": "Küldés most"
   },
+  "attachment_rename": {
+    "rename": "Átnevezés",
+    "rename_named": "{name} átnevezése",
+    "rename_menu": "Átnevezés…",
+    "rename_title": "Melléklet átnevezése",
+    "rename_invalid_chars": "A fájlnév nem tartalmazhat / vagy \\ jelet, sem vezérlőkaraktert",
+    "rename_too_long": "Ez a név túl hosszú"
+  },
   "email_composer": {
     "read_receipt_on": "Olvasási visszaigazolás kérve (kattints a letiltáshoz)",
     "read_receipt_off": "Olvasási visszaigazolás kérése",
@@ -766,6 +775,7 @@
     "refreshing": "Frissítés…"
   },
   "notifications": {
+    "not_connected": "Ez a fiók nincs csatlakoztatva. Jelentkezzen be újra.",
     "email_sent": "E-mail sikeresen elküldve",
     "email_deleted": "E-mail törölve",
     "email_archived": "E-mail archiválva",
@@ -1189,6 +1199,12 @@
       }
     },
     "email_behavior": {
+      "reading_width": {
+        "label": "Olvasási szélesség",
+        "full": "Teljes szélesség",
+        "comfortable": "Körülbelül 80 karakter"
+      },
+      "fit_wide_mail": "Széles üzenetek az ablakhoz igazítása",
       "request_read_receipt": {
         "label": "Olvasási visszaigazolás kérése alapértelmezés szerint",
         "description": "Az olvasási visszaigazolás kérésének előre bekapcsolása új üzenet írásakor."
